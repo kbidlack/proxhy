@@ -1,0 +1,4 @@
+msmcauth
+requests
+python-dotenv
+quarry
