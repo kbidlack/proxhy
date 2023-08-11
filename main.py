@@ -215,28 +215,30 @@ class ProxhyBridge(Bridge):
     waiting_for_locraw = False
     game = {}
 
-    def __init__(self, *args, **kwargs):
-        # settings
-        self.silence_mystery = False
+    # settings
+    silence_mystery = False
 
-        # load credentials
-        load_dotenv()
+    # load credentials
+    load_dotenv()
 
-        email = os.environ["EMAIL"]
-        password = os.environ["PASSWORD"]
+    email = os.environ["EMAIL"]
+    password = os.environ["PASSWORD"]
 
-        auth_info = msmcauth.login(email, password)    
+    auth_info = msmcauth.login(email, password)    
 
-        access_token = auth_info[0]
-        username = auth_info[1]
-        uuid = UUID.from_hex(auth_info[2])
+    access_token = auth_info[0]
+    username = auth_info[1]
+    uuid = UUID.from_hex(auth_info[2])
 
     
     def run_command(self, buff, command: str):
         match segments := command.split():
             case ["/requeue" | "/rq", *args]:
                 if args:
-                    print(f"Command <{segments[0]}> takes no arguments!")
+                    self.downstream.send_packet(
+                        "chat_message",
+                        pack_chat(f"Command <{segments[0]}> takes no arguments!", 0)
+                    )
                 elif self.game is None or self.game.get('mode') is None:
                     self.downstream.send_packet(
                         "chat_message",
@@ -251,12 +253,12 @@ class ProxhyBridge(Bridge):
                 if not args: # TODO mystery | joins, etc.
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"Command <{segments[0]}> takes one argument: mystery")
+                        pack_chat(f"Command <{segments[0]}> takes one argument: mystery", 0)
                     )
                 elif len(args) > 1:
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"Command <{segments[0]}> only takes one argument!")
+                        pack_chat(f"Command <{segments[0]}> only takes one argument!", 0)
                     )
                 elif args == ["mystery"]:
                     self.silence_mystery = not self.silence_mystery
@@ -264,7 +266,8 @@ class ProxhyBridge(Bridge):
                     self.downstream.send_packet(
                         "chat_message",
                         pack_chat(
-                            f"Turned {'on' if self.silence_mystery else 'off'} mystery box silencing!"
+                            f"Turned {'on' if self.silence_mystery else 'off'} mystery box silencing!",
+                            0
                         )
                     )
             case _:
