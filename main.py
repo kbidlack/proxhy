@@ -239,12 +239,12 @@ class ProxhyBridge(Bridge):
                 if args:
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"Command <{segments[0]}> takes no arguments!", 0)
+                        pack_chat(f"§9§l▋ §4Command <{segments[0]}> takes no arguments!", 0)
                     )
                 elif self.game is None or self.game.get('mode') is None:
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat("No game to requeue!", 0)
+                        pack_chat("§9§l▋ §4No game to requeue!", 0)
                     )
                 else:
                     self.upstream.send_packet(
@@ -255,12 +255,12 @@ class ProxhyBridge(Bridge):
                 if not args: # TODO multiple args
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"Command <{segments[0]}> takes one argument: target", 0)
+                        pack_chat(f"§9§l▋ §4Command <{segments[0]}> takes one argument: target", 0)
                     )
                 elif len(args) > 1:
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"Command <{segments[0]}> only takes one argument!", 0)
+                        pack_chat(f"§9§l▋ §4Command <{segments[0]}> only takes one argument!", 0)
                     )
                 elif args == ["mystery"]:
                     self.silence_mystery = not self.silence_mystery
@@ -268,7 +268,7 @@ class ProxhyBridge(Bridge):
                     self.downstream.send_packet(
                         "chat_message",
                         pack_chat(
-                            f"Turned {'on' if self.silence_mystery else 'off'} mystery box silencing!",
+                            f"§9§l▋ §2Turned {'§aon' if self.silence_mystery else '§4off'} §2mystery box silencing!",
                             0
                         )
                     )
@@ -277,7 +277,7 @@ class ProxhyBridge(Bridge):
                     self.downstream.send_packet(
                         "chat_message",
                         pack_chat(
-                            f"Turned {'on' if self.silence_joins else 'off'} lobby join messages silencing!",
+                            f"§9§l▋ §2Turned {'§aon' if self.silence_joins else '§4off'} §2lobby join messages silencing!",
                             0
                         )
                     )
@@ -285,33 +285,33 @@ class ProxhyBridge(Bridge):
                      self.downstream.send_packet(
                         "chat_message",
                         pack_chat(
-                            "Please enter a valid target; either mystery or joins.", 0)
+                            "§9§l▋ §4Please enter a valid target; either mystery or joins.", 0)
                     )
             case ["/autoboop", *args]:
                 if not args:
                     if len(self.autoboops) > 0:
-                        autoboops = str(self.autoboops)
+                        autoboops = str(self.autoboops).replace(",", "§3,§c")
                         autoboops = ((autoboops.replace("[", "")).replace("]", "")).replace("'", "")
                         self.downstream.send_packet(
                             "chat_message",
-                            pack_chat(f"People in autoboop list: {autoboops}", 0)
+                            pack_chat(f"§9§l▋ §3People in autoboop list: §c{autoboops}§c.", 0)
                         )
                     else:
                         self.downstream.send_packet(
                             "chat_message",
-                            pack_chat("No one in autoboop list!", 0)
+                            pack_chat("§9§l▋ §4No one in autoboop list!", 0)
                         )
                 elif len(args) > 1:
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"Command <{segments[0]}> takes at most one argument!", 0)
+                        pack_chat(f"§9§l▋ §4Command <{segments[0]}> takes at most one argument!", 0)
                     )
                 elif str("".join(args)).lower() in self.autoboops:
                     boop = str("".join(args)).lower()
                     self.autoboops.remove(boop)
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"{boop} has been removed from autoboop", 0)
+                        pack_chat(f"§9§l▋ §c{boop} §3has been removed from autoboop", 0)
                     )
                     
                 elif str("".join(args)).lower() not in self.autoboops:
@@ -319,7 +319,7 @@ class ProxhyBridge(Bridge):
                     self.autoboops.append(boop)
                     self.downstream.send_packet(
                         "chat_message",
-                        pack_chat(f"{boop} has been added to autoboop", 0)
+                        pack_chat(f"§9§l▋ §c{boop} §3has been added to autoboop", 0)
                     )
             case _:
                 buff.restore()
@@ -367,11 +367,11 @@ class ProxhyBridge(Bridge):
         elif chat_message.startswith("✦") and self.silence_mystery:
             buff.discard()
             return
-        elif chat_message.find("joined the lobby!") and (chat_message.find(":") == -1) and self.silence_joins:
+        elif (chat_message.find("joined the lobby!") != -1) and (chat_message.find(":") == -1) and self.silence_joins:
             buff.discard()
             return
         elif chat_message.startswith("Friend > ") and str(chat_message.split()[2]).lower() in self.autoboops and str(chat_message.split()[3]).lower() == "joined.":
-            time.sleep(0.5)
+            time.sleep(0.5) # Small wait for 
             self.upstream.send_packet(
                         "chat_message",
                         buff.pack_string(f"/boop {str(chat_message.split()[2]).lower()}")
