@@ -21,7 +21,7 @@ from twisted.python import failure
 class Settings:
     checks = {}
     patterns = {
-        "waiting_for_locraw": re.compile("^{.*}$"),
+        "wflp": re.compile("^{.*}$"),
     }
 
     @property
@@ -33,18 +33,43 @@ class Settings:
         if value is True:
             self._waiting_for_locraw = True
             self.checks.update(
-                {self.patterns["waiting_for_locraw"]:  self.update_game_from_locraw}
+                {"wfl": (lambda x: bool(self.patterns["wflp"].match(x)), self.update_game_from_locraw)}
             )
         elif value is False:
             self._waiting_for_locraw = False
-            del self.checks[self.patterns["waiting_for_locraw"]]
+            del self.checks["wfl"]
     
     @staticmethod
     def update_game_from_locraw(self, buff, chat_message):
         if self.settings.waiting_for_locraw:
-            self.game = json.loads(chat_message)
+            if "limbo" in chat_message:
+                # sometimes it says limbo right when you join a game
+                time.sleep(0.1)
+                return self.update_game(buff)
+            elif "lobbyname" in chat_message:
+                # keep previous game
+                self.settings.waiting_for_locraw = False
+            else:
+                self.game = json.loads(chat_message)
+                self.settings.waiting_for_locraw = False
         else:
             self.downstream.send_packet(buff.read())
+    
+
+    @property
+    def silence_mystery(self):
+        return self._silence_mystery
+    
+    @silence_mystery.setter
+    def silence_mystery(self, value):
+        if value is True:
+            self._silence_mystery = True
+            self.checks.update(
+                {"s_m": (
+                    lambda x: x.startswith("✦"),
+                    lambda self, buff, chat_message: buff.discard()
+                )}
+            )
 
 
 # PATCHES
@@ -384,31 +409,13 @@ class ProxhyBridge(Bridge):
         buff.save()
         chat_message = buff.unpack_chat().to_string()
 
-        for check, func in self.settings.checks.items():
-            if check.match(chat_message):
+        for _, (check, func) in self.settings.checks.items():
+            if check(chat_message):
                 return func(self, buff, chat_message)
         
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
 
-        # ---------------------------------------------------------------
-        # buff.save()
-        # chat_message = buff.unpack_chat().to_string()
-
-        # if chat_message.startswith("{") and self.waiting_for_locraw:
-        #     if "limbo" in chat_message:
-        #         # sometimes it says limbo right when you join a game
-        #         time.sleep(0.1)
-        #         return self.update_game(buff)
-        #     elif "lobbyname" in chat_message:
-        #         # keep previous game
-        #         return
-
-        #     self.game = json.loads(chat_message)
-        #     self.waiting_for_locraw = False
-        # elif chat_message.startswith("✦") and self.silence_mystery:
-        #     buff.discard()
-        #     return
         # elif (chat_message.find("joined the lobby!") != -1) and (chat_message.find(":") == -1) and self.silence_joins:
         #     buff.discard()
         #     return
