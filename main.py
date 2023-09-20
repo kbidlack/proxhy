@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import time
 from xmlrpc.client import ProtocolError
 
@@ -16,6 +17,105 @@ from quarry.types.uuid import UUID
 from twisted.internet import reactor
 from twisted.python import failure
 
+
+class Settings:
+    checks = {}
+    patterns = {
+        # waiting_for_locraw
+        "wflp": re.compile("^{.*}$"),
+        # silence_joins
+        "sjp": re.compile("/\[.*MVP.*].*joined the lobby\!$/"),
+        # autoboop
+        "abp": re.compile("^Friend >.* joined\.")
+    }
+
+    _silence_joins = False
+    _silence_mystery = False
+    _waiting_for_locraw = False
+
+    @property
+    def waiting_for_locraw(self):
+        return self._waiting_for_locraw
+    
+    @waiting_for_locraw.setter
+    def waiting_for_locraw(self, value: bool):
+        if value is True:
+            self._waiting_for_locraw = True
+            self.checks.update(
+                {
+                    "wfl":
+                    (
+                        lambda x: bool(self.patterns["wflp"].match(x)),
+                        self.update_game_from_locraw
+                    )
+                }
+            )
+        elif value is False:
+            self._waiting_for_locraw = False
+            del self.checks["wfl"]
+    
+    @staticmethod
+    def update_game_from_locraw(self, buff, chat_message):
+        if self.settings.waiting_for_locraw:
+            if "limbo" in chat_message:
+                # sometimes it says limbo right when you join a game
+                time.sleep(0.1)
+                return self.update_game(buff)
+            elif "lobbyname" in chat_message:
+                # keep previous game
+                self.settings.waiting_for_locraw = False
+            else:
+                self.game = json.loads(chat_message)
+                self.settings.waiting_for_locraw = False
+        else:
+            self.downstream.send_packet(buff.read())
+    
+
+    @property
+    def silence_mystery(self):
+        return self._silence_mystery
+    
+    @silence_mystery.setter
+    def silence_mystery(self, value: bool):
+        if value is True:
+            self._silence_mystery = True
+            self.checks.update(
+                {"silence_mystery": (
+                    lambda x: x.startswith("✦"),
+                    lambda _, buff, __: buff.discard()
+                )}
+            )
+        elif value is False:
+            self._silence_mystery = False
+            del self.checks["silence_mystery"]
+
+    
+    @property
+    def silence_joins(self):
+        return self._silence_joins
+
+    @silence_joins.setter
+    def silence_joins(self, value: bool):
+        if value is True:
+            self._silence_joins = True
+            self.checks.update(
+                {
+                    "silence_joins":
+                    (
+                        lambda x: bool(self.patterns["sjp"].match(x))
+                        and not ':' in x,
+                        lambda _, buff, __: buff.discard()
+                    )
+                }
+            )
+        elif value is False:
+            self._silence_joins = False
+            del self.checks["silence_joins"]
+
+    
+    @property
+    def autoboop():
+        ...
 
 # PATCHES
 def data_received(self, data):
@@ -200,9 +300,12 @@ class DownstreamProtocol(Downstream):
 
         if r.status_code == 200:
             self.auth_ok(r.json())
+        elif r.status_code == 204:
+            self.auth_ok({"id": os.environ["UUID"]})
         else:
             self.auth_failed(failure.Failure(
-                auth.AuthException('invalid', 'invalid session')))
+                auth.AuthException('invalid', 'invalid session'))
+            )
 
 
 class ProxhyUpstreamFactory(UpstreamFactory):
@@ -213,11 +316,11 @@ class ProxhyUpstreamFactory(UpstreamFactory):
 class ProxhyBridge(Bridge):
     upstream_factory_class = ProxhyUpstreamFactory
     waiting_for_locraw = False
+    settings = Settings()
     game = {}
 
     # settings
     silence_mystery = False
-    silence_joins = False
     autoboops = []
 
     # load credentials
@@ -225,12 +328,6 @@ class ProxhyBridge(Bridge):
 
     email = os.environ["EMAIL"]
     password = os.environ["PASSWORD"]
-
-    auth_info = msmcauth.login(email, password)    
-
-    access_token = auth_info[0]
-    username = auth_info[1]
-    uuid = UUID.from_hex(auth_info[2])
 
     
     def run_command(self, buff, command: str):
@@ -273,11 +370,11 @@ class ProxhyBridge(Bridge):
                         )
                     )
                 elif args == ["joins"]:
-                    self.silence_joins = not self.silence_joins
+                    self.settings.silence_joins = not self.settings.silence_joins
                     self.downstream.send_packet(
                         "chat_message",
                         pack_chat(
-                            f"§9§l∎ §2Turned {'§aon' if self.silence_joins else '§4off'} §2lobby join messages silencing!",
+                            f"§9§l∎ §2Turned {'§aon' if self.settings.silence_joins else '§4off'} §2lobby join messages silencing!",
                             0
                         )
                     )
@@ -353,43 +450,30 @@ class ProxhyBridge(Bridge):
         buff.save()
         chat_message = buff.unpack_chat().to_string()
 
-        if chat_message.startswith("{") and self.waiting_for_locraw:
-            if "limbo" in chat_message:
-                # sometimes it says limbo right when you join a game
-                time.sleep(0.1)
-                return self.update_game(buff)
-            elif "lobbyname" in chat_message:
-                # keep previous game
-                return
+        for _, (check, func) in self.settings.checks.items():
+            if check(chat_message):
+                return func(self, buff, chat_message)
+        
+        buff.restore()
+        self.downstream.send_packet("chat_message", buff.read())
 
-            self.game = json.loads(chat_message)
-            self.waiting_for_locraw = False
-        elif chat_message.startswith("✦") and self.silence_mystery:
-            buff.discard()
-            return
-        elif (chat_message.find("joined the lobby!") != -1) and (chat_message.find(":") == -1) and self.silence_joins:
-            buff.discard()
-            return
-        elif chat_message.startswith("Friend > ") and str(chat_message.split()[2]).lower() in self.autoboops and str(chat_message.split()[3]).lower() == "joined.":
-            time.sleep(0.5) # Small wait for 
-            self.upstream.send_packet(
-                        "chat_message",
-                        buff.pack_string(f"/boop {str(chat_message.split()[2]).lower()}")
-                    )
-            buff.restore()
-            self.downstream.send_packet("chat_message", buff.read())
-        else:
-            buff.restore()
-            self.downstream.send_packet("chat_message", buff.read())
+        # elif chat_message.startswith("Friend > ") and str(chat_message.split()[2]).lower() in self.autoboops and str(chat_message.split()[3]).lower() == "joined.":
+        #     time.sleep(0.5) # Small wait for 
+        #     self.upstream.send_packet(
+        #                 "chat_message",
+        #                 buff.pack_string(f"/boop {str(chat_message.split()[2]).lower()}")
+        #             )
+        #     buff.restore()
+        #     self.downstream.send_packet("chat_message", buff.read())
 
     
     def update_game(self, buff):
         self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
-        self.waiting_for_locraw = True
+        self.settings.waiting_for_locraw = True
 
         # sometimes it doesn't come back properly
         time.sleep(0.1)
-        if self.waiting_for_locraw:
+        if self.settings.waiting_for_locraw:
             self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
 
 
