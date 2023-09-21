@@ -329,6 +329,11 @@ class ProxhyBridge(Bridge):
     email = os.environ["EMAIL"]
     password = os.environ["PASSWORD"]
 
+    auth_info = msmcauth.login(email, password)
+
+    access_token = auth_info[0]
+    username = auth_info[1]
+    uuid = UUID.from_hex(auth_info[2])
     
     def run_command(self, buff, command: str):
         match segments := command.split():
