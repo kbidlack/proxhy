@@ -156,7 +156,7 @@ def data_received(self, data):
                 except quarry.net.protocol.ProtocolError as e:
                     self.protocol_error(e)
 
-def pack_chat(message: str, _type: int):
+def pack_chat(message: str, _type: int = 0):
     # downstream chat packing works differently from upstream, requires this patch
     # see https://wiki.vg/index.php?title=Protocol&oldid=7368#Chat_Message for types
     # 0: chat (chat box), 1: system message (chat box), 2: above hotbar
@@ -225,11 +225,14 @@ class UpstreamProtocol(Upstream):
             "POST", url, headers=headers, data=payload
         )
 
-        if r.status_code == 204:
-            self.auth_ok(r.text)
+        if r.status_code == 200:
+            self.auth_ok(r.json())
+        elif r.status_code == 204:
+            self.auth_ok({"id": os.environ["UUID"]})
         else:
             self.auth_failed(failure.Failure(
-                auth.AuthException('unverified', 'unverified username')))
+                auth.AuthException('unverified', 'unverified username'))
+            )
 
 
 class DownstreamProtocol(Downstream):
@@ -322,6 +325,9 @@ class ProxhyBridge(Bridge):
     # settings
     silence_mystery = False
     autoboops = []
+
+    # !
+    sent_commands = []
 
     # load credentials
     load_dotenv()
@@ -425,7 +431,7 @@ class ProxhyBridge(Bridge):
                     )
             case _:
                 buff.restore()
-                self.upstream.send_packet("chat_message", buff.read())
+                self.upstream.send_packet("chat_message", buff.pack_string(command))
 
 
     def packet_unhandled(self, buff, direction, name):
@@ -439,8 +445,17 @@ class ProxhyBridge(Bridge):
         chat_message = buff.unpack_string()
         
         # parse commands
-        if chat_message.startswith("/"):
+        if chat_message.startswith('/'):
             self.run_command(buff, chat_message)
+            self.sent_commands.append(chat_message) #!
+        elif chat_message.startswith('!'):
+            event = chat_message.replace('!', '')
+            for command in reversed(self.sent_commands):
+                if command.startswith('/' + event):
+                    self.run_command(buff, command)
+                    break
+            else:
+                self.downstream.send_packet("chat_message", pack_chat(f"Event not found: {event}"))
         else:
             buff.restore()
             self.upstream.send_packet("chat_message", buff.read())
