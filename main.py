@@ -318,7 +318,6 @@ class ProxhyUpstreamFactory(UpstreamFactory):
 
 class ProxhyBridge(Bridge):
     upstream_factory_class = ProxhyUpstreamFactory
-    waiting_for_locraw = False
     settings = Settings()
     game = {}
 
@@ -329,18 +328,21 @@ class ProxhyBridge(Bridge):
     # !
     sent_commands = []
 
-    # load credentials
-    load_dotenv()
+    auth_info_gen_time = 0
 
-    email = os.environ["EMAIL"]
-    password = os.environ["PASSWORD"]
 
-    auth_info = msmcauth.login(email, password)
+    def gen_auth_info(self):
+        email = os.environ["EMAIL"]
+        password = os.environ["PASSWORD"]
 
-    access_token = auth_info[0]
-    username = auth_info[1]
-    uuid = UUID.from_hex(auth_info[2])
+        auth_info = msmcauth.login(email, password)
+        ProxhyBridge.auth_info_gen_time = time.time()
+
+        ProxhyBridge.access_token = auth_info[0]
+        ProxhyBridge.username = auth_info[1]
+        ProxhyBridge.uuid = UUID.from_hex(auth_info[2])
     
+
     def run_command(self, buff, command: str):
         match segments := command.split():
             case ["/requeue" | "/rq", *args]:
@@ -440,6 +442,7 @@ class ProxhyBridge(Bridge):
         elif direction == "upstream":
             self.upstream.send_packet(name, buff.read())
     
+
     def packet_upstream_chat_message(self, buff):
         buff.save()
         chat_message = buff.unpack_string()
@@ -503,6 +506,11 @@ class ProxhyBridge(Bridge):
         """
 
         # https://github.com/barneygale/quarry/issues/135
+        if time.time() - self.auth_info_gen_time > 86000:
+            # access token expired or doesn't exist
+            print("Credentials expired or do not exist, regenerating them")
+            self.gen_auth_info()
+
         return auth.Profile('(skip)', self.access_token, self.username, self.uuid)
 
 
@@ -513,6 +521,8 @@ class ProxhyDownstreamFactory(DownstreamFactory):
 
 
 def main():
+    load_dotenv()
+
     # start proxy
     factory = ProxhyDownstreamFactory()
 
