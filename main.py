@@ -351,19 +351,22 @@ class ProxhyBridge(Bridge):
     sent_commands = []
 
     load_dotenv()
-    access_token = os.environ["ACCESS_TOKEN"]
-    username = os.environ["USERNAME"]
-    uuid = os.environ["UUID"]
-    token_gen_time = float(os.environ["TOKEN_GEN_TIME"])
+    try:
+        email = os.environ["EMAIL"]
+        password = os.environ["PASSWORD"]
+    except KeyError:
+        print("Please put your email and password in .env file")
+
+    token_gen_time = float(os.environ.get("TOKEN_GEN_TIME", 0))
+    access_token = os.environ.get("ACCESS_TOKEN")
+    username = os.environ.get("USERNAME")
+    uuid = os.environ.get("UUID")
 
 
     def gen_auth_info(self):
         dotenv_path = dotenv.find_dotenv()
 
-        email = os.environ["EMAIL"]
-        password = os.environ["PASSWORD"]
-
-        auth_info = msmcauth.login(email, password)
+        auth_info = msmcauth.login(self.email, self.password)
         ProxhyBridge.access_token = auth_info[0]
         ProxhyBridge.username = auth_info[1]
         ProxhyBridge.uuid = str(UUID.from_hex(auth_info[2]))
