@@ -7,6 +7,7 @@ from xmlrpc.client import ProtocolError
 import msmcauth
 import quarry
 import requests
+import dotenv
 from dotenv import load_dotenv
 from quarry.net import auth, crypto
 from quarry.net.proxy import (Bridge, Downstream, DownstreamFactory, Upstream,
@@ -19,19 +20,43 @@ from twisted.python import failure
 
 
 class Settings:
-    checks = {}
-    patterns = {
-        # waiting_for_locraw
-        "wflp": re.compile("^{.*}$"),
-        # silence_joins
-        "sjp": re.compile("/\[.*MVP.*].*joined the lobby\!$/"),
-        # autoboop
-        "abp": re.compile("^Friend >.* joined\.")
-    }
+    autoboops = []    
 
     _silence_joins = False
     _silence_mystery = False
     _waiting_for_locraw = False
+
+
+    def __init__(self):
+        self.patterns = {
+            # waiting_for_locraw
+            "wflp": re.compile("^{.*}$"),
+            # silence_joins
+            "sjp": re.compile("/\[.*MVP.*].*joined the lobby\!$/"),
+            # autoboop
+            "abp": re.compile("^Friend >.* joined\.")
+        }
+
+        self.checks = {
+            "autoboop": (
+                lambda x: bool(self.patterns["abp"].match(x)),
+                self._autoboop
+            )
+        }
+
+
+    def _autoboop(self, bridge, buff, join_message):
+        # wait for a second for player to join
+        time.sleep(0.2)
+
+        bridge.upstream.send_packet(
+            "chat_message",
+            buff.pack_string(f"/boop {str(join_message.split()[2]).lower()}")
+        )
+
+        buff.restore()
+        bridge.downstream.send_packet("chat_message", buff.read())
+
 
     @property
     def waiting_for_locraw(self):
@@ -111,11 +136,7 @@ class Settings:
         elif value is False:
             self._silence_joins = False
             del self.checks["silence_joins"]
-
     
-    @property
-    def autoboop():
-        ...
 
 # PATCHES
 def data_received(self, data):
@@ -155,6 +176,7 @@ def data_received(self, data):
 
                 except quarry.net.protocol.ProtocolError as e:
                     self.protocol_error(e)
+
 
 def pack_chat(message: str, _type: int = 0):
     # downstream chat packing works differently from upstream, requires this patch
@@ -328,19 +350,45 @@ class ProxhyBridge(Bridge):
     # !
     sent_commands = []
 
-    auth_info_gen_time = 0
+    load_dotenv()
+    access_token = os.environ["ACCESS_TOKEN"]
+    username = os.environ["USERNAME"]
+    uuid = os.environ["UUID"]
+    token_gen_time = float(os.environ["TOKEN_GEN_TIME"])
 
 
     def gen_auth_info(self):
+        dotenv_path = dotenv.find_dotenv()
+
         email = os.environ["EMAIL"]
         password = os.environ["PASSWORD"]
 
         auth_info = msmcauth.login(email, password)
-        ProxhyBridge.auth_info_gen_time = time.time()
-
         ProxhyBridge.access_token = auth_info[0]
         ProxhyBridge.username = auth_info[1]
-        ProxhyBridge.uuid = UUID.from_hex(auth_info[2])
+        ProxhyBridge.uuid = str(UUID.from_hex(auth_info[2]))
+        ProxhyBridge.token_gen_time = str(time.time())
+
+        dotenv.set_key(
+            dotenv_path,
+            "TOKEN_GEN_TIME",
+            ProxhyBridge.token_gen_time
+        )
+        dotenv.set_key(
+            dotenv_path,
+            "ACCESS_TOKEN",
+            ProxhyBridge.access_token
+        )
+        dotenv.set_key(
+            dotenv_path,
+            "USERNAME",
+            ProxhyBridge.username
+        )
+        dotenv.set_key(
+            dotenv_path,
+            "UUID",
+            ProxhyBridge.uuid
+        )
     
 
     def run_command(self, buff, command: str):
@@ -480,15 +528,6 @@ class ProxhyBridge(Bridge):
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
 
-        # elif chat_message.startswith("Friend > ") and str(chat_message.split()[2]).lower() in self.autoboops and str(chat_message.split()[3]).lower() == "joined.":
-        #     time.sleep(0.5) # Small wait for 
-        #     self.upstream.send_packet(
-        #                 "chat_message",
-        #                 buff.pack_string(f"/boop {str(chat_message.split()[2]).lower()}")
-        #             )
-        #     buff.restore()
-        #     self.downstream.send_packet("chat_message", buff.read())
-
     
     def update_game(self, buff):
         self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
@@ -506,12 +545,12 @@ class ProxhyBridge(Bridge):
         """
 
         # https://github.com/barneygale/quarry/issues/135
-        if time.time() - self.auth_info_gen_time > 86000:
+        if time.time() - self.token_gen_time > 86000.:
             # access token expired or doesn't exist
             print("Credentials expired or do not exist, regenerating them")
             self.gen_auth_info()
 
-        return auth.Profile('(skip)', self.access_token, self.username, self.uuid)
+        return auth.Profile('(skip)', self.access_token, self.username, UUID.from_hex(self.uuid))
 
 
 class ProxhyDownstreamFactory(DownstreamFactory):
@@ -521,8 +560,6 @@ class ProxhyDownstreamFactory(DownstreamFactory):
 
 
 def main():
-    load_dotenv()
-
     # start proxy
     factory = ProxhyDownstreamFactory()
 
