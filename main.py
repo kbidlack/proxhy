@@ -49,10 +49,11 @@ class Settings:
         # wait for a second for player to join
         time.sleep(0.2)
 
-        bridge.upstream.send_packet(
-            "chat_message",
-            buff.pack_string(f"/boop {str(join_message.split()[2]).lower()}")
-        )
+        if (player := str(join_message.split()[2]).lower()) in bridge.autoboops:
+            bridge.upstream.send_packet(
+                "chat_message",
+                buff.pack_string(f"/boop {player}")
+            )
 
         buff.restore()
         bridge.downstream.send_packet("chat_message", buff.read())
