@@ -2,21 +2,17 @@ import json
 import os
 import re
 import time
-from xmlrpc.client import ProtocolError
 
-import msmcauth
-import quarry
-import requests
 import dotenv
+import msmcauth
 from dotenv import load_dotenv
-from quarry.net import auth, crypto
-from quarry.net.proxy import (Bridge, Downstream, DownstreamFactory, Upstream,
-                              UpstreamFactory)
-from quarry.types import chat
-from quarry.types.buffer import BufferUnderrun
+from quarry.net import auth
+from quarry.net.proxy import Bridge, DownstreamFactory
 from quarry.types.uuid import UUID
 from twisted.internet import reactor
-from twisted.python import failure
+
+from patches import pack_chat
+from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
 
 class Settings:
@@ -137,206 +133,6 @@ class Settings:
         elif value is False:
             self._silence_joins = False
             del self.checks["silence_joins"]
-    
-
-# PATCHES
-def data_received(self, data):
-            # Decrypt data
-            data = self.cipher.decrypt(data)
-
-            # Add it to our buffer
-            self.recv_buff.add(data)
-
-            # Read some packets
-            while not self.closed:
-                # Save the buffer, in case we read an incomplete packet
-                self.recv_buff.save()
-
-                # Read the packet
-                try:
-                    buff = self.recv_buff.unpack_packet(
-                        self.buff_type,
-                        self.compression_threshold)
-
-                except BufferUnderrun:
-                    self.recv_buff.restore()
-                    break
-
-                try:
-                    # Identify the packet
-                    name = self.get_packet_name(buff.unpack_varint())
-
-                    # Dispatch the packet
-                    try:
-                        self.packet_received(buff, name)
-                    except BufferUnderrun:
-                        raise quarry.net.protocol.ProtocolError("Packet is too short: %s" % name)
-
-                    # Reset the inactivity timer
-                    self.connection_timer.restart()
-
-                except quarry.net.protocol.ProtocolError as e:
-                    self.protocol_error(e)
-
-
-def pack_chat(message: str, _type: int = 0):
-    # downstream chat packing works differently from upstream, requires this patch
-    # see https://wiki.vg/index.php?title=Protocol&oldid=7368#Chat_Message for types
-    # 0: chat (chat box), 1: system message (chat box), 2: above hotbar
-    message = chat.Message.from_string(message)
-
-    if _type == 0:
-        byte = b'\x00' # chat box
-    elif _type == 1:
-        byte = b'\x01' # system message (chat box)
-    elif _type == 2:
-        byte = b'\x02' # above hotbar
-    return message.to_bytes() + byte
-
-
-class UpstreamProtocol(Upstream):
-    protocol_version = 47  
-
-    # PATCH Packet is too long:
-    def data_received(self, data):
-        return data_received(self, data)
-
-    def packet_login_encryption_request(self, buff):
-        p_server_id = buff.unpack_string()
-
-        # 1.7.x
-        if self.protocol_version <= 5:
-            def unpack_array(b):
-                return b.read(b.unpack('h'))
-        # 1.8.x
-        else:
-            def unpack_array(b):
-                return b.read(b.unpack_varint(max_bits=16))
-
-        p_public_key = unpack_array(buff)
-        p_verify_token = unpack_array(buff)
-
-        if not self.factory.profile.online:
-            raise ProtocolError("Can't log into online-mode server while using"
-                                " offline profile")
-
-        self.shared_secret = crypto.make_shared_secret()
-        self.public_key = crypto.import_public_key(p_public_key)
-        self.verify_token = p_verify_token
-
-        # make digest
-        digest = crypto.make_digest(
-            p_server_id.encode('ascii'),
-            self.shared_secret,
-            p_public_key)
-
-        # do auth
-        # deferred = self.factory.profile.join(digest)
-        # deferred.addCallbacks(self.auth_ok, self.auth_failed)
-
-        url = "https://sessionserver.mojang.com/session/minecraft/join"
-        payload = json.dumps({
-            "accessToken": self.factory.profile.access_token,
-            "selectedProfile": self.factory.profile.uuid.to_hex(False),
-            "serverId": digest
-        })
-        headers = {
-            'Content-Type': 'application/json'
-        }
-
-        r = requests.request(
-            "POST", url, headers=headers, data=payload
-        )
-
-        if r.status_code == 200:
-            self.auth_ok(r.json())
-        elif r.status_code == 204:
-            self.auth_ok({"id": os.environ["UUID"]})
-        else:
-            self.auth_failed(failure.Failure(
-                auth.AuthException('unverified', 'unverified username'))
-            )
-
-
-class DownstreamProtocol(Downstream):
-    protocol_version = 47
-
-    # PATCH Packet is too long:
-    def data_received(self, data):
-        return data_received(self, data)
-
-    def packet_login_encryption_response(self, buff):
-        if self.login_expecting != 1:
-            raise ProtocolError("Out-of-order login")
-
-        # 1.7.x
-        if self.protocol_version <= 5:
-            def unpack_array(b):
-                return b.read(b.unpack('h'))
-        # 1.8.x
-        else:
-            def unpack_array(b):
-                return b.read(b.unpack_varint(max_bits=16))
-
-        p_shared_secret = unpack_array(buff)
-        p_verify_token = unpack_array(buff)
-
-        shared_secret = crypto.decrypt_secret(
-            self.factory.keypair,
-            p_shared_secret)
-
-        verify_token = crypto.decrypt_secret(
-            self.factory.keypair,
-            p_verify_token)
-
-        self.login_expecting = None
-
-        if verify_token != self.verify_token:
-            raise ProtocolError("Verify token incorrect")
-
-        # enable encryption
-        self.cipher.enable(shared_secret)
-        self.logger.debug("Encryption enabled")
-
-        # make digest
-        digest = crypto.make_digest(
-            self.server_id.encode('ascii'),
-            shared_secret,
-            self.factory.public_key)
-
-        # do auth
-        remote_host = None
-        if self.factory.prevent_proxy_connections:
-            remote_host = self.remote_addr.host
-
-        # deferred = auth.has_joined(
-        #     self.factory.auth_timeout,
-        #     digest,
-        #     self.display_name,
-        #     remote_host)
-        # deferred.addCallbacks(self.auth_ok, self.auth_failed)
-
-        r = requests.get(
-            'https://sessionserver.mojang.com/session/minecraft/hasJoined',
-            params={'username': self.display_name,
-                    'serverId': digest,
-                    'ip': remote_host
-                }
-        )
-
-        if r.status_code == 200:
-            self.auth_ok(r.json())
-        elif r.status_code == 204:
-            self.auth_ok({"id": os.environ["UUID"]})
-        else:
-            self.auth_failed(failure.Failure(
-                auth.AuthException('invalid', 'invalid session'))
-            )
-
-
-class ProxhyUpstreamFactory(UpstreamFactory):
-    protocol = UpstreamProtocol
-    connection_timeout = 10
 
 
 class ProxhyBridge(Bridge):
