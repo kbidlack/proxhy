@@ -167,12 +167,12 @@ class ProxhyBridge(Bridge):
         ProxhyBridge.access_token = auth_info[0]
         ProxhyBridge.username = auth_info[1]
         ProxhyBridge.uuid = str(UUID.from_hex(auth_info[2]))
-        ProxhyBridge.token_gen_time = str(time.time())
+        ProxhyBridge.token_gen_time = time.time()
 
         dotenv.set_key(
             dotenv_path,
             "TOKEN_GEN_TIME",
-            ProxhyBridge.token_gen_time
+            str(ProxhyBridge.token_gen_time)
         )
         dotenv.set_key(
             dotenv_path,
