@@ -28,9 +28,9 @@ class Settings:
             # waiting_for_locraw
             "wflp": re.compile("^{.*}$"),
             # silence_joins
-            "sjp": re.compile("/\[.*MVP.*].*joined the lobby\!$/"),
+            "sjp": re.compile(r"/\[.*MVP.*].*joined the lobby\!$/"),
             # autoboop
-            "abp": re.compile("^Friend >.* joined\.")
+            "abp": re.compile(r"^Friend >.* joined\.")
         }
 
         self.checks = {
@@ -347,8 +347,9 @@ class ProxhyBridge(Bridge):
         # https://github.com/barneygale/quarry/issues/135
         if time.time() - self.token_gen_time > 86000.:
             # access token expired or doesn't exist
-            print("Credentials expired or do not exist, regenerating them")
+            print("Regenerating credentials...", end="")
             self.gen_auth_info()
+            print("done!")
 
         return auth.Profile('(skip)', self.access_token, self.username, UUID.from_hex(self.uuid))
 
