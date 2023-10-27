@@ -16,19 +16,13 @@ from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
 
 class Settings:
-    autoboops = []    
-
-    _silence_joins = False
-    _silence_mystery = False
-    _waiting_for_locraw = False
-
-
     def __init__(self):
+        self.autoboops = []
+        self.waiting_for_locraw = True
+
         self.patterns = {
             # waiting_for_locraw
             "wflp": re.compile("^{.*}$"),
-            # silence_joins
-            "sjp": re.compile(r"/\[.*MVP.*].*joined the lobby\!$/"),
             # autoboop
             "abp": re.compile(r"^Friend >.* joined\.")
         }
@@ -36,16 +30,20 @@ class Settings:
         self.checks = {
             "autoboop": (
                 lambda x: bool(self.patterns["abp"].match(x)),
-                self._autoboop
+                self.autoboop
+            ),
+            "waiting_for_locraw": (
+                lambda x: bool(self.patterns["wflp"].match(x)),
+                self.update_game_from_locraw
             )
         }
 
 
-    def _autoboop(self, bridge, buff, join_message):
+    def autoboop(self, bridge, buff, join_message):
         # wait for a second for player to join
-        time.sleep(0.2)
+        time.sleep(0.1)
 
-        if (player := str(join_message.split()[2]).lower()) in bridge.autoboops:
+        if (player := str(join_message.split()[2]).lower()) in self.autoboops:
             bridge.upstream.send_packet(
                 "chat_message",
                 buff.pack_string(f"/boop {player}")
@@ -53,96 +51,29 @@ class Settings:
 
         buff.restore()
         bridge.downstream.send_packet("chat_message", buff.read())
-
-
-    @property
-    def waiting_for_locraw(self):
-        return self._waiting_for_locraw
     
-    @waiting_for_locraw.setter
-    def waiting_for_locraw(self, value: bool):
-        if value is True:
-            self._waiting_for_locraw = True
-            self.checks.update(
-                {
-                    "wfl":
-                    (
-                        lambda x: bool(self.patterns["wflp"].match(x)),
-                        self.update_game_from_locraw
-                    )
-                }
-            )
-        elif value is False:
-            self._waiting_for_locraw = False
-            del self.checks["wfl"]
-    
-    @staticmethod
-    def update_game_from_locraw(self, buff, chat_message):
-        if self.settings.waiting_for_locraw:
+    def update_game_from_locraw(self, bridge, buff, chat_message):
+        if self.waiting_for_locraw:
             if "limbo" in chat_message:
                 # sometimes it says limbo right when you join a game
                 time.sleep(0.1)
-                return self.update_game(buff)
+                return bridge.update_game(buff)
             elif "lobbyname" in chat_message:
                 # keep previous game
-                self.settings.waiting_for_locraw = False
+                self.waiting_for_locraw = False
             else:
-                self.game = json.loads(chat_message)
-                self.settings.waiting_for_locraw = False
+                bridge.game = json.loads(chat_message)
+                self.waiting_for_locraw = False
         else:
-            self.downstream.send_packet(buff.read())
+            buff.restore()
+            bridge.downstream.send_packet("chat_message", buff.read())
     
-
-    @property
-    def silence_mystery(self):
-        return self._silence_mystery
-    
-    @silence_mystery.setter
-    def silence_mystery(self, value: bool):
-        if value is True:
-            self._silence_mystery = True
-            self.checks.update(
-                {"silence_mystery": (
-                    lambda x: x.startswith("✦"),
-                    lambda _, buff, __: buff.discard()
-                )}
-            )
-        elif value is False:
-            self._silence_mystery = False
-            del self.checks["silence_mystery"]
-
-    
-    @property
-    def silence_joins(self):
-        return self._silence_joins
-
-    @silence_joins.setter
-    def silence_joins(self, value: bool):
-        if value is True:
-            self._silence_joins = True
-            self.checks.update(
-                {
-                    "silence_joins":
-                    (
-                        lambda x: bool(self.patterns["sjp"].match(x))
-                        and not ':' in x,
-                        lambda _, buff, __: buff.discard()
-                    )
-                }
-            )
-        elif value is False:
-            self._silence_joins = False
-            del self.checks["silence_joins"]
-
 
 class ProxhyBridge(Bridge):
+    # persists across joins
     upstream_factory_class = ProxhyUpstreamFactory
     settings = Settings()
     game = {}
-
-    # settings
-    silence_mystery = False
-    autoboops = []
 
     # !
     sent_commands = []
@@ -209,50 +140,14 @@ class ProxhyBridge(Bridge):
                         "chat_message",
                         buff.pack_string(f"/play {self.game['mode']}")
                     )
-            case ["/silence", *args]:
-                if not args: # TODO multiple args
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(f"§9§l∎ §4Command <{segments[0]}> takes one argument: target", 0)
-                    )
-                elif len(args) > 1:
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(f"§9§l∎ §4Command <{segments[0]}> only takes one argument!", 0)
-                    )
-                elif args == ["mystery"]:
-                    self.silence_mystery = not self.silence_mystery
-
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(
-                            f"§9§l∎ §2Turned {'§aon' if self.silence_mystery else '§4off'} §2mystery box silencing!",
-                            0
-                        )
-                    )
-                elif args == ["joins"]:
-                    self.settings.silence_joins = not self.settings.silence_joins
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(
-                            f"§9§l∎ §2Turned {'§aon' if self.settings.silence_joins else '§4off'} §2lobby join messages silencing!",
-                            0
-                        )
-                    )
-                else:
-                     self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(
-                            "§9§l∎ §4Please enter a valid target; either mystery or joins.", 0)
-                    )
             case ["/autoboop", *args]:
                 if not args:
-                    if len(self.autoboops) > 0:
-                        autoboops = str(self.autoboops).replace(",", "§3,§c")
+                    if len(self.settings.autoboops) > 0:
+                        autoboops = str(self.settings.autoboops).replace(",", "§3,§c")
                         autoboops = ((autoboops.replace("[", "")).replace("]", "")).replace("'", "")
                         self.downstream.send_packet(
                             "chat_message",
-                            pack_chat(f"§9§l∎ §3People in autoboop list: §c{autoboops}§c.", 0)
+                            pack_chat(f"§9§l∎ §3People in autoboop list: §c{autoboops}§c", 0)
                         )
                     else:
                         self.downstream.send_packet(
@@ -264,17 +159,17 @@ class ProxhyBridge(Bridge):
                         "chat_message",
                         pack_chat(f"§9§l∎ §4Command <{segments[0]}> takes at most one argument!", 0)
                     )
-                elif str("".join(args)).lower() in self.autoboops:
+                elif str("".join(args)).lower() in self.settings.autoboops:
                     boop = str("".join(args)).lower()
-                    self.autoboops.remove(boop)
+                    self.settings.autoboops.remove(boop)
                     self.downstream.send_packet(
                         "chat_message",
                         pack_chat(f"§9§l∎ §c{boop} §3has been removed from autoboop", 0)
                     )
                     
-                elif str("".join(args)).lower() not in self.autoboops:
+                elif str("".join(args)).lower() not in self.settings.autoboops:
                     boop = str("".join(args)).lower()
-                    self.autoboops.append(boop)
+                    self.settings.autoboops.append(boop)
                     self.downstream.send_packet(
                         "chat_message",
                         pack_chat(f"§9§l∎ §c{boop} §3has been added to autoboop", 0)
