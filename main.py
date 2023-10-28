@@ -249,13 +249,12 @@ class ProxhyBridge(Bridge):
         return auth.Profile('(skip)', self.access_token, self.username, UUID.from_hex(self.uuid))
 
 
-class ProxhyDownstreamFactory(DownstreamFactory):
-    protocol = DownstreamProtocol
-    bridge_class = ProxhyBridge
-    motd = "Epic™ Hypixel Proxy | One might even say, Brilliant Move™"
-
-
 def main():
+    class ProxhyDownstreamFactory(DownstreamFactory):
+        protocol = DownstreamProtocol
+        bridge_class = ProxhyBridge
+        motd = "Epic™ Hypixel Proxy | One might even say, Brilliant Move™"
+
     # start proxy
     factory = ProxhyDownstreamFactory()
 
