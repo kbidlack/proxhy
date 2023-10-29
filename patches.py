@@ -1,5 +1,4 @@
 import asyncio
-import functools
 import json
 import pathlib
 import time
@@ -8,15 +7,14 @@ from uuid import UUID
 import hypixel
 import quarry
 from hypixel.aliases import GUILD, PLAYER, STATUS
-from hypixel.errors import InvalidPlayerId, PlayerNotFound
 from hypixel.game import Game
 from hypixel.models import Player
-from hypixel.utils import HashedDict
 from quarry.types import chat
 from quarry.types.buffer import BufferUnderrun
 
 
 class Client():
+    """Synchronous wrapper for hypixel.Client that supports caching across program runs"""
     def __init__(self, api_key):
         self.api_key = api_key
         
@@ -74,7 +72,7 @@ class Client():
 
     def player(self, username: str) -> Player:
         # check if player data is cached and not outdated
-        cached_data = self.cached_data.get(username)
+        cached_data = self.cached_data.get(username.lower())
         if cached_data and (time.monotonic() - float(cached_data['_time'])) < 3600:
             data = {
                 'raw': cached_data,
@@ -90,9 +88,12 @@ class Client():
             # if this is not here, causes a circular reference
             # because for some reason the last stats has a "..."
             # which throws an error
-            del data['player']['stats']['Arcade']['_data']['stats']
+            try:
+                del data['player']['stats']['Arcade']['_data']['stats']
+            except KeyError:
+                pass
             data.update({'_time': str(time.monotonic())})
-            self.cached_data.update({player.name: player.raw})
+            self.cached_data.update({player.name.lower(): player.raw})
             with open(self.cache_path, 'w') as cache_file:
                 json.dump(self.cached_data, cache_file, indent=4)
 

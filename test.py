@@ -3,11 +3,19 @@ import time
 from patches import Client
 
 client = Client('3e502eff-e9e6-4cd7-8f10-6ea0cdbf6f3d')
-print(time.perf_counter())
-client.player("gamerboy80")
-print(time.perf_counter())
-client.player("gamerboy80")
-print(time.perf_counter())
+players = ["gamerboy80", "kyngk", "perlence", "dukky", "zyyph", "purpled", "gamerboy81", "samuel1997", "HS_79", "PieterMeijer", "Flobo13", "Zovys", "Edumombe08", "ZenithUnleashed_", "ShadeyMcGrady", "_7ms", "puchitime", "wxtchie", "BenBoiGaming", "illes1", "Try_me_Nerd"]
+print(f"Checking {len(players)} players")
+
+start_time = time.perf_counter()
+
+for player in players:
+    print(time.perf_counter())
+    print(client.player(player).name)
+
+end_time = time.perf_counter()
+
+print("Total time:")
+print(end_time - start_time)
 
 # async def main():
 #     client = hypixel.Client('3e502eff-e9e6-4cd7-8f10-6ea0cdbf6f3d')
