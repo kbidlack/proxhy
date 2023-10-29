@@ -60,29 +60,37 @@ class Client():
         # Remove items that are not in the alias dictionary
         return {alias.get(k, k): v for k, v in data.items() if k in alias.keys()}
 
-    async def player_async(self, username: str) -> Player:
+    async def player_async(self, *usernames: str) -> list[Player]:
         """Call hypixel async player method with a new client""" 
-        # TODO update to fetch multiple players at once
-        # so new client sessions don't have to be created for each one
         client = hypixel.Client(self.api_key)
         async with client:
-            player = await client.player(username)
+            tasks = []
+            for username in usernames:
+                tasks.append(asyncio.create_task(client.player(username)))
 
-        return player
+            players = await asyncio.gather(*tasks)
+        return players
 
-    def player(self, username: str) -> Player:
-        # check if player data is cached and not outdated
-        cached_data = self.cached_data.get(username.lower())
-        if cached_data and (time.monotonic() - float(cached_data['_time'])) < 3600:
-            data = {
-                'raw': cached_data,
-                '_data': cached_data['player']
-            }
-            clean_data = self._clean(cached_data['player'], mode='PLAYER')
-            data.update(clean_data)
-            return Player(**data)
-        else:
-            player = asyncio.run(self.player_async(username))
+    def player(self, *usernames: str) -> list[Player]:
+        players = []
+        players_to_request = []
+
+        for username in usernames:
+            # check if player data is cached and not outdated
+            cached_data = self.cached_data.get(username.lower())
+            if cached_data and (time.monotonic() - float(cached_data['_time'])) < 3600:
+                data = {
+                    'raw': cached_data,
+                    '_data': cached_data['player']
+                }
+                clean_data = self._clean(cached_data['player'], mode='PLAYER')
+                data.update(clean_data)
+                players.append(Player(**data))
+            else:
+                players_to_request.append(username)
+
+        requested_players: list = asyncio.run(self.player_async(*players_to_request)) 
+        for player in requested_players:
             # cache data
             data = player.raw
             # if this is not here, causes a circular reference
@@ -92,12 +100,15 @@ class Client():
                 del data['player']['stats']['Arcade']['_data']['stats']
             except KeyError:
                 pass
+            # cache data
             data.update({'_time': str(time.monotonic())})
             self.cached_data.update({player.name.lower(): player.raw})
             with open(self.cache_path, 'w') as cache_file:
                 json.dump(self.cached_data, cache_file, indent=4)
 
-            return player
+            players.append(player)
+
+        return players
 
 
 def data_received(self, data):

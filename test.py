@@ -8,9 +8,9 @@ print(f"Checking {len(players)} players")
 
 start_time = time.perf_counter()
 
-for player in players:
-    print(time.perf_counter())
-    print(client.player(player).name)
+response = client.player(*players)
+print(f"{len(response)} players returned")
+print([player.name for player in response])
 
 end_time = time.perf_counter()
 
