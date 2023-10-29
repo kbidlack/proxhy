@@ -1,4 +1,3 @@
-import asyncio
 import json
 import os
 import re
@@ -12,7 +11,7 @@ from quarry.net.proxy import Bridge, DownstreamFactory
 from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
-from patches import Client, pack_chat
+from patches import pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
 

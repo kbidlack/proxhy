@@ -2,7 +2,6 @@ import asyncio
 import json
 import pathlib
 import time
-from uuid import UUID
 
 import hypixel
 import quarry
