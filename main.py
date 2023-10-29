@@ -1,3 +1,4 @@
+import asyncio
 import json
 import os
 import re
@@ -11,7 +12,7 @@ from quarry.net.proxy import Bridge, DownstreamFactory
 from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
-from patches import pack_chat
+from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
 
@@ -75,6 +76,7 @@ class ProxhyBridge(Bridge):
     settings = Settings()
     game = {}
 
+
     # !
     sent_commands = []
 
@@ -89,7 +91,7 @@ class ProxhyBridge(Bridge):
     access_token = os.environ.get("ACCESS_TOKEN")
     username = os.environ.get("USERNAME")
     uuid = os.environ.get("UUID")
-
+    hypixel_api_key = os.environ.get("HYPIXEL_API_KEY")
 
     def gen_auth_info(self):
         dotenv_path = dotenv.find_dotenv()
@@ -222,8 +224,17 @@ class ProxhyBridge(Bridge):
         
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
-
     
+    def packet_downstream_teams(self, buff):
+        buff.save()
+
+        # info about team
+        # https://wiki.vg/index.php?title=Protocol&oldid=7368#Teams
+
+        buff.restore()
+        self.downstream.send_packet("teams", buff.read())
+    
+
     def update_game(self, buff):
         self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
         self.settings.waiting_for_locraw = True

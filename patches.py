@@ -1,6 +1,102 @@
+import asyncio
+import functools
+import json
+import pathlib
+import time
+from uuid import UUID
+
+import hypixel
 import quarry
-from quarry.types.buffer import BufferUnderrun
+from hypixel.aliases import GUILD, PLAYER, STATUS
+from hypixel.errors import InvalidPlayerId, PlayerNotFound
+from hypixel.game import Game
+from hypixel.models import Player
+from hypixel.utils import HashedDict
 from quarry.types import chat
+from quarry.types.buffer import BufferUnderrun
+
+
+class Client():
+    def __init__(self, api_key):
+        self.api_key = api_key
+        
+        # load cached info
+        dir = __file__[:__file__.rfind('/')]
+        self.cache_path = dir / pathlib.Path('proxhy_cache.json')
+        if self.cache_path.exists():
+            with open(self.cache_path, 'r') as cache_file:
+                self.cached_data = json.load(cache_file)
+        else:
+            self.cached_data = {}
+
+            with open(self.cache_path, 'w') as cache_file:
+                json.dump(self.cached_data, cache_file)
+
+    @staticmethod
+    def _clean(data: dict, mode: str) -> dict:
+        alias = globals()[mode]
+
+        if mode == 'PLAYER':
+            # Avoid name conflicts
+            data['achievement_stats'] = data.pop('achievements', {})
+
+        # Deprecated by Hypixel
+        # elif mode == 'FRIEND':
+        #     # Sender and receiver could be either the player or the friend
+        #     # as the api stores the sender and receiver of the actual friend
+        #     # request.
+        #     # Extra is the player's uuid.
+        #     if data['uuidReceiver'] == extra:
+        #         data['uuidReceiver'] = data['uuidSender']
+
+        elif mode == 'STATUS':
+            data['gameType'] = Game.from_type(data.get('gameType'))
+
+        elif mode == 'GUILD':
+            achievements = data.get('achievements', {})
+            data['winners'] = achievements.get('WINNERS')
+            data['experience_kings'] = achievements.get('EXPERIENCE_KINGS')
+            data['most_online_players'] = achievements.get('ONLINE_PLAYERS')
+
+        # Replace keys in data with formatted alias
+        # Remove items that are not in the alias dictionary
+        return {alias.get(k, k): v for k, v in data.items() if k in alias.keys()}
+
+    async def player_async(self, username: str) -> Player:
+        """Call hypixel async player method with a new client""" 
+        # TODO update to fetch multiple players at once
+        # so new client sessions don't have to be created for each one
+        client = hypixel.Client(self.api_key)
+        async with client:
+            player = await client.player(username)
+
+        return player
+
+    def player(self, username: str) -> Player:
+        # check if player data is cached and not outdated
+        cached_data = self.cached_data.get(username)
+        if cached_data and (time.monotonic() - float(cached_data['_time'])) < 3600:
+            data = {
+                'raw': cached_data,
+                '_data': cached_data['player']
+            }
+            clean_data = self._clean(cached_data['player'], mode='PLAYER')
+            data.update(clean_data)
+            return Player(**data)
+        else:
+            player = asyncio.run(self.player_async(username))
+            # cache data
+            data = player.raw
+            # if this is not here, causes a circular reference
+            # because for some reason the last stats has a "..."
+            # which throws an error
+            del data['player']['stats']['Arcade']['_data']['stats']
+            data.update({'_time': str(time.monotonic())})
+            self.cached_data.update({player.name: player.raw})
+            with open(self.cache_path, 'w') as cache_file:
+                json.dump(self.cached_data, cache_file, indent=4)
+
+            return player
 
 
 def data_received(self, data):
