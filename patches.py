@@ -1,6 +1,7 @@
 import asyncio
 import json
 import pathlib
+import pickle
 import time
 
 import hypixel
@@ -19,15 +20,15 @@ class Client():
         
         # load cached info
         dir = __file__[:__file__.rfind('/')]
-        self.cache_path = dir / pathlib.Path('proxhy_cache.json')
+        self.cache_path = dir / pathlib.Path('proxhy_cache.pkl')
         if self.cache_path.exists():
-            with open(self.cache_path, 'r') as cache_file:
-                self.cached_data = json.load(cache_file)
+            with open(self.cache_path, 'rb') as cache_file:
+                self.cached_data = pickle.load(cache_file)
         else:
             self.cached_data = {}
 
-            with open(self.cache_path, 'w') as cache_file:
-                json.dump(self.cached_data, cache_file)
+            with open(self.cache_path, 'wb') as cache_file:
+                pickle.dump(self.cached_data, cache_file)
 
     @staticmethod
     def _clean(data: dict, mode: str) -> dict:
@@ -76,34 +77,19 @@ class Client():
 
         for username in usernames:
             # check if player data is cached and not outdated
-            cached_data = self.cached_data.get(username.lower())
-            if cached_data and (time.monotonic() - float(cached_data['_time'])) < 3600:
-                data = {
-                    'raw': cached_data,
-                    '_data': cached_data['player']
-                }
-                clean_data = self._clean(cached_data['player'], mode='PLAYER')
-                data.update(clean_data)
-                players.append(Player(**data))
+            cached_player = self.cached_data.get(username.lower())
+            if cached_player and (time.monotonic() - cached_player.data_gen_time) < 3600:
+                players.append(cached_player)
             else:
                 players_to_request.append(username)
 
         requested_players: list = asyncio.run(self.player_async(*players_to_request)) 
         for player in requested_players:
             # cache data
-            data = player.raw
-            # if this is not here, causes a circular reference
-            # because for some reason the last stats has a "..."
-            # which throws an error
-            try:
-                del data['player']['stats']['Arcade']['_data']['stats']
-            except KeyError:
-                pass
-            # cache data
-            data.update({'_time': str(time.monotonic())})
-            self.cached_data.update({player.name.lower(): player.raw})
-            with open(self.cache_path, 'w') as cache_file:
-                json.dump(self.cached_data, cache_file, indent=4)
+            player.data_gen_time = time.monotonic()
+            self.cached_data.update({player.name.lower(): player})
+            with open(self.cache_path, 'wb') as cache_file:
+                pickle.dump(self.cached_data, cache_file)
 
             players.append(player)
 

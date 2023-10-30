@@ -11,6 +11,7 @@ start_time = time.perf_counter()
 response = client.player(*players)
 print(f"{len(response)} players returned")
 print([player.name for player in response])
+print([player.bedwars.level for player in response])
 
 end_time = time.perf_counter()
 

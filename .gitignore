@@ -160,4 +160,4 @@ cython_debug/
 #.idea/
 
 # proxhy cache (wow insane crazy!!!!)
-proxhy_cache.json
+proxhy_cache.pkl
