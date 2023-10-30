@@ -8,10 +8,10 @@ import msmcauth
 from dotenv import load_dotenv
 from quarry.net import auth
 from quarry.net.proxy import Bridge, DownstreamFactory
-from quarry.types.buffer import Buffer1_7
 from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
+from commands import run_command
 from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
@@ -127,89 +127,6 @@ class ProxhyBridge(Bridge):
         )
     
 
-    def run_command(self, buff, command: str):
-        match segments := command.split():
-            case ["/requeue" | "/rq", *args]:
-                if args:
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(f"§9§l∎ §4Command <{segments[0]}> takes no arguments!", 0)
-                    )
-                elif self.game is None or self.game.get('mode') is None:
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat("§9§l∎ §4No game to requeue!", 0)
-                    )
-                else:
-                    self.upstream.send_packet(
-                        "chat_message",
-                        buff.pack_string(f"/play {self.game['mode']}")
-                    )
-            case ["/autoboop", *args]:
-                if not args:
-                    if len(self.settings.autoboops) > 0:
-                        autoboops = str(self.settings.autoboops).replace(",", "§3,§c")
-                        autoboops = ((autoboops.replace("[", "")).replace("]", "")).replace("'", "")
-                        self.downstream.send_packet(
-                            "chat_message",
-                            pack_chat(f"§9§l∎ §3People in autoboop list: §c{autoboops}§c", 0)
-                        )
-                    else:
-                        self.downstream.send_packet(
-                            "chat_message",
-                            pack_chat("§9§l∎ §4No one in autoboop list!", 0)
-                        )
-                elif len(args) > 1:
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(f"§9§l∎ §4Command <{segments[0]}> takes at most one argument!", 0)
-                    )
-                elif str("".join(args)).lower() in self.settings.autoboops:
-                    boop = str("".join(args)).lower()
-                    self.settings.autoboops.remove(boop)
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(f"§9§l∎ §c{boop} §3has been removed from autoboop", 0)
-                    )
-                    
-                elif str("".join(args)).lower() not in self.settings.autoboops:
-                    boop = str("".join(args)).lower()
-                    self.settings.autoboops.append(boop)
-                    self.downstream.send_packet(
-                        "chat_message",
-                        pack_chat(f"§9§l∎ §c{boop} §3has been added to autoboop", 0)
-                    )
-            case ["/teams"]:
-                try:
-                    with open('./teams.json', 'w') as file:
-                        json.dump(self.teams, file, indent=4)
-                except:
-                    print("skill issue bud.")
-            case ["/sc", *args]:
-                stats = ""
-                for arg in args:
-                    stats += self.client.player(arg)
-                self.downstream.send_packet( 
-                        "chat_message", 
-                        pack_chat(f"{stats}", 0)
-                )
-            case ["/garlicbread"]: # Mmm, garlic bread.
-                self.downstream.send_packet( # Mmm, garlic bread.
-                        "chat_message", # Mmm, garlic bread.
-                        pack_chat("§eMmm, garlic bread.", 0) # Mmm, garlic bread.
-                    ) # Mmm, garlic bread.
-            case ["/ping"]:
-                self.downstream.send_packet( 
-                        "pong", 
-                        pack_chat(f"{stats}", 0)
-                )
-                
-                
-            case _:
-                buff.restore()
-                self.upstream.send_packet("chat_message", buff.pack_string(command))
-
-
     def packet_unhandled(self, buff, direction, name):
         if direction == "downstream":
             self.downstream.send_packet(name, buff.read())
@@ -223,13 +140,13 @@ class ProxhyBridge(Bridge):
         
         # parse commands
         if chat_message.startswith('/'):
-            self.run_command(buff, chat_message)
+            run_command(buff, chat_message)
             self.sent_commands.append(chat_message) #!
         elif chat_message.startswith('!'):
             event = chat_message.replace('!', '')
             for command in reversed(self.sent_commands):
                 if command.startswith('/' + event):
-                    self.run_command(buff, command)
+                    run_command(buff, command)
                     break
             else:
                 self.downstream.send_packet("chat_message", pack_chat(f"Event not found: {event}"))
