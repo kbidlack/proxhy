@@ -8,10 +8,11 @@ import msmcauth
 from dotenv import load_dotenv
 from quarry.net import auth
 from quarry.net.proxy import Bridge, DownstreamFactory
+from quarry.types.buffer import Buffer1_7
 from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
-from patches import pack_chat
+from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
 
@@ -92,6 +93,8 @@ class ProxhyBridge(Bridge):
     username = os.environ.get("USERNAME")
     uuid = os.environ.get("UUID")
     hypixel_api_key = os.environ.get("HYPIXEL_API_KEY")
+
+    client = Client(hypixel_api_key)
 
     def gen_auth_info(self):
         dotenv_path = dotenv.find_dotenv()
@@ -227,7 +230,7 @@ class ProxhyBridge(Bridge):
         
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
-    
+
     def packet_downstream_teams(self, buff):
         buff.save()
 
@@ -283,7 +286,6 @@ class ProxhyBridge(Bridge):
             players = []
             for _ in range(player_count):
                 self.teams[name]["players"].remove(buff.unpack_string())
-
 
         buff.restore()
         self.downstream.send_packet("teams", buff.read())
