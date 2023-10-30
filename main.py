@@ -177,8 +177,31 @@ class ProxhyBridge(Bridge):
                         pack_chat(f"§9§l∎ §c{boop} §3has been added to autoboop", 0)
                     )
             case ["/teams"]:
-                with open('./teams.json', 'w') as file:
-                    json.dump(self.teams, file, indent=4)
+                try:
+                    with open('./teams.json', 'w') as file:
+                        json.dump(self.teams, file, indent=4)
+                except:
+                    print("skill issue bud.")
+            case ["/sc", *args]:
+                stats = ""
+                for arg in args:
+                    stats += self.client.player(arg)
+                self.downstream.send_packet( 
+                        "chat_message", 
+                        pack_chat(f"{stats}", 0)
+                )
+            case ["/garlicbread"]: # Mmm, garlic bread.
+                self.downstream.send_packet( # Mmm, garlic bread.
+                        "chat_message", # Mmm, garlic bread.
+                        pack_chat("§eMmm, garlic bread.", 0) # Mmm, garlic bread.
+                    ) # Mmm, garlic bread.
+            case ["/ping"]:
+                self.downstream.send_packet( 
+                        "pong", 
+                        pack_chat(f"{stats}", 0)
+                )
+                
+                
             case _:
                 buff.restore()
                 self.upstream.send_packet("chat_message", buff.pack_string(command))
