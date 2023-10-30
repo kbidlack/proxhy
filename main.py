@@ -73,8 +73,9 @@ class ProxhyBridge(Bridge):
     # persists across joins
     upstream_factory_class = ProxhyUpstreamFactory
     settings = Settings()
-    game = {}
 
+    game = {}
+    teams = {}
 
     # !
     sent_commands = []
@@ -175,6 +176,9 @@ class ProxhyBridge(Bridge):
                         "chat_message",
                         pack_chat(f"§9§l∎ §c{boop} §3has been added to autoboop", 0)
                     )
+            case ["/teams"]:
+                with open('./teams.json', 'w') as file:
+                    json.dump(self.teams, file, indent=4)
             case _:
                 buff.restore()
                 self.upstream.send_packet("chat_message", buff.pack_string(command))
@@ -227,8 +231,59 @@ class ProxhyBridge(Bridge):
     def packet_downstream_teams(self, buff):
         buff.save()
 
-        # info about team
-        # https://wiki.vg/index.php?title=Protocol&oldid=7368#Teams
+        name = buff.unpack_string()
+        mode = buff.read(1)
+
+        # team creation
+        if mode == b'\x00':
+            display_name = buff.unpack_string()
+            prefix = buff.unpack_string()
+            suffix = buff.unpack_string()
+            friendly_fire = buff.read(1)[0]
+            name_tag_visibility = buff.unpack_string()
+            color = buff.read(1)[0]
+
+            player_count = buff.unpack_varint()
+            players = []
+            for _ in range(player_count):
+                players.append(buff.unpack_string())
+            
+            self.teams.update(
+                {
+                    name: {
+                    "display_name": display_name,
+                    "prefix": prefix,
+                    "suffix": suffix,
+                    "friendly_fire": friendly_fire,
+                    "name_tag_visibility": name_tag_visibility,
+                    "color": color,
+                    "players": players
+                    }
+                }
+            )
+        # team removal
+        elif mode == b'\x01':
+            del self.teams[name]
+        # team information updation
+        elif mode == b'\x02':
+            self.teams[name]["display_name"] = buff.unpack_string()
+            self.teams[name]["prefix"] = buff.unpack_string()
+            self.teams[name]["suffix"] = buff.unpack_string()
+            self.teams[name]["friendly_fire"] = buff.read(1)[0]
+            self.teams[name]["name_tag_visibility"] = buff.unpack_string()
+            self.teams[name]["color"] = buff.read(1)[0]
+        # add players to team
+        elif mode == b'\x03':
+            player_count = buff.unpack_varint()
+            for _ in range(player_count):
+                self.teams[name]["players"].append(buff.unpack_string())
+        # remove players from team
+        elif mode == b'\x04':
+            player_count = buff.unpack_varint()
+            players = []
+            for _ in range(player_count):
+                self.teams[name]["players"].remove(buff.unpack_string())
+
 
         buff.restore()
         self.downstream.send_packet("teams", buff.read())
