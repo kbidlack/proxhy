@@ -125,15 +125,32 @@ class ProxhyBridge(Bridge):
             "UUID",
             ProxhyBridge.uuid
         )
-    
 
+    @staticmethod
+    def packet_catch_errors(func):
+        def inner(self, buff, *args, **kwargs):
+            try:
+                buff.save()
+                func(self, buff, *args, **kwargs)
+            except Exception as e:
+                direction = func.__name__.split('_')[1]
+                name = '_'.join(func.__name__.split('_')[2:])
+                if direction == "downstream":
+                    self.downstream.send_packet(name, buff.read())
+                elif direction == "upstream":
+                    self.upstream.send_packet(name, buff.read())
+                print(e)
+        return inner
+
+    
+    @packet_catch_errors
     def packet_unhandled(self, buff, direction, name):
         if direction == "downstream":
             self.downstream.send_packet(name, buff.read())
         elif direction == "upstream":
             self.upstream.send_packet(name, buff.read())
     
-
+    @packet_catch_errors
     def packet_upstream_chat_message(self, buff):
         buff.save()
         chat_message = buff.unpack_string()
@@ -153,13 +170,15 @@ class ProxhyBridge(Bridge):
         else:
             buff.restore()
             self.upstream.send_packet("chat_message", buff.read())
-    
+
+    @packet_catch_errors 
     def packet_downstream_join_game(self, buff):
         self.downstream.send_packet("join_game", buff.read())
 
         # check what game the player is playing
         self.update_game(buff)
 
+    @packet_catch_errors
     def packet_downstream_chat_message(self, buff):
         buff.save()
         chat_message = buff.unpack_chat().to_string()
@@ -171,6 +190,7 @@ class ProxhyBridge(Bridge):
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
 
+    @packet_catch_errors
     def packet_downstream_teams(self, buff):
         buff.save()
 
