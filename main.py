@@ -157,13 +157,13 @@ class ProxhyBridge(Bridge):
         
         # parse commands
         if chat_message.startswith('/'):
-            run_command(buff, chat_message)
+            run_command(self, buff, chat_message)
             self.sent_commands.append(chat_message) #!
         elif chat_message.startswith('!'):
             event = chat_message.replace('!', '')
             for command in reversed(self.sent_commands):
                 if command.startswith('/' + event):
-                    run_command(buff, command)
+                    run_command(self, buff, command)
                     break
             else:
                 self.downstream.send_packet("chat_message", pack_chat(f"Event not found: {event}"))
