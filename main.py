@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from quarry.net import auth
 from quarry.net.proxy import Bridge, DownstreamFactory
 from quarry.types.uuid import UUID
+from quarry.types.buffer import Buffer1_7
 from twisted.internet import reactor
 
 from commands import run_command
@@ -40,7 +41,7 @@ class Settings:
         }
 
 
-    def autoboop(self, bridge, buff, join_message):
+    def autoboop(self, bridge, buff: Buffer1_7, join_message):
         # wait for a second for player to join
         time.sleep(0.1)
 
@@ -53,7 +54,7 @@ class Settings:
         buff.restore()
         bridge.downstream.send_packet("chat_message", buff.read())
     
-    def update_game_from_locraw(self, bridge, buff, chat_message):
+    def update_game_from_locraw(self, bridge, buff: Buffer1_7, chat_message):
         if self.waiting_for_locraw:
             if "limbo" in chat_message:
                 # sometimes it says limbo right when you join a game
@@ -128,7 +129,7 @@ class ProxhyBridge(Bridge):
 
     @staticmethod
     def packet_catch_errors(func):
-        def inner(self, buff, *args, **kwargs):
+        def inner(self, buff: Buffer1_7, *args, **kwargs):
             try:
                 buff.save()
                 func(self, buff, *args, **kwargs)
@@ -144,14 +145,14 @@ class ProxhyBridge(Bridge):
 
     
     @packet_catch_errors
-    def packet_unhandled(self, buff, direction, name):
+    def packet_unhandled(self, buff: Buffer1_7, direction, name):
         if direction == "downstream":
             self.downstream.send_packet(name, buff.read())
         elif direction == "upstream":
             self.upstream.send_packet(name, buff.read())
     
     @packet_catch_errors
-    def packet_upstream_chat_message(self, buff):
+    def packet_upstream_chat_message(self, buff: Buffer1_7):
         buff.save()
         chat_message = buff.unpack_string()
         
@@ -172,14 +173,14 @@ class ProxhyBridge(Bridge):
             self.upstream.send_packet("chat_message", buff.read())
 
     @packet_catch_errors 
-    def packet_downstream_join_game(self, buff):
+    def packet_downstream_join_game(self, buff: Buffer1_7):
         self.downstream.send_packet("join_game", buff.read())
 
         # check what game the player is playing
         self.update_game(buff)
 
     @packet_catch_errors
-    def packet_downstream_chat_message(self, buff):
+    def packet_downstream_chat_message(self, buff: Buffer1_7):
         buff.save()
         chat_message = buff.unpack_chat().to_string()
 
@@ -251,7 +252,7 @@ class ProxhyBridge(Bridge):
         self.downstream.send_packet("teams", buff.read())
     
 
-    def update_game(self, buff):
+    def update_game(self, buff: Buffer1_7):
         self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
         self.settings.waiting_for_locraw = True
 
