@@ -1,8 +1,9 @@
 import inspect
+from hypixel.errors import PlayerNotFound
 
 from quarry.types.buffer import Buffer1_7
 
-from patches import pack_chat
+from patches import Client, pack_chat
 
 commands = {}
 
@@ -80,4 +81,26 @@ def requeue(bridge, buff: Buffer1_7):
         bridge.upstream.send_packet(
             "chat_message",
             buff.pack_string(f"/play {bridge.game['mode']}")
+        )
+
+@command("sc", "cs")
+def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
+    if gamemode is None:
+        gamemode = bridge.game.get('mode')
+    # TODO check for gamemode aliases
+    
+    client: Client = bridge.client
+    try:
+        player = client.player(ign)[0]
+    except PlayerNotFound:
+        bridge.downstream.send_packet(
+            "chat_message",
+            f"Player '{ign}' not found!"
+        )
+    else:
+        bridge.downstream.send_packet(
+            "chat_message",
+            pack_chat(
+                f"[{player.bedwars.level}] | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {player.bedwars.wins/player.bedwars.losses}"
+            )
         )
