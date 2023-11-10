@@ -55,7 +55,6 @@ class Command:
         else:
             self.function(bridge, buff, *args)
 
-
 def command(*aliases):
     return lambda func: Command(func, *aliases)
 
