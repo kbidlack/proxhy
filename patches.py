@@ -1,5 +1,5 @@
 import asyncio
-import json
+import aiohttp
 import pathlib
 import pickle
 import time
@@ -63,6 +63,17 @@ class Client():
     async def player_async(self, *usernames: str) -> list[Player]:
         """Call hypixel async player method with a new client""" 
         client = hypixel.Client(self.api_key)
+
+        # disable ssl cuz that was causing a problem I guess
+        await client._session.close()
+        client._session = aiohttp.ClientSession(
+            loop=client.loop,
+            timeout=aiohttp.ClientTimeout(
+                total=client.timeout
+            ),
+            connector=aiohttp.TCPConnector(ssl=False) 
+        )
+
         async with client:
             tasks = []
             for username in usernames:
