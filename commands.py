@@ -58,7 +58,17 @@ class Command:
 def command(*aliases):
     return lambda func: Command(func, *aliases)
 
+def run_command(bridge, buff, message: str):
+    segments = message.split()
+    command = segments[0].removeprefix('/')
+    if commands.get(command):
+        commands[command](bridge, buff, message)
+    else:
+        buff.restore()
+        bridge.upstream.send_packet("chat_message", buff.pack_string(message))
 
+
+# COMMANDS
 @command("rq")
 def requeue(bridge, buff: Buffer1_7):
     if bridge.game.get('mode') is None:
@@ -71,13 +81,3 @@ def requeue(bridge, buff: Buffer1_7):
             "chat_message",
             buff.pack_string(f"/play {bridge.game['mode']}")
         )
-
-
-def run_command(bridge, buff, message: str):
-    segments = message.split()
-    command = segments[0].removeprefix('/')
-    if commands.get(command):
-        commands[command](bridge, buff, message)
-    else:
-        buff.restore()
-        bridge.upstream.send_packet("chat_message", buff.pack_string(message))
