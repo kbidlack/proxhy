@@ -19,7 +19,7 @@ class Client():
         self.api_key = api_key
         
         # load cached info
-        dir = __file__[:__file__.rfind('/')]
+        dir = pathlib.Path(__file__).parent
         self.cache_path = dir / pathlib.Path('proxhy_cache.pkl')
         if self.cache_path.exists():
             with open(self.cache_path, 'rb') as cache_file:
