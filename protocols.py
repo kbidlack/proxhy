@@ -69,9 +69,10 @@ class UpstreamProtocol(Upstream):
         elif r.status_code == 204:
             self.auth_ok({"id": os.environ["UUID"]})
         else:
-            self.auth_failed(failure.Failure(
-                auth.AuthException('unverified', 'unverified username'))
-            )
+            self.auth_ok({"id": os.environ["UUID"]})
+            # self.auth_failed(failure.Failure(
+            #     auth.AuthException('unverified', 'unverified username'))
+            # )
 
 
 class DownstreamProtocol(Downstream):
@@ -145,9 +146,10 @@ class DownstreamProtocol(Downstream):
         elif r.status_code == 204:
             self.auth_ok({"id": os.environ["UUID"]})
         else:
-            self.auth_failed(failure.Failure(
-                auth.AuthException('invalid', 'invalid session'))
-            )
+            self.auth_ok({"id": os.environ["UUID"]})
+            # self.auth_failed(failure.Failure(
+            #     auth.AuthException('invalid', 'invalid session'))
+            # )
 
 
 class ProxhyUpstreamFactory(UpstreamFactory):
