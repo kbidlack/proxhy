@@ -1,11 +1,17 @@
 import inspect
-from hypixel.errors import PlayerNotFound
+from hypixel.errors import PlayerNotFound, InvalidApiKey
 
 from quarry.types.buffer import Buffer1_7
 
 from patches import Client, pack_chat
 
 commands = {}
+
+
+class CommandException(Exception):
+    """If a command has an error then stuff happens"""
+    def __init__(self, message):
+        self.message = message
 
 
 class Parameter:
@@ -54,16 +60,25 @@ class Command:
                 pack_chat(f"§9§l∎ §4Command <{segments[0]}> needs at least {len(self.required_parameters)} arguments! ({names})")
             )
         else:
-            self.function(bridge, buff, *args)
+            return self.function(bridge, buff, *args)
 
 def command(*aliases):
     return lambda func: Command(func, *aliases)
 
 def run_command(bridge, buff, message: str):
     segments = message.split()
-    command = segments[0].removeprefix('/')
-    if commands.get(command):
-        commands[command](bridge, buff, message)
+    command = commands.get(segments[0].removeprefix('/')) or commands.get(segments[0].removeprefix('//'))
+    if command:
+        try:
+            output = command(bridge, buff, message)
+        except CommandException as err:
+            bridge.downstream.send_packet("chat_message", pack_chat(err.message))
+        else:
+            if output:
+                if segments[0].startswith('//'): # send output of command
+                    bridge.upstream.send_packet("chat_message", buff.pack_string(output))
+                else:
+                    bridge.downstream.send_packet("chat_message", pack_chat(output))
     else:
         buff.restore()
         bridge.upstream.send_packet("chat_message", buff.pack_string(message))
@@ -73,10 +88,7 @@ def run_command(bridge, buff, message: str):
 @command("rq")
 def requeue(bridge, buff: Buffer1_7):
     if bridge.game.get('mode') is None:
-        bridge.downstream.send_packet(
-            "chat_message",
-            pack_chat("§9§l∎ §4No game to requeue!", 0)
-        )
+        raise CommandException("§9§l∎ §4No game to requeue!")
     else:
         bridge.upstream.send_packet(
             "chat_message",
@@ -92,15 +104,13 @@ def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
     client: Client = bridge.client
     try:
         player = client.player(ign)[0]
+
+        if player.bedwars.losses == 0: # ZeroDivisionError
+            losses = 1
+        else:
+            losses = player.bedwars.losses
+        return f"[{player.bedwars.level}] | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {round(player.bedwars.wins/losses, 2)}"
     except PlayerNotFound:
-        bridge.downstream.send_packet(
-            "chat_message",
-            f"Player '{ign}' not found!"
-        )
-    else:
-        bridge.downstream.send_packet(
-            "chat_message",
-            pack_chat(
-                f"[{player.bedwars.level}] | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {player.bedwars.wins/player.bedwars.losses}"
-            )
-        )
+        raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
+    except InvalidApiKey:
+        raise CommandException(f"§9§l∎ §4Invalid API Key!")
