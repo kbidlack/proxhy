@@ -94,11 +94,11 @@ def requeue(bridge, buff: Buffer1_7):
             buff.pack_string(f"/play {bridge.game['mode']}")
         )
         
-@command("garlicbread") # Mmm, garlic bread. 
+@command() # Mmm, garlic bread. 
 def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread. 
        return "§eMmm, garlic bread." # Mmm, garlic bread. 
 
-@command("sc", "cs")
+@command("sc")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
     if ign == "sw" and gamemode is None:
         ign = bridge.username
@@ -108,8 +108,6 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
     if gamemode is None:
         # TODO check for duels aliases
         gamemode = bridge.game.get('mode')
-   
-    
 
     client: Client = bridge.client
     try:
@@ -117,10 +115,10 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
         if gamemode in sw:
             stats_message = player.skywars.level
             stats_message += f" {player.name} "
-            stats_message += f"Wins: {player.skywars.wins} "
-            stats_message += f"WLR: {player.skywars.wlr} "
             stats_message += f"Kills: {player.skywars.kills} "
             stats_message += f"KDR: {player.skywars.kdr}"
+            stats_message += f"Wins: {player.skywars.wins} "
+            stats_message += f"WLR: {player.skywars.wlr} "
         else:
             stats_message = player.bedwars.level
             stats_message += f" {player.name} "

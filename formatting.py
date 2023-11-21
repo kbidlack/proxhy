@@ -334,7 +334,7 @@ def sw_icon(player): # Thanks SO MUCH to hxzelx on the forums for making a list 
              "emperor_prestige":"❈","mythic_prestige":"§lಠ§d_§5ಠ"}
     try:
         return icons[player._data["stats"]["SkyWars"]["selected_prestige_icon"]]
-    except: # Occasionally there are errors with the default icon
+    except KeyError: # Occasionally there are errors with the default icon
         return "⋆"
     
 def format_sw_star(level, player):
@@ -388,9 +388,7 @@ def format_sw_star(level, player):
         level = str(level)
         stars = f"§l§c§k[§r§6{level[0]}§e{level[1]}§a{level[2]}§b{sw_icon(player)}§l§c§k]§r"
     return stars
-    
-        
-    
+
 
 # add attributes to player object
 def format_player(player: Player) -> Player:
