@@ -11,10 +11,10 @@ def get_rank(player):
     elif player.rank == "MVP":
         return "§b[MVP]"
     elif player.rank == "MVP+":
-        plus = player.plus_color.chat_code
+        plus = return_plus_color(player)
         return f"§b[MVP{plus}+§b]"
     elif player.rank == "MVP++":
-        plus = player.plus_color.chat_code
+        plus = return_plus_color(player)
         return f"§6[MVP{plus}++§6]"
     elif player.rank == "ADMIN" or player.rank == "OWNER":
         return f"§c[{player.rank}]"
@@ -29,6 +29,12 @@ def get_rank(player):
     elif player.name == "KyngK":
         return "§2[§eS§2T§eI§2N§eK§2Y§e]§2"
     return "§7" # if there are any other weird ranks because you never know ig, also nons lmfao
+
+def return_plus_color(player):
+    if player.plus_color:
+        return player.plus.color.chat_code
+    else:
+        return "§c"
 
 # BEDWARS 
 def format_bw_fkdr(fkdr):
@@ -314,6 +320,16 @@ def format_sw_wlr(wlr):
         return "§9" + str(wlr) + "§f"
     else:
         return "§0" + str(wlr) + "§f"
+def get_sw_icon(ign):
+    ...   
+def format_sw_star(level):
+    stars = ""
+    colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
+
+    if level < 50:
+        stars = f"{colors[level // 5]}[{level}]"
+    ...
+    
 # add attributes to player object
 def format_player(player: Player) -> Player:
     new_player = deepcopy(player)
