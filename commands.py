@@ -112,7 +112,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
 
         stats_message = player.bedwars.level
         stats_message += f" {player.name} "
-        stats_message += f"§fFinals: {player.bedwars.final_kills} "
+        stats_message += f"Finals: {player.bedwars.final_kills} "
         stats_message += f"FKDR: {player.bedwars.fkdr} "
         stats_message += f"Wins: {player.bedwars.wins} "
         stats_message += f"WLR: {player.bedwars.wlr}"

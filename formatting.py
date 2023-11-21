@@ -320,8 +320,10 @@ def format_sw_wlr(wlr):
         return "§9" + str(wlr) + "§f"
     else:
         return "§0" + str(wlr) + "§f"
-def get_sw_icon(ign):
+
+def format_sw_icon(ign):
     ...   
+
 def format_sw_star(level):
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
