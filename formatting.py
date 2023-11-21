@@ -329,8 +329,7 @@ def format_player(player: Player) -> Player:
     new_player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
     new_player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
     new_player.bedwars.wins = format_bw_wins(player.bedwars.wins)
-    losses = player.bedwars.losses or 1 # ZeroDivisionError
-    new_player.bedwars.wlr = format_bw_wlr(round(player.bedwars.wins / losses, 2))
+    new_player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
 
     new_player.skywars.kills = format_sw_kills(player.skywars.kills)
     new_player.skywars.wins = format_sw_wins(player.skywars.wins)

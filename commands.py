@@ -99,7 +99,6 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
 
 @command("sc", "cs")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
-    print(ign, gamemode, stats)
     if gamemode is None:
         # TODO check for gamemode aliases
         gamemode = bridge.game.get('mode')
