@@ -115,10 +115,10 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None):
         losses = player.bedwars.losses or 1 # ZeroDivisionError
 
         stats_message = color_bw_stars(player.bedwars.level)
-        stats_message += f"§f {get_rank(player)} {player.name} "
-        stats_message += f"§fFKDR: {format_bw_fkdr(player.bedwars.fkdr)} "
-        stats_message += f"Wins: {format_bw_wins(player.bedwars.wins)} "
+        stats_message += f"§f {get_rank(player)} {player.name} §f"
         stats_message += f"Finals: {format_bw_finals(player.bedwars.final_kills)} "
+        stats_message += f"FKDR: {format_bw_fkdr(player.bedwars.fkdr)} "
+        stats_message += f"Wins: {format_bw_wins(player.bedwars.wins)} "
         stats_message += f"WLR: {format_bw_wlr(round(player.bedwars.wins / losses, 2))}"
         return stats_message
     except PlayerNotFound: 
