@@ -94,9 +94,9 @@ def requeue(bridge, buff: Buffer1_7):
             buff.pack_string(f"/play {bridge.game['mode']}")
         )
         
-@command("garlicbread") # Mmm, garlic bread.
-def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
-       return "§eMmm, garlic bread." # Mmm, garlic bread.
+@command("garlicbread") # Mmm, garlic bread. 
+def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread. 
+       return "§eMmm, garlic bread." # Mmm, garlic bread. 
 
 @command("sc", "cs")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
@@ -109,15 +109,29 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
     client: Client = bridge.client
     try:
         player = format_player(client.player(ign))
-
-        stats_message = player.bedwars.level
-        stats_message += f" {player.name} "
-        stats_message += f"Finals: {player.bedwars.final_kills} "
-        stats_message += f"FKDR: {player.bedwars.fkdr} "
-        stats_message += f"Wins: {player.bedwars.wins} "
-        stats_message += f"WLR: {player.bedwars.wlr}"
+        if (gamemode in sw):
+            stats_message = player.skywars.level
+            stats_message += f" {player.name} "
+            stats_message += f"Wins: {player.skywars.wins} "
+            stats_message += f"WLR: {player.skywars.wlr} "
+            stats_message += f"Kills: {player.skywars.kills} "
+            stats_message += f"KDR: {player.skywars.kdr}"
+        else:
+            stats_message = player.bedwars.level
+            stats_message += f" {player.name} "
+            stats_message += f"Finals: {player.bedwars.final_kills} "
+            stats_message += f"FKDR: {player.bedwars.fkdr} "
+            stats_message += f"Wins: {player.bedwars.wins} "
+            stats_message += f"WLR: {player.bedwars.wlr}"
         return stats_message
+        
     except PlayerNotFound: 
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
     except InvalidApiKey:
         raise CommandException(f"§9§l∎ §4Invalid API Key!")
+    
+# Gamemodes:
+sw = ["solo_normal","solo_insane","teams_normal","teams_insane","mega_normal","mega_doubles",
+      "solo_insane_tnt_madness","teams_insane_tnt_madness","solo_insane_rush","teams_insane_rush",
+      "solo_insane_slime","teams_insane_slime","solo_insane_lucky","teams_insane_lucky",
+      "solo_insane_hunters_vs_beasts","sw","SW","skywars"]

@@ -113,7 +113,7 @@ def format_bw_wlr(wlr):
     else:
         return "§d" + str(wlr) + "§f"       
 
-def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
+def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors up to 3000
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
@@ -321,16 +321,75 @@ def format_sw_wlr(wlr):
     else:
         return "§0" + str(wlr) + "§f"
 
-def format_sw_icon(ign):
-    ...   
-
-def format_sw_star(level):
+def sw_icon(player): # Thanks SO MUCH to hxzelx on the forums for making a list of all of these. If I had to search up all of these it would be joever
+    icons = {"angel_1":"★", "angel_2":"☆", "angel_3":"⁕", "angel_4":"✶","angel_5":"✳","angel_6":"✴","angel_7":"✷",
+             "angel_8":"❋","angel_9":"✼","angel_10":"❂","angel_11":"❁","angel_12":"☬","omega_icon":"Ω",
+             "favor_icon":"⚔","default":"⋆","iron_prestige":"✙","gold_prestige":"❤","diamond_prestige":"☠",
+             "emerald_prestige":"✦","sapphire_prestige":"✌","ruby_prestige":"❦","crystal_prestige":"✵","opal_prestige":"❣",
+             "amethyst_prestige":"☯","rainbow_prestige":"✺","first_class_prestige":"✈","assassin_prestige":"⚰",
+             "veteran_prestige":"✠","god_like_prestige":"♕","warrior_prestige":"⚡","captain_prestige":"⁂",
+             "soldier_prestige":"✰","infantry_prestige":"⁑","sergeant_prestige":"☢","lieutenant_prestige":"✥",
+             "admiral_prestige":"♝","general_prestige":"♆","villain_prestige":"☁","skilled_prestige":"⍟",
+             "sneaky_prestige":"♗","overlord_prestige":"♔","war_chief_prestige":"♞","warlock_prestige":"✏",
+             "emperor_prestige":"❈","mythic_prestige":"§lಠ§d_§5ಠ"}
+    try:
+        return icons[player._data["stats"]["SkyWars"]["selected_prestige_icon"]]
+    except: # Occasionally there are errors with the default icon
+        return "⋆"
+    
+def format_sw_star(level, player):
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
     if level < 50:
-        stars = f"{colors[level // 5]}[{level}]"
-    ...
+        stars = f"{colors[int(level // 5)]}[{str(level)[0:2]}{sw_icon(player)}]"
+    elif level < 55:
+        level = str(level)
+        stars = f"§c[§6{level[0]}§e{level[1]}§a{sw_icon(player)}§b]"
+    elif level < 60:
+        stars = f"§7[§f{level}{sw_icon(player)}§7]"
+    elif level < 65:
+        stars = f"§4[§c{level}{sw_icon(player)}§4]"
+    elif level < 70:
+        stars = f"§c[§f{level}{sw_icon(player)}§c]"
+    elif level < 75:
+        stars = f"§e[§6{level}{sw_icon(player)}§7]"
+    elif level < 80:
+        stars = f"§f[§1{level}{sw_icon(player)}§f]"
+    elif level < 85:
+        stars = f"§f[§b{level}{sw_icon(player)}§f]"
+    elif level < 90:
+        stars = f"§f[§3{level}{sw_icon(player)}§f]"
+    elif level < 95:
+        stars = f"§a[§3{level}{sw_icon(player)}§a]"
+    elif level < 100:
+        stars = f"§c[§e{level}{sw_icon(player)}§c]"
+    elif level < 105:
+        stars = f"§9[§1{level}{sw_icon(player)}§9]"
+    elif level < 110:
+        stars = f"§6[§4{level}{sw_icon(player)}§6]"
+    elif level < 115:
+        stars = f"§1[§d{level}{sw_icon(player)}§1]"
+    elif level < 120:
+        stars = f"§8[§7{level}{sw_icon(player)}§8]"
+    elif level < 125:
+        stars = f"§d[§5{level}{sw_icon(player)}§d]"
+    elif level < 130:
+        stars = f"§f[§e{level}{sw_icon(player)}§f]"
+    elif level < 135:
+        stars = f"§c[§e{level}{sw_icon(player)}§c]"
+    elif level < 140:
+        stars = f"§6[§c{level}{sw_icon(player)}§6]"
+    elif level < 145:
+        stars = f"§a[§c{level}{sw_icon(player)}§a]"
+    elif level < 150:
+        stars = f"§a[§b{level}{sw_icon(player)}§a]"
+    else:
+        level = str(level)
+        stars = f"§l§c§k[§r§6{level[0]}§e{level[1]}§a{level[2]}§b{sw_icon(player)}§l§c§k]§r"
+    return stars
+    
+        
     
 
 # add attributes to player object
@@ -349,6 +408,7 @@ def format_player(player: Player) -> Player:
     new_player.bedwars.wins = format_bw_wins(player.bedwars.wins)
     new_player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
 
+    new_player.skywars.level = format_sw_star(player.skywars.level, player)
     new_player.skywars.kills = format_sw_kills(player.skywars.kills)
     new_player.skywars.wins = format_sw_wins(player.skywars.wins)
     new_player.skywars.kdr = format_sw_kdr(player.skywars.kdr)
