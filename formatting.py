@@ -314,6 +314,7 @@ def format_sw_wlr(wlr):
         return "§9" + str(wlr) + "§f"
     else:
         return "§0" + str(wlr) + "§f"
+
 # add attributes to player object
 def format_player(player: Player) -> Player:
     new_player = deepcopy(player)
@@ -322,7 +323,7 @@ def format_player(player: Player) -> Player:
     if new_player.rank == "§7": # non, no space needed
         new_player.name = f"§f{new_player.rank}{player.name}§f"
     else:
-        new_player.name = f"§f{new_player.rank} {player.name}"
+        new_player.name = f"§f{new_player.rank} {player.name}§f"
 
     new_player.bedwars.level = format_bw_star(player.bedwars.level)
     new_player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
