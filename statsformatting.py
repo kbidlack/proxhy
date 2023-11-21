@@ -23,6 +23,8 @@ def get_rank(player):
         return "§2[GM]"
     elif player.rank == "YOUTUBE":
         return "§c[§fYOUTUBE§c]"
+    elif player.rank == "PIG+++":
+        return "§d[PIG§b+++§d]"
     
     return "" # if there are any other weird ranks because you never know ig
     
