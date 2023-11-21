@@ -3,8 +3,7 @@ import inspect
 from hypixel.errors import InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
 
-from formatting import (color_bw_stars, format_bw_finals, format_bw_fkdr,
-                        format_bw_wins, format_bw_wlr, get_rank)
+from formatting import (format_player)
 from patches import Client, pack_chat
 
 commands = {}
@@ -111,15 +110,14 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None):
     
     client: Client = bridge.client
     try:
-        player = client.player(ign)
-        losses = player.bedwars.losses or 1 # ZeroDivisionError
+        player = format_player(client.player(ign))
 
-        stats_message = color_bw_stars(player.bedwars.level)
-        stats_message += f"§f {get_rank(player)} {player.name} §f"
-        stats_message += f"Finals: {format_bw_finals(player.bedwars.final_kills)} "
-        stats_message += f"FKDR: {format_bw_fkdr(player.bedwars.fkdr)} "
-        stats_message += f"Wins: {format_bw_wins(player.bedwars.wins)} "
-        stats_message += f"WLR: {format_bw_wlr(round(player.bedwars.wins / losses, 2))}"
+        stats_message = player.bedwars.level
+        stats_message += f" {player.name} "
+        stats_message += f"Finals: {player.bedwars.final_kills} "
+        stats_message += f"FKDR: {player.bedwars.fkdr} "
+        stats_message += f"Wins: {player.bedwars.wins} "
+        stats_message += f"WLR: {player.bedwars.wlr}"
         return stats_message
     except PlayerNotFound: 
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")

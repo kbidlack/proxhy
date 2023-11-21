@@ -1,7 +1,10 @@
+from copy import deepcopy
+
+from hypixel import Player
+
+
 def get_rank(player):
-    if player.rank == None:
-        return None
-    elif player.rank == "VIP":
+    if player.rank == "VIP":
         return "§a[VIP]"
     elif player.rank == "VIP+":
         return "§a[VIP§6+§a]"
@@ -21,8 +24,8 @@ def get_rank(player):
         return "§c[§fYOUTUBE§c]"
     elif player.rank == "PIG+++":
         return "§d[PIG§b+++§d]"
-    
-    return "" # if there are any other weird ranks because you never know ig
+
+    return "§7" # if there are any other weird ranks because you never know ig, also nons
 
 # BEDWARS 
 def format_bw_fkdr(fkdr):
@@ -101,7 +104,7 @@ def format_bw_wlr(wlr):
     else:
         return "§d" + str(wlr) + "§f"       
 
-def color_bw_stars(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
+def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
@@ -264,3 +267,26 @@ def format_sw_wins(wins):
         return "§d" + str(wins) + "§f"
     else:
         return "§0" + str(wins) + "§f"
+
+
+# add attributes to player object
+def format_player(player: Player) -> Player:
+    new_player = deepcopy(player)
+
+    new_player.rank = get_rank(player)
+    if new_player.rank == "§7": # non, no space needed
+        new_player.name = f"§f{new_player.rank}{player.name}§f"
+    else:
+        new_player.name = f"§f{new_player.rank} {player.name}"
+
+    new_player.bedwars.level = format_bw_star(player.bedwars.level)
+    new_player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
+    new_player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
+    new_player.bedwars.wins = format_bw_wins(player.bedwars.wins)
+    losses = player.bedwars.losses or 1 # ZeroDivisionError
+    new_player.bedwars.wlr = format_bw_wlr(round(player.bedwars.wins / losses, 2))
+
+    new_player.skywars.kills = format_sw_kills(player.skywars.kills)
+    new_player.skywars.wins = format_sw_wins(player.skywars.wins)
+
+    return new_player
