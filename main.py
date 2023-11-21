@@ -56,16 +56,12 @@ class Settings:
     
     def update_game_from_locraw(self, bridge, buff: Buffer1_7, chat_message):
         if self.waiting_for_locraw:
-            if "limbo" in chat_message:
-                # sometimes it says limbo right when you join a game
+            if 'limbo' in chat_message:
                 time.sleep(0.1)
-                return bridge.update_game(buff)
-            elif "lobbyname" in chat_message:
-                # keep previous game
-                self.waiting_for_locraw = False
-            else:
+                return bridge.update_game(buff, self.locraw_retry + 1)
+            if not "lobbyname" in chat_message:
                 bridge.game = json.loads(chat_message)
-                self.waiting_for_locraw = False
+            self.waiting_for_locraw = False
         else:
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
@@ -252,14 +248,15 @@ class ProxhyBridge(Bridge):
         self.downstream.send_packet("teams", buff.read())
     
 
-    def update_game(self, buff: Buffer1_7):
-        self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
-        self.settings.waiting_for_locraw = True
+    def update_game(self, buff: Buffer1_7, retry=0):
+        if retry > 2:
+            return
 
-        # sometimes it doesn't come back properly
+        # sometimes it doesn't come back properly, so wait a bit
         time.sleep(0.1)
-        if self.settings.waiting_for_locraw:
-            self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
+        self.settings.waiting_for_locraw = True
+        self.settings.locraw_retry = retry
+        self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
 
 
     def make_profile(self):

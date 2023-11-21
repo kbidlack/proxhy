@@ -320,6 +320,7 @@ def format_sw_wlr(wlr):
         return "§9" + str(wlr) + "§f"
     else:
         return "§0" + str(wlr) + "§f"
+<<<<<<< HEAD
 def get_sw_icon(ign):
     ...   
 def format_sw_star(level):
@@ -330,6 +331,9 @@ def format_sw_star(level):
         stars = f"{colors[level // 5]}[{level}]"
     ...
     
+=======
+
+>>>>>>> 8055957a3542c1792e2f6266296e47c37cee28f9
 # add attributes to player object
 def format_player(player: Player) -> Player:
     new_player = deepcopy(player)
@@ -338,14 +342,13 @@ def format_player(player: Player) -> Player:
     if new_player.rank == "§7": # non, no space needed
         new_player.name = f"§f{new_player.rank}{player.name}§f"
     else:
-        new_player.name = f"§f{new_player.rank} {player.name}"
+        new_player.name = f"§f{new_player.rank} {player.name}§f"
 
     new_player.bedwars.level = format_bw_star(player.bedwars.level)
     new_player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
     new_player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
     new_player.bedwars.wins = format_bw_wins(player.bedwars.wins)
-    losses = player.bedwars.losses or 1 # ZeroDivisionError
-    new_player.bedwars.wlr = format_bw_wlr(round(player.bedwars.wins / losses, 2))
+    new_player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
 
     new_player.skywars.kills = format_sw_kills(player.skywars.kills)
     new_player.skywars.wins = format_sw_wins(player.skywars.wins)
