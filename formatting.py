@@ -32,7 +32,7 @@ def get_rank(player):
 
 def return_plus_color(player):
     if player.plus_color:
-        return player.plus.color.chat_code
+        return player.plus_color.chat_code
     else:
         return "§c"
 
@@ -320,7 +320,6 @@ def format_sw_wlr(wlr):
         return "§9" + str(wlr) + "§f"
     else:
         return "§0" + str(wlr) + "§f"
-<<<<<<< HEAD
 def get_sw_icon(ign):
     ...   
 def format_sw_star(level):
@@ -331,9 +330,7 @@ def format_sw_star(level):
         stars = f"{colors[level // 5]}[{level}]"
     ...
     
-=======
 
->>>>>>> 8055957a3542c1792e2f6266296e47c37cee28f9
 # add attributes to player object
 def format_player(player: Player) -> Player:
     new_player = deepcopy(player)
