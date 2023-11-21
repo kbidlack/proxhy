@@ -89,7 +89,8 @@ class ProxhyBridge(Bridge):
     except KeyError:
         print("Please put your email and password in .env file")
 
-    token_gen_time = 0 # float(os.environ.get("TOKEN_GEN_TIME", 0)) this doesnt work!!!! fix it.
+    # sometimes this doesn't work just relog a few times or restart proxhy
+    token_gen_time = float(os.environ.get("TOKEN_GEN_TIME", 0))
     access_token = os.environ.get("ACCESS_TOKEN")
     username = os.environ.get("USERNAME")
     uuid = os.environ.get("UUID")

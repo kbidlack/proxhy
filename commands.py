@@ -1,10 +1,11 @@
 import inspect
-from hypixel.errors import PlayerNotFound, InvalidApiKey
 
+from hypixel.errors import InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
 
+from formatting import (color_bw_stars, format_bw_finals, format_bw_fkdr,
+                        format_bw_wins, format_bw_wlr, get_rank)
 from patches import Client, pack_chat
-from statsformatting import color_stars, format_fkdr, format_wins, format_wlr, format_finals, get_rank
 
 commands = {}
 
@@ -98,28 +99,29 @@ def requeue(bridge, buff: Buffer1_7):
         
 @command("garlicbread") # Mmm, garlic bread.
 def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
-       return "§eMmm, garlic bread."
+       return "§eMmm, garlic bread." # Mmm, garlic bread.
+
 @command("sc", "cs")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None):
     if gamemode is None:
+        # TODO check for gamemode aliases
         gamemode = bridge.game.get('mode')
     if ign is None:
         ign = bridge.username
-    # TODO check for gamemode aliases
     
     client: Client = bridge.client
     try:
         player = client.player(ign)[0]
+        losses = player.bedwars.losses or 1 # ZeroDivisionError
 
-        if player.bedwars.losses == 0: # ZeroDivisionError
-            losses = 1
-        else:
-            losses = player.bedwars.losses
-        return color_stars(player.bedwars.level) + f"§f | "+ get_rank(player) + f" {player.name} §fFKDR: " + format_fkdr(player.bedwars.fkdr) + " Wins: " + format_wins(player.bedwars.wins) + " Finals: " + format_finals(player.bedwars.final_kills) + " WLR: " + format_wlr(round(player.bedwars.wins/losses, 2))
+        stats_message = color_bw_stars(player.bedwars.level)
+        stats_message += f"§f {get_rank(player)} {player.name} "
+        stats_message += f"§fFKDR: {format_bw_fkdr(player.bedwars.fkdr)} "
+        stats_message += f"Wins: {format_bw_wins(player.bedwars.wins)} "
+        stats_message += f"Finals: {format_bw_finals(player.bedwars.final_kills)} "
+        stats_message += f"WLR: {format_bw_wlr(round(player.bedwars.wins / losses, 2))}"
+        return stats_message
     except PlayerNotFound: 
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
     except InvalidApiKey:
         raise CommandException(f"§9§l∎ §4Invalid API Key!")
-
-
-        

@@ -1,11 +1,5 @@
-from patches import Client
-
 def get_rank(player):
-    if player.name == "Perlence":
-        return "§4[COOL]"
-    elif player.name == "KyngK":
-        return "§2[§eS§2T§eI§2N§eK§2Y§e]"
-    elif player.rank == None:
+    if player.rank == None:
         return None
     elif player.rank == "VIP":
         return "§a[VIP]"
@@ -14,10 +8,10 @@ def get_rank(player):
     elif player.rank == "MVP":
         return "§b[MVP]"
     elif player.rank == "MVP+":
-        plus = get_plus_color(player)
+        plus = player.plus_color.chat_code
         return f"§b[MVP{plus}+§b]"
     elif player.rank == "MVP++":
-        plus = get_plus_color(player)
+        plus = player.plus_color.chat_code
         return f"§6[MVP{plus}++§6]"
     elif player.rank == "ADMIN" or player.rank == "OWNER":
         return f"§c[{player.rank}]"
@@ -29,12 +23,9 @@ def get_rank(player):
         return "§d[PIG§b+++§d]"
     
     return "" # if there are any other weird ranks because you never know ig
-    
 
-def get_plus_color(player):
-    return player.plus_color.chat_code
-   
-def format_fkdr(fkdr):
+# BEDWARS 
+def format_bw_fkdr(fkdr):
     if fkdr < 1:
         return "§7" + str(fkdr) + "§f" 
     elif fkdr < 2.5:
@@ -56,7 +47,7 @@ def format_fkdr(fkdr):
     else:
         return "§0" + str(fkdr) + "§f"
 
-def format_wins(wins):
+def format_bw_wins(wins):
     if wins < 250:
         return "§7" + str(wins) + "§f" 
     elif wins < 1000:
@@ -71,10 +62,8 @@ def format_wins(wins):
         return "§5" + str(wins) + "§f"
     else:
         return "§d" + str(wins) + "§f"
-    
-
-    
-def format_finals(finals):
+ 
+def format_bw_finals(finals):
     if finals < 1000:
         return "§7" + str(finals) + "§f" 
     elif finals < 4000:
@@ -90,7 +79,7 @@ def format_finals(finals):
     else:
         return "§d" + str(finals) + "§f"
 
-def format_wlr(wlr):
+def format_bw_wlr(wlr):
     if wlr < .5:
         return "§7" + str(wlr) + "§f" 
     elif wlr < 1:
@@ -112,20 +101,9 @@ def format_wlr(wlr):
     else:
         return "§d" + str(wlr) + "§f"       
 
-def color_stars(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
+def color_bw_stars(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
     stars = ""
-    colors = [
-        ("§7"),
-        ("§f"),
-        ("§6"),
-        ("§b"),
-        ("§2"),
-        ("§3"),
-        ("§4"),
-        ("§d"),
-        ("§9"),
-        ("§5"),
-    ]
+    colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
     if level < 1000:
         stars = f"{colors[level // 100]}[{level}✫]"
@@ -245,7 +223,8 @@ def color_stars(level): # Thanks a ton to Tiget on the hypixel forums for creati
         stars += f"§4[{level[0]}§5{level[1]}§9{level[2:4]}§1✥§0]"
     
     return stars
-    
+
+# SKYWARS
 def format_sw_kills(kills):
     if kills < 1000:
         return "§7" + str(kills) + "§f" 
