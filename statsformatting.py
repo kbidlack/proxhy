@@ -115,20 +115,20 @@ def format_wlr(wlr):
 def color_stars(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
     stars = ""
     colors = [
-        ("§7", ""),
-        ("§f", ""),
-        ("§6", ""),
-        ("§b", ""),
-        ("§2", ""),
-        ("§3", ""),
-        ("§4", ""),
-        ("§d", ""),
-        ("§9", ""),
-        ("§5", ""),
+        ("§7"),
+        ("§f"),
+        ("§6"),
+        ("§b"),
+        ("§2"),
+        ("§3"),
+        ("§4"),
+        ("§d"),
+        ("§9"),
+        ("§5"),
     ]
 
     if level < 1000:
-        stars = f"{colors[level // 100][0]}[{level}✫]"
+        stars = f"{colors[level // 100]}[{level}✫]"
     elif level < 1100:
         level = str(level)
         stars += f"§c[§6{level[0]}§e{level[1]}§a{level[2]}§b{level[3]}§d✫§5]"
