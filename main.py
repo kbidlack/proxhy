@@ -90,7 +90,10 @@ class ProxhyBridge(Bridge):
         print("Please put your email and password in .env file")
 
     # sometimes this doesn't work just relog a few times or restart proxhy
-    token_gen_time = float(os.environ.get("TOKEN_GEN_TIME", 0))
+    if os.environ.get("REGEN_TOKEN"):
+        token_gen_time = 0
+    else:
+        token_gen_time = float(os.environ.get("TOKEN_GEN_TIME", 0))
     access_token = os.environ.get("ACCESS_TOKEN")
     username = os.environ.get("USERNAME")
     uuid = os.environ.get("UUID")

@@ -111,7 +111,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None):
     
     client: Client = bridge.client
     try:
-        player = client.player(ign)[0]
+        player = client.player(ign)
         losses = player.bedwars.losses or 1 # ZeroDivisionError
 
         stats_message = color_bw_stars(player.bedwars.level)

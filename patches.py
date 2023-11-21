@@ -60,7 +60,7 @@ class Client():
         # Remove items that are not in the alias dictionary
         return {alias.get(k, k): v for k, v in data.items() if k in alias.keys()}
 
-    async def player_async(self, *usernames: str) -> list[Player]:
+    async def players_async(self, *usernames: str) -> list[Player]:
         """Call hypixel async player method with a new client""" 
         client = hypixel.Client(self.api_key)
 
@@ -82,7 +82,7 @@ class Client():
             players = await asyncio.gather(*tasks)
         return players
 
-    def player(self, *usernames: str) -> list[Player]:
+    def players(self, *usernames: str) -> list[Player]:
         players = []
         players_to_request = []
 
@@ -94,7 +94,7 @@ class Client():
             else:
                 players_to_request.append(username)
 
-        requested_players: list = asyncio.run(self.player_async(*players_to_request)) 
+        requested_players: list = asyncio.run(self.players_async(*players_to_request)) 
         for player in requested_players:
             # cache data
             player.data_gen_time = time.monotonic()
@@ -105,6 +105,9 @@ class Client():
             players.append(player)
 
         return players
+    
+    def player(self, username: str) -> Player:
+        return self.players(username)[0]
 
 
 def data_received(self, data):
