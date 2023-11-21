@@ -105,11 +105,14 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
         gamemode = bridge.game.get('mode')
     if ign is None:
         ign = bridge.username
-    
+    elif ign == "sw":
+        ign = bridge.username
+        gamemode = "sw"
+
     client: Client = bridge.client
     try:
         player = format_player(client.player(ign))
-        if (gamemode in sw):
+        if gamemode in sw:
             stats_message = player.skywars.level
             stats_message += f" {player.name} "
             stats_message += f"Wins: {player.skywars.wins} "
