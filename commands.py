@@ -4,6 +4,7 @@ from hypixel.errors import PlayerNotFound, InvalidApiKey
 from quarry.types.buffer import Buffer1_7
 
 from patches import Client, pack_chat
+from statsformatting import color_stars
 
 commands = {}
 
@@ -94,7 +95,10 @@ def requeue(bridge, buff: Buffer1_7):
             "chat_message",
             buff.pack_string(f"/play {bridge.game['mode']}")
         )
-
+        
+@command("garlicbread") # Mmm, garlic bread.
+def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
+       return "§eMmm, garlic bread."
 @command("sc", "cs")
 def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
     if gamemode is None:
@@ -109,8 +113,12 @@ def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
             losses = 1
         else:
             losses = player.bedwars.losses
-        return f"[{player.bedwars.level}] | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {round(player.bedwars.wins/losses, 2)}"
+        return color_stars(player.bedwars.level)   
+       # return f"[{player.bedwars.level}] | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {round(player.bedwars.wins/losses, 2)} "
     except PlayerNotFound:
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
     except InvalidApiKey:
         raise CommandException(f"§9§l∎ §4Invalid API Key!")
+
+
+        
