@@ -333,5 +333,7 @@ def format_player(player: Player) -> Player:
 
     new_player.skywars.kills = format_sw_kills(player.skywars.kills)
     new_player.skywars.wins = format_sw_wins(player.skywars.wins)
+    new_player.skywars.kdr = format_sw_kdr(player.skywars.kdr)
+    new_player.skywars.wlr = format_sw_wlr(player.skywars.wlr)
 
     return new_player
