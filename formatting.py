@@ -24,8 +24,11 @@ def get_rank(player):
         return "§c[§fYOUTUBE§c]"
     elif player.rank == "PIG+++":
         return "§d[PIG§b+++§d]"
-
-    return "§7" # if there are any other weird ranks because you never know ig, also nons
+    if player.name == "Perlence":
+        return  "§4[COOL]"
+    elif player.name == "KyngK":
+        return "§2[§eS§2T§eI§2N§eK§2Y§e]§2"
+    return "§7" # if there are any other weird ranks because you never know ig, also nons lmfao
 
 # BEDWARS 
 def format_bw_fkdr(fkdr):
@@ -268,7 +271,49 @@ def format_sw_wins(wins):
     else:
         return "§0" + str(wins) + "§f"
 
+def format_sw_kdr(kdr):
+    if kdr < .75:
+        return "§7" + str(kdr) + "§f" 
+    elif kdr < 1.5:
+        return "§e" + str(kdr) + "§f"
+    elif kdr < 3:
+        return "§2" + str(kdr) + "§f"
+    elif kdr < 5:
+        return "§b" + str(kdr) + "§f"
+    elif kdr < 10:
+        return "§4" + str(kdr) + "§f"
+    elif kdr < 25:
+        return "§5" + str(kdr) + "§f"
+    elif kdr < 50:
+        return "§c" + str(kdr) + "§f"
+    elif kdr < 100:
+        return "§d" + str(kdr) + "§f"
+    elif kdr < 250:
+        return "§9" + str(kdr) + "§f"
+    else:
+        return "§0" + str(kdr) + "§f"
 
+def format_sw_wlr(wlr):
+    if wlr < .1:
+        return "§7" + str(wlr) + "§f" 
+    elif wlr < .2:
+        return "§e" + str(wlr) + "§f"
+    elif wlr < .4:
+        return "§2" + str(wlr) + "§f"
+    elif wlr < .75:
+        return "§b" + str(wlr) + "§f"
+    elif wlr < 1:
+        return "§4" + str(wlr) + "§f"
+    elif wlr < 2.5:
+        return "§5" + str(wlr) + "§f"
+    elif wlr < 5:
+        return "§c" + str(wlr) + "§f"
+    elif wlr < 10:
+        return "§d" + str(wlr) + "§f"
+    elif wlr < 25:
+        return "§9" + str(wlr) + "§f"
+    else:
+        return "§0" + str(wlr) + "§f"
 # add attributes to player object
 def format_player(player: Player) -> Player:
     new_player = deepcopy(player)
