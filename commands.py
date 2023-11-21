@@ -27,6 +27,7 @@ class Parameter:
         
         if param.kind is inspect.Parameter.VAR_POSITIONAL: # *args
             self.infinite = True
+            self.required = False
         else:
             self.infinite = False
 
