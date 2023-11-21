@@ -1,7 +1,9 @@
 from patches import Client
 
 def get_rank(player):
-    if player.rank == None:
+    if player.name == "Perlence":
+        return "§4[COOL]"
+    elif player.rank == None:
         return None
     elif player.rank == "VIP":
         return "§a[VIP]"
@@ -15,10 +17,19 @@ def get_rank(player):
     elif player.rank == "MVP++":
         plus = get_plus_color(player)
         return f"§6[MVP{plus}++§6]"
+    elif player.rank == "ADMIN" or player.rank == "OWNER":
+        return f"§c[{player.rank}]"
+    elif player.rank == "GAME MASTER":
+        return "§2[GM]"
+    elif player.rank == "YOUTUBE":
+        return "§c[§fYOUTUBE§c]"
+    
+    return "" # if there are any other weird ranks because you never know ig
+    
 
 def get_plus_color(player):
     return player.plus_color.chat_code
-    
+   
 def format_fkdr(fkdr):
     if fkdr < 1:
         return "§7" + str(fkdr) + "§f" 
