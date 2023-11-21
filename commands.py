@@ -18,11 +18,17 @@ class CommandException(Exception):
 class Parameter:
     def __init__(self, param):
         self.name = param.name
+
         if param.default is not inspect._empty:
             self.default = param.default
             self.required = False
         else:
             self.required = True
+        
+        if param.kind is inspect.Parameter.VAR_POSITIONAL: # *args
+            self.infinite = True
+        else:
+            self.infinite = False
 
 
 class Command:
@@ -45,21 +51,12 @@ class Command:
         segments = message.split()
         args = segments[1:]
         if not self.parameters and args:
-            bridge.downstream.send_packet(
-                "chat_message",
-                pack_chat(f"§9§l∎ §4Command <{segments[0]}> takes no arguments!")
-            )
-        elif len(args) > len(self.parameters):
-            bridge.downstream.send_packet(
-                "chat_message",
-                pack_chat(f"§9§l∎ §4Command <{segments[0]}> takes at most {len(self.parameters)} argument(s)!")
-            )
+            raise CommandException(f"§9§l∎ §4Command <{segments[0]}> takes no arguments!")
+        elif (len(args) > len(self.parameters)) and not any(p.infinite for p in self.parameters):
+            raise CommandException(f"§9§l∎ §4Command <{segments[0]}> takes at most {len(self.parameters)} argument(s)!")
         elif len(args) < len(self.required_parameters):
             names = ', '.join([param.name for param in self.required_parameters])
-            bridge.downstream.send_packet(
-                "chat_message",
-                pack_chat(f"§9§l∎ §4Command <{segments[0]}> needs at least {len(self.required_parameters)} arguments! ({names})")
-            )
+            raise CommandException(f"§9§l∎ §4Command <{segments[0]}> needs at least {len(self.required_parameters)} arguments! ({names})")
         else:
             return self.function(bridge, buff, *args)
 
@@ -101,7 +98,8 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
        return "§eMmm, garlic bread." # Mmm, garlic bread.
 
 @command("sc", "cs")
-def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None):
+def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
+    print(ign, gamemode, stats)
     if gamemode is None:
         # TODO check for gamemode aliases
         gamemode = bridge.game.get('mode')
