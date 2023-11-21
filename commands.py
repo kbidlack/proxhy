@@ -113,7 +113,6 @@ def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
             losses = 1
         else:
             losses = player.bedwars.losses
-        print(player.rank)
         return color_stars(player.bedwars.level) + f"§f | "+ get_rank(player) + f" {player.name} §fFKDR: " + format_fkdr(player.bedwars.fkdr) + " Wins: " + format_wins(player.bedwars.wins) + " Finals: " + format_finals(player.bedwars.final_kills) + " WLR: " + format_wlr(round(player.bedwars.wins/losses, 2))
     except PlayerNotFound: 
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
