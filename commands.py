@@ -113,8 +113,8 @@ def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
             losses = 1
         else:
             losses = player.bedwars.losses
-        return color_stars(player.bedwars.level)   
-       # return f"[{player.bedwars.level}] | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {round(player.bedwars.wins/losses, 2)} "
+          
+        return color_stars(player.bedwars.level) + f"§f | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {round(player.bedwars.wins/losses, 2)} "
     except PlayerNotFound:
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
     except InvalidApiKey:
