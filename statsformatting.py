@@ -1,3 +1,102 @@
+from patches import Client
+
+def get_rank(player):
+    if player.rank == None:
+        return None
+    elif player.rank == "VIP":
+        return "§a[VIP]"
+    elif player.rank == "VIP+":
+        return "§a[VIP§6+§a]"
+    elif player.rank == "MVP":
+        return "§b[MVP]"
+    elif player.rank == "MVP+":
+        plus = get_plus_color(player)
+        return f"§b[MVP{plus}+§b]"
+    elif player.rank == "MVP++":
+        plus = get_plus_color(player)
+        return f"§6[MVP{plus}++§6]"
+
+def get_plus_color(player):
+    return player.plus_color.chat_code
+    
+def format_fkdr(fkdr):
+    if fkdr < 1:
+        return "§7" + str(fkdr) + "§f" 
+    elif fkdr < 2.5:
+        return "§e" + str(fkdr) + "§f"
+    elif fkdr < 5:
+        return "§2" + str(fkdr) + "§f"
+    elif fkdr < 10:
+        return "§b" + str(fkdr) + "§f"
+    elif fkdr < 20:
+        return "§4" + str(fkdr) + "§f"
+    elif fkdr < 50:
+        return "§5" + str(fkdr) + "§f"
+    elif fkdr < 100:
+        return "§c" + str(fkdr) + "§f"
+    elif fkdr < 300:
+        return "§d" + str(fkdr) + "§f"
+    elif fkdr < 1000:
+        return "§9" + str(fkdr) + "§f"
+    else:
+        return "§0" + str(fkdr) + "§f"
+
+def format_wins(wins):
+    if wins < 250:
+        return "§7" + str(wins) + "§f" 
+    elif wins < 1000:
+        return "§e" + str(wins) + "§f"
+    elif wins < 2500:
+        return "§2" + str(wins) + "§f"
+    elif wins < 8000:
+        return "§b" + str(wins) + "§f"
+    elif wins < 15000:
+        return "§4" + str(wins) + "§f"
+    elif wins < 40000:
+        return "§5" + str(wins) + "§f"
+    else:
+        return "§d" + str(wins) + "§f"
+    
+
+    
+def format_finals(finals):
+    if finals < 1000:
+        return "§7" + str(finals) + "§f" 
+    elif finals < 4000:
+        return "§e" + str(finals) + "§f"
+    elif finals < 10000:
+        return "§2" + str(finals) + "§f"
+    elif finals < 25000:
+        return "§b" + str(finals) + "§f"
+    elif finals < 50000:
+        return "§4" + str(finals) + "§f"
+    elif finals < 100000:
+        return "§5" + str(finals) + "§f"
+    else:
+        return "§d" + str(finals) + "§f"
+
+def format_wlr(wlr):
+    if wlr < .5:
+        return "§7" + str(wlr) + "§f" 
+    elif wlr < 1:
+        return "§e" + str(wlr) + "§f"
+    elif wlr < 2.5:
+        return "§2" + str(wlr) + "§f"
+    elif wlr < 5:
+        return "§b" + str(wlr) + "§f"
+    elif wlr < 10:
+        return "§4" + str(wlr) + "§f"
+    elif wlr < 25:
+        return "§5" + str(wlr) + "§f"
+    elif wlr < 100:
+        return "§c" + str(wlr) + "§f"
+    elif wlr < 300:
+        return "§d" + str(wlr) + "§f"
+    elif wlr < 1000:
+        return "§9" + str(wlr) + "§f"
+    else:
+        return "§d" + str(wlr) + "§f"       
+
 def color_stars(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors
     stars = ""
     colors = [

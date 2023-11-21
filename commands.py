@@ -4,7 +4,7 @@ from hypixel.errors import PlayerNotFound, InvalidApiKey
 from quarry.types.buffer import Buffer1_7
 
 from patches import Client, pack_chat
-from statsformatting import color_stars
+from statsformatting import color_stars, format_fkdr, format_wins, format_wlr, format_finals, get_rank
 
 commands = {}
 
@@ -113,9 +113,9 @@ def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
             losses = 1
         else:
             losses = player.bedwars.losses
-          
-        return color_stars(player.bedwars.level) + f"§f | {player.name} FKDR: {player.bedwars.fkdr} Wins: {player.bedwars.wins} Finals: {player.bedwars.final_kills} WLR: {round(player.bedwars.wins/losses, 2)} "
-    except PlayerNotFound:
+         
+        return color_stars(player.bedwars.level) + f"§f | "+ get_rank(player) + f" {player.name} §fFKDR: " + format_fkdr(player.bedwars.fkdr) + " Wins: " + format_wins(player.bedwars.wins) + " Finals: " + format_finals(player.bedwars.final_kills) + " WLR: " + format_wlr(round(player.bedwars.wins/losses, 2))
+    except PlayerNotFound: 
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
     except InvalidApiKey:
         raise CommandException(f"§9§l∎ §4Invalid API Key!")
