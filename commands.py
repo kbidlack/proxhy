@@ -100,9 +100,11 @@ def requeue(bridge, buff: Buffer1_7):
 def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
        return "§eMmm, garlic bread."
 @command("sc", "cs")
-def statcheck(bridge, buff: Buffer1_7, ign, gamemode=None):
+def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None):
     if gamemode is None:
         gamemode = bridge.game.get('mode')
+    if ign is None:
+        ign = bridge.username
     # TODO check for gamemode aliases
     
     client: Client = bridge.client

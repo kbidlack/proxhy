@@ -3,6 +3,8 @@ from patches import Client
 def get_rank(player):
     if player.name == "Perlence":
         return "§4[COOL]"
+    elif player.name == "KyngK":
+        return "§2[§eS§2T§eI§2N§eK§2Y§e]"
     elif player.rank == None:
         return None
     elif player.rank == "VIP":
