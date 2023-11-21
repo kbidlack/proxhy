@@ -100,14 +100,16 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
 
 @command("sc", "cs")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
-    if gamemode is None:
-        # TODO check for gamemode aliases
-        gamemode = bridge.game.get('mode')
-    if ign is None:
-        ign = bridge.username
-    elif ign == "sw":
+    if ign == "sw" and gamemode is None:
         ign = bridge.username
         gamemode = "sw"
+    elif ign is None:
+        ign = bridge.username
+    if gamemode is None:
+        # TODO check for duels aliases
+        gamemode = bridge.game.get('mode')
+   
+    
 
     client: Client = bridge.client
     try:
