@@ -246,4 +246,42 @@ def color_stars(level): # Thanks a ton to Tiget on the hypixel forums for creati
     
     return stars
     
-    """✥"""
+def format_sw_kills(kills):
+    if kills < 1000:
+        return "§7" + str(kills) + "§f" 
+    elif kills < 5000:
+        return "§e" + str(kills) + "§f"
+    elif kills < 15000:
+        return "§2" + str(kills) + "§f"
+    elif kills < 30000:
+        return "§b" + str(kills) + "§f"
+    elif kills < 50000:
+        return "§4" + str(kills) + "§f"
+    elif kills < 10000:
+        return "§5" + str(kills) + "§f"
+    elif kills < 250000:
+        return "§c" + str(kills) + "§f"
+    elif kills < 500000:
+        return "§d" + str(kills) + "§f"
+    else:
+        return "§0" + str(kills) + "§f"
+
+def format_sw_wins(wins):
+    if wins < 250:
+        return "§7" + str(wins) + "§f" 
+    elif wins < 1000:
+        return "§e" + str(wins) + "§f"
+    elif wins < 3000:
+        return "§2" + str(wins) + "§f"
+    elif wins < 7500:
+        return "§b" + str(wins) + "§f"
+    elif wins < 15000:
+        return "§4" + str(wins) + "§f"
+    elif wins < 30000:
+        return "§5" + str(wins) + "§f"
+    elif wins < 60000:
+        return "§c" + str(wins) + "§f"
+    elif wins < 100000:
+        return "§d" + str(wins) + "§f"
+    else:
+        return "§0" + str(wins) + "§f"
