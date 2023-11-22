@@ -2,8 +2,9 @@ import inspect
 
 from hypixel.errors import InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
+from twisted.internet import reactor
 
-from formatting import (format_player)
+from formatting import format_player
 from patches import Client, pack_chat
 
 commands = {}
@@ -71,16 +72,16 @@ def run_command(bridge, buff, message: str):
         try:
             output = command(bridge, buff, message)
         except CommandException as err:
-            bridge.downstream.send_packet("chat_message", pack_chat(err.message))
+            reactor.callFromThread(bridge.downstream.send_packet, "chat_message", pack_chat(err.message))
         else:
             if output:
                 if segments[0].startswith('//'): # send output of command
-                    bridge.upstream.send_packet("chat_message", buff.pack_string(output))
+                    reactor.callFromThread(bridge.upstream.send_packet, "chat_message", buff.pack_string(output))
                 else:
-                    bridge.downstream.send_packet("chat_message", pack_chat(output))
+                    reactor.callFromThread(bridge.downstream.send_packet, "chat_message", pack_chat(output))
     else:
         buff.restore()
-        bridge.upstream.send_packet("chat_message", buff.pack_string(message))
+        reactor.callFromThread(bridge.upstream.send_packet, "chat_message", buff.pack_string(message))
 
 
 # COMMANDS
@@ -89,7 +90,8 @@ def requeue(bridge, buff: Buffer1_7):
     if bridge.game.mode is None:
         raise CommandException("§9§l∎ §4No game to requeue!")
     else:
-        bridge.upstream.send_packet(
+        reactor.callFromThread(
+            bridge.upstream.send_packet,
             "chat_message",
             buff.pack_string(f"/play {bridge.game.mode}")
         )

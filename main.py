@@ -56,13 +56,14 @@ class Settings:
 
     def autoboop(self, bridge, buff: Buffer1_7, join_message):
         buff.restore()
-        bridge.downstream.send_packet("chat_message", buff.read())
+        reactor.callFromThread(bridge.downstream.send_packet, "chat_message", buff.read())
 
         # wait for a second for player to join
         time.sleep(0.1)
 
         if (player := str(join_message.split()[2]).lower()) in self.autoboops:
-            bridge.upstream.send_packet(
+            reactor.callFromThread(
+                bridge.upstream.send_packet,
                 "chat_message",
                 buff.pack_string(f"/boop {player}")
             )
@@ -70,7 +71,7 @@ class Settings:
     def update_game_from_locraw(self, bridge, buff: Buffer1_7, chat_message):
         if self.waiting_for_locraw:
             if 'limbo' in chat_message:
-                bridge.update_game(buff, self.locraw_retry + 1)
+                return bridge.update_game(buff, self.locraw_retry + 1)
 
             game = json.loads(chat_message)
             bridge.game.server = game.get("server")
@@ -87,7 +88,7 @@ class Settings:
             self.waiting_for_locraw = False
         else:
             buff.restore()
-            bridge.downstream.send_packet("chat_message", buff.read())
+            reactor.callFromThread(bridge.downstream.send_packet, "chat_message", buff.read())
 
 
 class ProxhyBridge(Bridge):
@@ -281,7 +282,7 @@ class ProxhyBridge(Bridge):
         time.sleep(0.1)
         self.settings.waiting_for_locraw = True
         self.settings.locraw_retry = retry
-        self.upstream.send_packet("chat_message", buff.pack_string("/locraw"))
+        reactor.callFromThread(self.upstream.send_packet, "chat_message", buff.pack_string("/locraw"))
 
 
     def make_profile(self):
