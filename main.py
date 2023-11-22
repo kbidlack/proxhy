@@ -45,7 +45,7 @@ class Settings:
         self.checks = {
             "autoboop": (
                 lambda x: bool(self.patterns["abp"].match(x)),
-                lambda x, y, z: reactor.callInThread(self.autoboop, x, y, z)
+                self.autoboop
             ),
             "waiting_for_locraw": (
                 lambda x: bool(self.patterns["wflp"].match(x)),
@@ -70,7 +70,7 @@ class Settings:
     def update_game_from_locraw(self, bridge, buff: Buffer1_7, chat_message):
         if self.waiting_for_locraw:
             if 'limbo' in chat_message:
-                return reactor.callInThread(bridge.update_game, buff, self.locraw_retry + 1)
+                bridge.update_game(buff, self.locraw_retry + 1)
 
             game = json.loads(chat_message)
             bridge.game.server = game.get("server")
@@ -208,7 +208,7 @@ class ProxhyBridge(Bridge):
 
         for _, (check, func) in self.settings.checks.items():
             if check(chat_message):
-                return func(self, buff, chat_message)
+                return reactor.callInThread(func, self, buff, chat_message)
         
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
