@@ -45,7 +45,7 @@ class Settings:
         self.checks = {
             "autoboop": (
                 lambda x: bool(self.patterns["abp"].match(x)),
-                self.autoboop
+                lambda x, y, z: reactor.callInThread(self.autoboop, x, y, z)
             ),
             "waiting_for_locraw": (
                 lambda x: bool(self.patterns["wflp"].match(x)),
@@ -55,6 +55,9 @@ class Settings:
 
 
     def autoboop(self, bridge, buff: Buffer1_7, join_message):
+        buff.restore()
+        bridge.downstream.send_packet("chat_message", buff.read())
+
         # wait for a second for player to join
         time.sleep(0.1)
 
@@ -63,15 +66,11 @@ class Settings:
                 "chat_message",
                 buff.pack_string(f"/boop {player}")
             )
-
-        buff.restore()
-        bridge.downstream.send_packet("chat_message", buff.read())
     
     def update_game_from_locraw(self, bridge, buff: Buffer1_7, chat_message):
         if self.waiting_for_locraw:
             if 'limbo' in chat_message:
-                time.sleep(0.1)
-                return bridge.update_game(buff, self.locraw_retry + 1)
+                return reactor.callInThread(bridge.update_game, buff, self.locraw_retry + 1)
 
             game = json.loads(chat_message)
             bridge.game.server = game.get("server")
@@ -183,13 +182,13 @@ class ProxhyBridge(Bridge):
         
         # parse commands
         if chat_message.startswith('/'):
-            run_command(self, buff, chat_message)
+            reactor.callInThread(run_command, self, buff, chat_message)
             self.sent_commands.append(chat_message) #!
         elif chat_message.startswith('!'):
             event = chat_message.replace('!', '')
             for command in reversed(self.sent_commands):
                 if command.startswith('/' + event):
-                    run_command(self, buff, command)
+                    reactor.callInThread(run_command, self, buff, command)
                     break
             else:
                 self.downstream.send_packet("chat_message", pack_chat(f"Event not found: {event}"))
@@ -201,7 +200,7 @@ class ProxhyBridge(Bridge):
         self.downstream.send_packet("join_game", buff.read())
 
         # check what game the player is playing
-        self.update_game(buff)
+        reactor.callInThread(self.update_game, buff)
 
     def packet_downstream_chat_message(self, buff: Buffer1_7):
         buff.save()
