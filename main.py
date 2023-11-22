@@ -1,20 +1,33 @@
+import dataclasses
 import json
 import os
 import re
 import time
+from dataclasses import dataclass
 
 import dotenv
 import msmcauth
 from dotenv import load_dotenv
 from quarry.net import auth
 from quarry.net.proxy import Bridge, DownstreamFactory
-from quarry.types.uuid import UUID
 from quarry.types.buffer import Buffer1_7
+from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
 from commands import run_command
 from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
+
+
+@dataclass
+class Game:
+    server: str | None = None
+    gametype: str | None = None
+    mode: str | None = None
+    map: str | None = None
+    lobbyname: str | None = None
+ 
+    pregame: bool | None = None
 
 
 class Settings:
@@ -59,20 +72,33 @@ class Settings:
             if 'limbo' in chat_message:
                 time.sleep(0.1)
                 return bridge.update_game(buff, self.locraw_retry + 1)
-            if not "lobbyname" in chat_message:
-                bridge.game = json.loads(chat_message)
+
+            game = json.loads(chat_message)
+            bridge.game.server = game.get("server")
+            bridge.game.gametype = game.get("gametype")
+            bridge.game.mode = game.get("mode")
+            bridge.game.map = game.get("map")
+            bridge.game.lobbyname = game.get("lobbyname")
+
+            # determine if pregame
+
+            if bridge.game.mode:
+                bridge.rq_game = dataclasses.replace(bridge.game) # copy
+
             self.waiting_for_locraw = False
         else:
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
-    
+
 
 class ProxhyBridge(Bridge):
     # persists across joins
     upstream_factory_class = ProxhyUpstreamFactory
     settings = Settings()
 
-    game = {}
+    game = Game()
+    rq_game = Game()
+
     teams = {}
 
     # !
