@@ -2,6 +2,7 @@ from copy import deepcopy
 
 from hypixel import Player
 
+from math import floor
 
 def get_rank(player):
     if player.rank == "VIP":
@@ -340,9 +341,9 @@ def sw_icon(player): # Thanks SO MUCH to hxzelx on the forums for making a list 
 def format_sw_star(level, player):
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
-
+    level = floor(level)
     if level < 50:
-        stars = f"{colors[int(level // 5)]}[{str(level)[0:2]}{sw_icon(player)}]"
+        stars = f"{colors[int(level // 5)]}[{level}{sw_icon(player)}]"
     elif level < 55:
         level = str(level)
         stars = f"§c[§6{level[0]}§e{level[1]}§a{sw_icon(player)}§b]"
