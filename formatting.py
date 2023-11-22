@@ -387,7 +387,7 @@ def format_sw_star(level, player):
         stars = f"§a[§b{level}{sw_icon(player)}§a]"
     else:
         level = str(level)
-        stars = f"§l§c§k[§r§6{level[0]}§e{level[1]}§a{level[2]}§b{sw_icon(player)}§l§c§k]§r"
+        stars = f"§l§c§k[§r§6§l{level[0]}§e§l{level[1]}§a§l{level[2]}§b§l{sw_icon(player)}§l§c§k]§r"
     return stars
 
 

@@ -100,6 +100,8 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
 
 @command("sc")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
+    if ign:
+        ign = ign.replace("\\", "")
     if ign == "sw" and gamemode is None:
         ign = bridge.username
         gamemode = "sw"

@@ -29,7 +29,18 @@ class Game:
  
     pregame: bool | None = None
 
-
+@dataclass
+class team:
+    """Teams in tab list"""
+    display_name: str | None = None
+    prefix: str | None = None
+    suffix: str | None = None
+    friendly_fire: int | None = None
+    name_tag_visibility: str | None = None
+    color: int | None = None
+    players: list | None = None
+   
+    
 class Settings:
     def __init__(self):
         self.autoboops = []
