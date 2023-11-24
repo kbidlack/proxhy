@@ -1,4 +1,5 @@
 import inspect
+import re
 
 from hypixel.errors import InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
@@ -76,6 +77,8 @@ def run_command(bridge, buff, message: str):
         else:
             if output:
                 if segments[0].startswith('//'): # send output of command
+                    # remove chat formatting
+                    output = re.sub(r'§.', '', output)
                     reactor.callFromThread(bridge.upstream.send_packet, "chat_message", buff.pack_string(output))
                 else:
                     reactor.callFromThread(bridge.downstream.send_packet, "chat_message", pack_chat(output))
