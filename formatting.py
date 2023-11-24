@@ -1,6 +1,7 @@
 from copy import deepcopy
 
 from hypixel import Player
+from hypixel.errors import PlayerNotFound
 
 from math import floor
 
@@ -392,10 +393,17 @@ def format_sw_star(level, player):
 
 
 # add attributes to player object
-def format_player(player: Player) -> Player:
+# TODO FormattedPlayer class
+def format_player(player: Player | PlayerNotFound) -> Player:
+    # PlayerNotFound to make nicks easier
+    if isinstance(player, PlayerNotFound):
+        return player
+
     new_player = deepcopy(player)
 
     new_player.rank = get_rank(player)
+    new_player.rank_color = new_player.rank[:2]
+    new_player.rname = player.name
     if new_player.rank == "§7": # non, no space needed
         new_player.name = f"§f{new_player.rank}{player.name}§f"
     else:

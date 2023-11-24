@@ -142,3 +142,8 @@ sw = ["solo_normal","solo_insane","teams_normal","teams_insane","mega_normal","m
       "solo_insane_tnt_madness","teams_insane_tnt_madness","solo_insane_rush","teams_insane_rush",
       "solo_insane_slime","teams_insane_slime","solo_insane_lucky","teams_insane_lucky",
       "solo_insane_hunters_vs_beasts","sw","SW","skywars"]
+
+# TESTING
+@command('t')
+def teams(bridge, buff):
+    print(bridge.teams)

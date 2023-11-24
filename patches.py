@@ -1,16 +1,18 @@
 import asyncio
-import aiohttp
 import pathlib
 import pickle
 import time
 
+import aiohttp
 import hypixel
 import quarry
 from hypixel.aliases import GUILD, PLAYER, STATUS
+from hypixel.errors import PlayerNotFound
 from hypixel.game import Game
 from hypixel.models import Player
 from quarry.types import chat
 from quarry.types.buffer import BufferUnderrun
+from twisted.internet import reactor
 
 
 class Client():
@@ -29,6 +31,10 @@ class Client():
 
             with open(self.cache_path, 'wb') as cache_file:
                 pickle.dump(self.cached_data, cache_file)
+
+    def cache_data(self):
+        with open(self.cache_path, 'wb') as cache_file:
+            pickle.dump(self.cached_data, cache_file)
 
     @staticmethod
     def _clean(data: dict, mode: str) -> dict:
@@ -79,7 +85,7 @@ class Client():
             for username in usernames:
                 tasks.append(asyncio.create_task(client.player(username)))
 
-            players = await asyncio.gather(*tasks)
+            players = await asyncio.gather(*tasks, return_exceptions=True)
         return players
 
     def players(self, *usernames: str) -> list[Player]:
@@ -96,11 +102,16 @@ class Client():
 
         requested_players: list = asyncio.run(self.players_async(*players_to_request)) 
         for player in requested_players:
+            # if player is a nick
+            # TODO NickedPlayer class?
+            if isinstance(player, PlayerNotFound):
+                players.append(player)
+                continue
             # cache data
             player.data_gen_time = time.monotonic()
-            self.cached_data.update({player.name.lower(): player})
-            with open(self.cache_path, 'wb') as cache_file:
-                pickle.dump(self.cached_data, cache_file)
+            # call from thread otherwise dictionary changes size during iteration
+            reactor.callFromThread(self.cached_data.update, {player.name.lower(): player})
+            reactor.callFromThread(self.cache_data)
 
             players.append(player)
 
