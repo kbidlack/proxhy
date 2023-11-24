@@ -15,6 +15,7 @@ from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
 from commands import run_command
+from models import Team, Teams
 from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
@@ -99,7 +100,7 @@ class ProxhyBridge(Bridge):
     game = Game()
     rq_game = Game()
 
-    teams = {}
+    teams = Teams()
 
     # !
     sent_commands = []
@@ -214,7 +215,7 @@ class ProxhyBridge(Bridge):
         buff.restore()
         self.downstream.send_packet("chat_message", buff.read())
 
-    def packet_downstream_teams(self, buff):
+    def packet_downstream_teams(self, buff: Buffer1_7):
         buff.save()
 
         name = buff.unpack_string()
@@ -230,45 +231,40 @@ class ProxhyBridge(Bridge):
             color = buff.read(1)[0]
 
             player_count = buff.unpack_varint()
-            players = []
+            players = set()
             for _ in range(player_count):
-                players.append(buff.unpack_string())
-            
-            self.teams.update(
-                {
-                    name: {
-                    "display_name": display_name,
-                    "prefix": prefix,
-                    "suffix": suffix,
-                    "friendly_fire": friendly_fire,
-                    "name_tag_visibility": name_tag_visibility,
-                    "color": color,
-                    "players": players
-                    }
-                }
-            )
+                players.add(buff.unpack_string())
+
+            self.teams.append(
+                Team(
+                    name,
+                    display_name,
+                    prefix,
+                    suffix,
+                    friendly_fire,
+                    name_tag_visibility,
+                    color,
+                    players,
+                    bridge=self
+                )
+            ) 
         # team removal
         elif mode == b'\x01':
             del self.teams[name]
         # team information updation
         elif mode == b'\x02':
-            self.teams[name]["display_name"] = buff.unpack_string()
-            self.teams[name]["prefix"] = buff.unpack_string()
-            self.teams[name]["suffix"] = buff.unpack_string()
-            self.teams[name]["friendly_fire"] = buff.read(1)[0]
-            self.teams[name]["name_tag_visibility"] = buff.unpack_string()
-            self.teams[name]["color"] = buff.read(1)[0]
+            self.teams[name].display_name = buff.unpack_string()
+            self.teams[name].prefix = buff.unpack_string()
+            self.teams[name].suffix = buff.unpack_string()
+            self.teams[name].friendly_fire = buff.read(1)[0]
+            self.teams[name].name_tag_visibility = buff.unpack_string()
+            self.teams[name].color = buff.read(1)[0]
         # add players to team
-        elif mode == b'\x03':
+        elif mode in (b'\x03', b'\x04'):
+            add = True if mode == b'\x03' else False
             player_count = buff.unpack_varint()
-            for _ in range(player_count):
-                self.teams[name]["players"].append(buff.unpack_string())
-        # remove players from team
-        elif mode == b'\x04':
-            player_count = buff.unpack_varint()
-            players = []
-            for _ in range(player_count):
-                self.teams[name]["players"].remove(buff.unpack_string())
+            players = [buff.unpack_string() for _ in range(player_count)]
+            self.teams[name].update_players(add, *players)
 
         buff.restore()
         self.downstream.send_packet("teams", buff.read())
