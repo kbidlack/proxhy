@@ -3,7 +3,6 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass
 
 import dotenv
 import msmcauth
@@ -15,20 +14,9 @@ from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
 from commands import run_command
-from models import Team, Teams
+from models import Game, Team, Teams
 from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
-
-
-@dataclass
-class Game:
-    server: str | None = None
-    gametype: str | None = None
-    mode: str | None = None
-    map: str | None = None
-    lobbyname: str | None = None
- 
-    pregame: bool | None = None
 
 
 class Settings:

@@ -1,8 +1,9 @@
 from copy import deepcopy
-from typing import Any
 
 from hypixel import Player
 from hypixel.errors import HypixelException
+
+from aliases import Gamemode
 
 
 def get_rank(player):
@@ -391,43 +392,60 @@ def format_sw_star(level, player):
         stars = f"§l§c§k[§r§6{level[0]}§e{level[1]}§a{level[2]}§b{sw_icon(player)}§l§c§k]§r"
     return stars
 
+
 class FormattedPlayer:
     def __new__(cls, original_player: Player):
         player: cls = deepcopy(original_player)
         player.__class__ = cls
 
-        player.rank = get_rank(original_player)
-        player.name = original_player.name
+        player.rank = get_rank(player)
+        player.name = player.name
 
-        player.raw_rank = original_player.rank
-        player.raw_name = original_player.name
+        player.raw_rank = player.rank
+        player.raw_name = player.name
 
-        player.bedwars.level = format_bw_star(original_player.bedwars.level)
-        player.bedwars.final_kills = format_bw_finals(original_player.bedwars.final_kills)
-        player.bedwars.fkdr = format_bw_fkdr(original_player.bedwars.fkdr)
-        player.bedwars.wins = format_bw_wins(original_player.bedwars.wins)
-        player.bedwars.wlr = format_bw_wlr(original_player.bedwars.wlr)
+        player.bedwars.level = format_bw_star(player.bedwars.level)
+        player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
+        player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
+        player.bedwars.wins = format_bw_wins(player.bedwars.wins)
+        player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
 
-        player.bedwars.raw_level = original_player.bedwars.level
-        player.bedwars.raw_final_kills = original_player.bedwars.final_kills
-        player.bedwars.raw_fkdr = original_player.bedwars.fkdr
-        player.bedwars.raw_wins = original_player.bedwars.wins
-        player.bedwars.raw_wlr = original_player.bedwars.wlr
+        player.bedwars.raw_level = player.bedwars.level
+        player.bedwars.raw_final_kills = player.bedwars.final_kills
+        player.bedwars.raw_fkdr = player.bedwars.fkdr
+        player.bedwars.raw_wins = player.bedwars.wins
+        player.bedwars.raw_wlr = player.bedwars.wlr
 
-        player.skywars.level = format_bw_star(original_player.skywars.level)
-        player.skywars.kills = format_bw_finals(original_player.skywars.kills)
-        player.skywars.kdr = format_bw_fkdr(original_player.skywars.kdr)
-        player.skywars.wins = format_bw_wins(original_player.skywars.wins)
-        player.skywars.wlr = format_bw_wlr(original_player.skywars.wlr)
+        player.skywars.level = format_sw_star(player.skywars.level, player)
+        player.skywars.kills = format_sw_kills(player.skywars.kills)
+        player.skywars.kdr = format_sw_kdr(player.skywars.kdr)
+        player.skywars.wins = format_sw_wins(player.skywars.wins)
+        player.skywars.wlr = format_sw_wlr(player.skywars.wlr)
 
-        player.skywars.raw_level = original_player.skywars.level
-        player.skywars.raw_kills = original_player.skywars.kills
-        player.skywars.raw_kdr = original_player.skywars.kdr
-        player.skywars.raw_wins = original_player.skywars.wins
-        player.skywars.raw_wlr =original_player.skywars.wlr
+        player.skywars.raw_level = player.skywars.level
+        player.skywars.raw_kills = player.skywars.kills
+        player.skywars.raw_kdr = player.skywars.kdr
+        player.skywars.raw_wins = player.skywars.wins
+        player.skywars.raw_wlr = player.skywars.wlr
 
+        # aliases
+        player.bedwars.finals = player.bedwars.final_kills
+
+        # other utils
         player.rank_color = player.rank[:2]
         sep: str = '' if player.rank == "§7" else ' ' # no space for non
         player.rankname = sep.join((f"{player.rank}", f"{player.name}"))
 
         return player
+
+    def format_stats(self, gamemode: str, stats: tuple[str]) -> str:
+        formatted_stats = [
+            getattr(getattr(self, gamemode), "level"), self.rankname
+        ]
+        formatted_stats += [
+            f"{stat}: {getattr(getattr(self, gamemode), stat.lower())}"
+            for stat in stats
+        ]
+        stats_message = '§f '.join(formatted_stats)
+
+        return stats_message 

@@ -6,6 +6,7 @@ from quarry.types.buffer import Buffer1_7
 from twisted.internet import reactor
 from twisted.python import threadable
 
+from aliases import Gamemode, Statistic
 from formatting import FormattedPlayer
 from patches import Client, pack_chat
 
@@ -105,12 +106,34 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
        return "§eMmm, garlic bread." # Mmm, garlic bread. 
 
 @command("sc")
-def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
+def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
+    # TODO default gamemode is hypixel stats
     ign = ign or bridge.username
-    gamemode = gamemode or bridge.game.gametype
+    # verify gamemode
+    if mode is None:
+        gamemode = Gamemode(bridge.game.gametype) or "bedwars"
+    elif (gamemode := Gamemode(mode)) is None:
+        raise CommandException(f"§9§l∎ §4Unknown gamemode '{mode}'!")
+
+    # verify stats 
+    if not stats:
+        if gamemode == "bedwars":
+            stats = ("Finals", "FKDR", "Wins", "WLR")
+        elif gamemode == "skywars":
+            stats = ("Kills", "KDR", "Wins", "WLR")
+    elif any(Statistic(stat, gamemode) is None for stat in stats):
+        unknown_stat = next(
+            (stat for stat in stats if Statistic(stat, gamemode) is None)
+        )
+        raise CommandException(
+            f"§9§l∎ §4Unknown statistic '{unknown_stat}' "
+            f"for gamemode {gamemode}!"
+        )
+    else:
+        stats = tuple(Statistic(stat, gamemode) for stat in stats)
 
     client: Client = bridge.client
-    player = FormattedPlayer(client.player(ign))
+    player = client.player(ign)
 
     if isinstance(player, PlayerNotFound):
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
@@ -122,36 +145,11 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
             f"while fetching player '{ign}'! ({player})"
         )
 
-    # TODO move to formatting.py
-    # TODO check for gamemode aliases
-    if gamemode in sw:
-        stats_message = '§f '.join((
-            player.skywars.level,
-            player.rankname,
-            f"Kills: {player.skywars.kills}",
-            f"KDR: {player.skywars.kdr}",
-            f"Wins: {player.skywars.wins}",
-            f"WLR: {player.skywars.wlr}"
-        ))
-    else:
-        stats_message = '§f '.join((
-            player.bedwars.level,
-            player.rankname,
-            f"Kills: {player.bedwars.final_kills}",
-            f"FKDR: {player.bedwars.fkdr}",
-            f"Wins: {player.bedwars.wins}",
-            f"WLR: {player.bedwars.wlr}"
-        ))
-    return stats_message 
- 
+    fplayer = FormattedPlayer(player)
+    return fplayer.format_stats(gamemode, stats)
 
-# WIP gamemode aliases
-sw = ["solo_normal","solo_insane","teams_normal","teams_insane","mega_normal","mega_doubles",
-      "solo_insane_tnt_madness","teams_insane_tnt_madness","solo_insane_rush","teams_insane_rush",
-      "solo_insane_slime","teams_insane_slime","solo_insane_lucky","teams_insane_lucky",
-      "solo_insane_hunters_vs_beasts","sw","SW","skywars"]
 
-# TESTING
+# DEBUG
 @command('t')
 def teams(bridge, buff):
     print(bridge.teams)
