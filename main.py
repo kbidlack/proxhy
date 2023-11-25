@@ -3,7 +3,6 @@ import json
 import os
 import re
 import time
-from dataclasses import dataclass
 
 import dotenv
 import msmcauth
@@ -15,34 +14,12 @@ from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
 from commands import run_command
-from models import Team, Teams
+from models import Game, Team, Teams
 from patches import Client, pack_chat
 from protocols import DownstreamProtocol, ProxhyUpstreamFactory
 
 from math import sin
 
-@dataclass
-class Game:
-    server: str | None = None
-    gametype: str | None = None
-    mode: str | None = None
-    map: str | None = None
-    lobbyname: str | None = None
- 
-    pregame: bool | None = None
-
-@dataclass
-class team:
-    """Teams in tab list"""
-    display_name: str | None = None
-    prefix: str | None = None
-    suffix: str | None = None
-    friendly_fire: int | None = None
-    name_tag_visibility: str | None = None
-    color: int | None = None
-    players: list | None = None
-   
-    
 class Settings:
     def __init__(self):
         self.autoboops = []

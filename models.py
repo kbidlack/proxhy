@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from typing import Any
 
 from quarry.net.proxy import Bridge
 from quarry.types.buffer import Buffer1_7
@@ -102,3 +103,18 @@ class Team:
         ))
 
         self.bridge.downstream.send_packet("teams", packet)
+
+
+@dataclass
+class Game:
+    server: str | None = None
+    gametype: str | None = None
+    mode: str | None = None
+    map: str | None = None
+    lobbyname: str | None = None
+ 
+    pregame: bool | None = None
+
+    def __setattr__(self, name: str, value) -> None:
+        if isinstance(value, str):
+            super().__setattr__(name, value.lower())

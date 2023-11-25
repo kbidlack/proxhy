@@ -1,11 +1,13 @@
 import inspect
 import re
 
-from hypixel.errors import InvalidApiKey, PlayerNotFound
+from hypixel.errors import HypixelException, InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
 from twisted.internet import reactor
+from twisted.python import threadable
 
-from formatting import format_player
+from aliases import Gamemode, Statistic
+from formatting import FormattedPlayer
 from patches import Client, pack_chat
 
 commands = {}
@@ -90,7 +92,7 @@ def run_command(bridge, buff, message: str):
 # COMMANDS
 @command("rq")
 def requeue(bridge, buff: Buffer1_7):
-    if bridge.game.mode is None:
+    if not bridge.game.mode:
         raise CommandException("§9§l∎ §4No game to requeue!")
     else:
         reactor.callFromThread(
@@ -104,49 +106,50 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
        return "§eMmm, garlic bread." # Mmm, garlic bread. 
 
 @command("sc")
-def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
-    if ign:
-        ign = ign.replace("\\", "")
-    if ign == "sw" and gamemode is None:
-        ign = bridge.username
-        gamemode = "sw"
-    elif ign is None:
-        ign = bridge.username
-    if gamemode is None:
-        # TODO check for duels aliases
-        gamemode = bridge.game.mode
+def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
+    # TODO default gamemode is hypixel stats
+    ign = ign or bridge.username
+    # verify gamemode
+    if mode is None:
+        gamemode = Gamemode(bridge.game.gametype) or "bedwars"
+    elif (gamemode := Gamemode(mode)) is None:
+        raise CommandException(f"§9§l∎ §4Unknown gamemode '{mode}'!")
+
+    # verify stats 
+    if not stats:
+        if gamemode == "bedwars":
+            stats = ("Finals", "FKDR", "Wins", "WLR")
+        elif gamemode == "skywars":
+            stats = ("Kills", "KDR", "Wins", "WLR")
+    elif any(Statistic(stat, gamemode) is None for stat in stats):
+        unknown_stat = next(
+            (stat for stat in stats if Statistic(stat, gamemode) is None)
+        )
+        raise CommandException(
+            f"§9§l∎ §4Unknown statistic '{unknown_stat}' "
+            f"for gamemode {gamemode}!"
+        )
+    else:
+        stats = tuple(Statistic(stat, gamemode) for stat in stats)
 
     client: Client = bridge.client
-    try:
-        player = format_player(client.player(ign))
-        if gamemode in sw:
-            stats_message = player.skywars.level
-            stats_message += f" {player.name} "
-            stats_message += f"Kills: {player.skywars.kills} "
-            stats_message += f"KDR: {player.skywars.kdr} "
-            stats_message += f"Wins: {player.skywars.wins} "
-            stats_message += f"WLR: {player.skywars.wlr}"
-        else:
-            stats_message = player.bedwars.level
-            stats_message += f" {player.name} "
-            stats_message += f"Finals: {player.bedwars.final_kills} "
-            stats_message += f"FKDR: {player.bedwars.fkdr} "
-            stats_message += f"Wins: {player.bedwars.wins} "
-            stats_message += f"WLR: {player.bedwars.wlr}"
-        return stats_message
-        
-    except PlayerNotFound: 
-        raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
-    except InvalidApiKey:
-        raise CommandException(f"§9§l∎ §4Invalid API Key!")
-    
-# Gamemodes:
-sw = ["solo_normal","solo_insane","teams_normal","teams_insane","mega_normal","mega_doubles",
-      "solo_insane_tnt_madness","teams_insane_tnt_madness","solo_insane_rush","teams_insane_rush",
-      "solo_insane_slime","teams_insane_slime","solo_insane_lucky","teams_insane_lucky",
-      "solo_insane_hunters_vs_beasts","sw","SW","skywars"]
+    player = client.player(ign)
 
-# TESTING
+    if isinstance(player, PlayerNotFound):
+        raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
+    elif isinstance(player, InvalidApiKey):
+        raise CommandException(f"§9§l∎ §4Invalid API Key!")
+    elif isinstance(player, HypixelException):
+        raise CommandException(
+            f"§9§l∎ §4An unknown error occurred"
+            f"while fetching player '{ign}'! ({player})"
+        )
+
+    fplayer = FormattedPlayer(player)
+    return fplayer.format_stats(gamemode, stats)
+
+
+# DEBUG
 @command('t')
 def teams(bridge, buff):
     print(bridge.teams)
