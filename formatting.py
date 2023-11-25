@@ -1,7 +1,8 @@
 from copy import deepcopy
+from typing import Any
 
 from hypixel import Player
-from hypixel.errors import PlayerNotFound
+from hypixel.errors import HypixelException
 
 
 def get_rank(player):
@@ -40,86 +41,86 @@ def return_plus_color(player):
 # BEDWARS 
 def format_bw_fkdr(fkdr):
     if fkdr < 1:
-        return "§7" + str(fkdr) + "§f" 
+        return "§7" + str(fkdr)
     elif fkdr < 2.5:
-        return "§e" + str(fkdr) + "§f"
+        return "§e" + str(fkdr)
     elif fkdr < 5:
-        return "§2" + str(fkdr) + "§f"
+        return "§2" + str(fkdr)
     elif fkdr < 10:
-        return "§b" + str(fkdr) + "§f"
+        return "§b" + str(fkdr)
     elif fkdr < 20:
-        return "§4" + str(fkdr) + "§f"
+        return "§4" + str(fkdr)
     elif fkdr < 50:
-        return "§5" + str(fkdr) + "§f"
+        return "§5" + str(fkdr)
     elif fkdr < 100:
-        return "§c" + str(fkdr) + "§f"
+        return "§c" + str(fkdr)
     elif fkdr < 300:
-        return "§d" + str(fkdr) + "§f"
+        return "§d" + str(fkdr)
     elif fkdr < 1000:
-        return "§9" + str(fkdr) + "§f"
+        return "§9" + str(fkdr)
     else:
-        return "§0" + str(fkdr) + "§f"
+        return "§0" + str(fkdr)
 
 def format_bw_wins(wins):
     if wins < 250:
-        return "§7" + str(wins) + "§f" 
+        return "§7" + str(wins) 
     elif wins < 1000:
-        return "§e" + str(wins) + "§f"
+        return "§e" + str(wins)
     elif wins < 2500:
-        return "§2" + str(wins) + "§f"
+        return "§2" + str(wins)
     elif wins < 8000:
-        return "§b" + str(wins) + "§f"
+        return "§b" + str(wins)
     elif wins < 15000:
-        return "§4" + str(wins) + "§f"
+        return "§4" + str(wins)
     elif wins < 40000:
-        return "§5" + str(wins) + "§f"
+        return "§5" + str(wins)
     else:
-        return "§d" + str(wins) + "§f"
+        return "§d" + str(wins)
  
 def format_bw_finals(finals):
     if finals < 1000:
-        return "§7" + str(finals) + "§f" 
+        return "§7" + str(finals) 
     elif finals < 4000:
-        return "§e" + str(finals) + "§f"
+        return "§e" + str(finals)
     elif finals < 10000:
-        return "§2" + str(finals) + "§f"
+        return "§2" + str(finals)
     elif finals < 25000:
-        return "§b" + str(finals) + "§f"
+        return "§b" + str(finals)
     elif finals < 50000:
-        return "§4" + str(finals) + "§f"
+        return "§4" + str(finals)
     elif finals < 100000:
-        return "§5" + str(finals) + "§f"
+        return "§5" + str(finals)
     else:
-        return "§d" + str(finals) + "§f"
+        return "§d" + str(finals)
 
 def format_bw_wlr(wlr):
     if wlr < .5:
-        return "§7" + str(wlr) + "§f" 
+        return "§7" + str(wlr) 
     elif wlr < 1:
-        return "§e" + str(wlr) + "§f"
+        return "§e" + str(wlr)
     elif wlr < 2.5:
-        return "§2" + str(wlr) + "§f"
+        return "§2" + str(wlr)
     elif wlr < 5:
-        return "§b" + str(wlr) + "§f"
+        return "§b" + str(wlr)
     elif wlr < 10:
-        return "§4" + str(wlr) + "§f"
+        return "§4" + str(wlr)
     elif wlr < 25:
-        return "§5" + str(wlr) + "§f"
+        return "§5" + str(wlr)
     elif wlr < 100:
-        return "§c" + str(wlr) + "§f"
+        return "§c" + str(wlr)
     elif wlr < 300:
-        return "§d" + str(wlr) + "§f"
+        return "§d" + str(wlr)
     elif wlr < 1000:
-        return "§9" + str(wlr) + "§f"
+        return "§9" + str(wlr)
     else:
-        return "§d" + str(wlr) + "§f"       
+        return "§d" + str(wlr) 
 
 def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors up to 3000
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
     if level < 1000:
-        stars = f"{colors[level // 100]}[{level}✫]"
+        stars = f"{colors[int(level // 100)]}[{level}✫]"
     elif level < 1100:
         level = str(level)
         stars += f"§c[§6{level[0]}§e{level[1]}§a{level[2]}§b{level[3]}§d✫§5]"
@@ -240,87 +241,87 @@ def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for cre
 # SKYWARS
 def format_sw_kills(kills):
     if kills < 1000:
-        return "§7" + str(kills) + "§f" 
+        return "§7" + str(kills)
     elif kills < 5000:
-        return "§e" + str(kills) + "§f"
+        return "§e" + str(kills)
     elif kills < 15000:
-        return "§2" + str(kills) + "§f"
+        return "§2" + str(kills)
     elif kills < 30000:
-        return "§b" + str(kills) + "§f"
+        return "§b" + str(kills)
     elif kills < 50000:
-        return "§4" + str(kills) + "§f"
+        return "§4" + str(kills)
     elif kills < 10000:
-        return "§5" + str(kills) + "§f"
+        return "§5" + str(kills)
     elif kills < 250000:
-        return "§c" + str(kills) + "§f"
+        return "§c" + str(kills)
     elif kills < 500000:
-        return "§d" + str(kills) + "§f"
+        return "§d" + str(kills)
     else:
-        return "§0" + str(kills) + "§f"
+        return "§0" + str(kills)
 
 def format_sw_wins(wins):
     if wins < 250:
-        return "§7" + str(wins) + "§f" 
+        return "§7" + str(wins)
     elif wins < 1000:
-        return "§e" + str(wins) + "§f"
+        return "§e" + str(wins)
     elif wins < 3000:
-        return "§2" + str(wins) + "§f"
+        return "§2" + str(wins)
     elif wins < 7500:
-        return "§b" + str(wins) + "§f"
+        return "§b" + str(wins)
     elif wins < 15000:
-        return "§4" + str(wins) + "§f"
+        return "§4" + str(wins)
     elif wins < 30000:
-        return "§5" + str(wins) + "§f"
+        return "§5" + str(wins)
     elif wins < 60000:
-        return "§c" + str(wins) + "§f"
+        return "§c" + str(wins)
     elif wins < 100000:
-        return "§d" + str(wins) + "§f"
+        return "§d" + str(wins)
     else:
-        return "§0" + str(wins) + "§f"
+        return "§0" + str(wins)
 
 def format_sw_kdr(kdr):
     if kdr < .75:
-        return "§7" + str(kdr) + "§f" 
+        return "§7" + str(kdr)
     elif kdr < 1.5:
-        return "§e" + str(kdr) + "§f"
+        return "§e" + str(kdr)
     elif kdr < 3:
-        return "§2" + str(kdr) + "§f"
+        return "§2" + str(kdr)
     elif kdr < 5:
-        return "§b" + str(kdr) + "§f"
+        return "§b" + str(kdr)
     elif kdr < 10:
-        return "§4" + str(kdr) + "§f"
+        return "§4" + str(kdr)
     elif kdr < 25:
-        return "§5" + str(kdr) + "§f"
+        return "§5" + str(kdr)
     elif kdr < 50:
-        return "§c" + str(kdr) + "§f"
+        return "§c" + str(kdr)
     elif kdr < 100:
-        return "§d" + str(kdr) + "§f"
+        return "§d" + str(kdr)
     elif kdr < 250:
-        return "§9" + str(kdr) + "§f"
+        return "§9" + str(kdr)
     else:
-        return "§0" + str(kdr) + "§f"
+        return "§0" + str(kdr)
 
 def format_sw_wlr(wlr):
     if wlr < .1:
-        return "§7" + str(wlr) + "§f" 
+        return "§7" + str(wlr)
     elif wlr < .2:
-        return "§e" + str(wlr) + "§f"
+        return "§e" + str(wlr)
     elif wlr < .4:
-        return "§2" + str(wlr) + "§f"
+        return "§2" + str(wlr)
     elif wlr < .75:
-        return "§b" + str(wlr) + "§f"
+        return "§b" + str(wlr)
     elif wlr < 1:
-        return "§4" + str(wlr) + "§f"
+        return "§4" + str(wlr)
     elif wlr < 2.5:
-        return "§5" + str(wlr) + "§f"
+        return "§5" + str(wlr)
     elif wlr < 5:
-        return "§c" + str(wlr) + "§f"
+        return "§c" + str(wlr)
     elif wlr < 10:
-        return "§d" + str(wlr) + "§f"
+        return "§d" + str(wlr)
     elif wlr < 25:
-        return "§9" + str(wlr) + "§f"
+        return "§9" + str(wlr)
     else:
-        return "§0" + str(wlr) + "§f"
+        return "§0" + str(wlr)
 
 def sw_icon(player): # Thanks SO MUCH to hxzelx on the forums for making a list of all of these. If I had to search up all of these it would be joever
     icons = {"angel_1":"★", "angel_2":"☆", "angel_3":"⁕", "angel_4":"✶","angel_5":"✳","angel_6":"✴","angel_7":"✷",
@@ -390,34 +391,43 @@ def format_sw_star(level, player):
         stars = f"§l§c§k[§r§6{level[0]}§e{level[1]}§a{level[2]}§b{sw_icon(player)}§l§c§k]§r"
     return stars
 
+class FormattedPlayer:
+    def __new__(cls, original_player: Player):
+        player: cls = deepcopy(original_player)
+        player.__class__ = cls
 
-# add attributes to player object
-# TODO FormattedPlayer class
-def format_player(player: Player | PlayerNotFound) -> Player:
-    # PlayerNotFound to make nicks easier
-    if isinstance(player, PlayerNotFound):
+        player.rank = get_rank(original_player)
+        player.name = original_player.name
+
+        player.raw_rank = original_player.rank
+        player.raw_name = original_player.name
+
+        player.bedwars.level = format_bw_star(original_player.bedwars.level)
+        player.bedwars.final_kills = format_bw_finals(original_player.bedwars.final_kills)
+        player.bedwars.fkdr = format_bw_fkdr(original_player.bedwars.fkdr)
+        player.bedwars.wins = format_bw_wins(original_player.bedwars.wins)
+        player.bedwars.wlr = format_bw_wlr(original_player.bedwars.wlr)
+
+        player.bedwars.raw_level = original_player.bedwars.level
+        player.bedwars.raw_final_kills = original_player.bedwars.final_kills
+        player.bedwars.raw_fkdr = original_player.bedwars.fkdr
+        player.bedwars.raw_wins = original_player.bedwars.wins
+        player.bedwars.raw_wlr = original_player.bedwars.wlr
+
+        player.skywars.level = format_bw_star(original_player.skywars.level)
+        player.skywars.kills = format_bw_finals(original_player.skywars.kills)
+        player.skywars.kdr = format_bw_fkdr(original_player.skywars.kdr)
+        player.skywars.wins = format_bw_wins(original_player.skywars.wins)
+        player.skywars.wlr = format_bw_wlr(original_player.skywars.wlr)
+
+        player.skywars.raw_level = original_player.skywars.level
+        player.skywars.raw_kills = original_player.skywars.kills
+        player.skywars.raw_kdr = original_player.skywars.kdr
+        player.skywars.raw_wins = original_player.skywars.wins
+        player.skywars.raw_wlr =original_player.skywars.wlr
+
+        player.rank_color = player.rank[:2]
+        sep: str = '' if player.rank == "§7" else ' ' # no space for non
+        player.rankname = sep.join((f"{player.rank}", f"{player.name}"))
+
         return player
-
-    new_player = deepcopy(player)
-
-    new_player.rank = get_rank(player)
-    new_player.rank_color = new_player.rank[:2]
-    new_player.rname = player.name
-    if new_player.rank == "§7": # non, no space needed
-        new_player.name = f"§f{new_player.rank}{player.name}§f"
-    else:
-        new_player.name = f"§f{new_player.rank} {player.name}§f"
-
-    new_player.bedwars.level = format_bw_star(player.bedwars.level)
-    new_player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
-    new_player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
-    new_player.bedwars.wins = format_bw_wins(player.bedwars.wins)
-    new_player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
-
-    new_player.skywars.level = format_sw_star(player.skywars.level, player)
-    new_player.skywars.kills = format_sw_kills(player.skywars.kills)
-    new_player.skywars.wins = format_sw_wins(player.skywars.wins)
-    new_player.skywars.kdr = format_sw_kdr(player.skywars.kdr)
-    new_player.skywars.wlr = format_sw_wlr(player.skywars.wlr)
-
-    return new_player

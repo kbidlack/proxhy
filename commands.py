@@ -1,11 +1,12 @@
 import inspect
 import re
 
-from hypixel.errors import InvalidApiKey, PlayerNotFound
+from hypixel.errors import HypixelException, InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
 from twisted.internet import reactor
+from twisted.python import threadable
 
-from formatting import format_player
+from formatting import FormattedPlayer
 from patches import Client, pack_chat
 
 commands = {}
@@ -90,7 +91,7 @@ def run_command(bridge, buff, message: str):
 # COMMANDS
 @command("rq")
 def requeue(bridge, buff: Buffer1_7):
-    if bridge.game.mode is None:
+    if not bridge.game.mode:
         raise CommandException("§9§l∎ §4No game to requeue!")
     else:
         reactor.callFromThread(
@@ -105,40 +106,46 @@ def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread.
 
 @command("sc")
 def statcheck(bridge, buff: Buffer1_7, ign=None, gamemode=None, *stats):
-    if ign == "sw" and gamemode is None:
-        ign = bridge.username
-        gamemode = "sw"
-    elif ign is None:
-        ign = bridge.username
-    if gamemode is None:
-        # TODO check for duels aliases
-        gamemode = bridge.game.mode
+    ign = ign or bridge.username
+    gamemode = gamemode or bridge.game.gametype
 
     client: Client = bridge.client
-    try:
-        player = format_player(client.player(ign))
-        if gamemode in sw:
-            stats_message = player.skywars.level
-            stats_message += f" {player.name} "
-            stats_message += f"Kills: {player.skywars.kills} "
-            stats_message += f"KDR: {player.skywars.kdr} "
-            stats_message += f"Wins: {player.skywars.wins} "
-            stats_message += f"WLR: {player.skywars.wlr}"
-        else:
-            stats_message = player.bedwars.level
-            stats_message += f" {player.name} "
-            stats_message += f"Finals: {player.bedwars.final_kills} "
-            stats_message += f"FKDR: {player.bedwars.fkdr} "
-            stats_message += f"Wins: {player.bedwars.wins} "
-            stats_message += f"WLR: {player.bedwars.wlr}"
-        return stats_message
-        
-    except PlayerNotFound: 
+    player = FormattedPlayer(client.player(ign))
+
+    if isinstance(player, PlayerNotFound):
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
-    except InvalidApiKey:
+    elif isinstance(player, InvalidApiKey):
         raise CommandException(f"§9§l∎ §4Invalid API Key!")
-    
-# Gamemodes:
+    elif isinstance(player, HypixelException):
+        raise CommandException(
+            f"§9§l∎ §4An unknown error occurred"
+            f"while fetching player '{ign}'! ({player})"
+        )
+
+    # TODO move to formatting.py
+    # TODO check for gamemode aliases
+    if gamemode in sw:
+        stats_message = '§f '.join((
+            player.skywars.level,
+            player.rankname,
+            f"Kills: {player.skywars.kills}",
+            f"KDR: {player.skywars.kdr}",
+            f"Wins: {player.skywars.wins}",
+            f"WLR: {player.skywars.wlr}"
+        ))
+    else:
+        stats_message = '§f '.join((
+            player.bedwars.level,
+            player.rankname,
+            f"Kills: {player.bedwars.final_kills}",
+            f"FKDR: {player.bedwars.fkdr}",
+            f"Wins: {player.bedwars.wins}",
+            f"WLR: {player.bedwars.wlr}"
+        ))
+    return stats_message 
+ 
+
+# WIP gamemode aliases
 sw = ["solo_normal","solo_insane","teams_normal","teams_insane","mega_normal","mega_doubles",
       "solo_insane_tnt_madness","teams_insane_tnt_madness","solo_insane_rush","teams_insane_rush",
       "solo_insane_slime","teams_insane_slime","solo_insane_lucky","teams_insane_lucky",
