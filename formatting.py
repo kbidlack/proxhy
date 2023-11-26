@@ -1,8 +1,8 @@
 from copy import deepcopy
+from math import floor
 
 from hypixel import Player
 
-from math import floor
 
 def get_rank(player):
     if player.rank == "VIP":
