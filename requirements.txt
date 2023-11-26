@@ -1,0 +1,7 @@
+msmcauth
+requests
+python-dotenv
+quarry
+aiohttp==3.9.0b0
+hypixel.py
+aenum
