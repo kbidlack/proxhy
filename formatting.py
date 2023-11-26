@@ -1,9 +1,6 @@
 from copy import deepcopy
 
 from hypixel import Player
-from hypixel.errors import HypixelException
-
-from aliases import Gamemode
 
 from math import floor
 
