@@ -1,8 +1,8 @@
 class Gamemode:
     # TODO add more aliases (duels, )
     gamemodes = {
-        "bedwars": {"bedwars", "bw"},
-        "skywars": {"skywars", "sw", 's'}
+        "bedwars": frozenset({"bedwars", "bw"}),
+        "skywars": frozenset({"skywars", "sw", 's'})
     }
 
     def __new__(cls, value: str):
@@ -14,16 +14,16 @@ class Gamemode:
 class Statistic:
     # TODO add more stats
     bedwars = {
-        "Finals": {"finals", "final", "fk", "fks"},
-        "FKDR": {"fkdr", "fk/d"},
-        "Wins": {"wins", "win", 'w'},
-        "WLR": {"wlr", "w/l"}
+        "Finals": frozenset({"finals", "final", "fk", "fks"}),
+        "FKDR": frozenset({"fkdr", "fk/d"}),
+        "Wins": frozenset({"wins", "win", 'w'}),
+        "WLR": frozenset({"wlr", "w/l"})
     }
     skywars = {
-        "Kills": {"kills", "kill", 'k'},
-        "KDR": {"kdr", "k/d"},
-        "Wins": {"wins", "win", 'w'},
-        "WLR": {"wlr", "w/l"}
+        "Kills": frozenset({"kills", "kill", 'k'}),
+        "KDR": frozenset({"kdr", "k/d"}),
+        "Wins": frozenset({"wins", "win", 'w'}),
+        "WLR": frozenset({"wlr", "w/l"}) 
     }
 
     def __new__(cls, stat: str, mode: str):

@@ -1,5 +1,8 @@
+import dataclasses
+import json
+import re
+import time
 from dataclasses import dataclass
-from typing import Any
 
 from quarry.net.proxy import Bridge
 from quarry.types.buffer import Buffer1_7
@@ -118,3 +121,72 @@ class Game:
     def __setattr__(self, name: str, value) -> None:
         if isinstance(value, str):
             super().__setattr__(name, value.lower())
+
+
+class Settings:
+    def __init__(self):
+        self.game = Game()
+        self.rq_game = Game()
+        self.teams = Teams()
+
+        self.sent_commands = []
+        self.autoboops = []
+        self.waiting_for_locraw = True
+
+        self.patterns = {
+            # waiting_for_locraw
+            "wflp": re.compile("^{.*}$"),
+            # autoboop
+            "abp": re.compile(r"^Friend >.* joined\.")
+        }
+
+        self.checks = {
+            "autoboop": (
+                lambda x: bool(self.patterns["abp"].match(x)),
+                self.autoboop
+            ),
+            "waiting_for_locraw": (
+                lambda x: bool(self.patterns["wflp"].match(x)),
+                self.update_game_from_locraw
+            )
+        }
+
+
+    def autoboop(self, bridge, buff: Buffer1_7, join_message):
+        buff.restore()
+        bridge.downstream.send_packet("chat_message", buff.read())
+
+        # wait for a second for player to join
+        time.sleep(0.1)
+
+        if (player := str(join_message.split()[2]).lower()) in self.autoboops:
+            bridge.upstream.send_chat(f"/boop {player}")
+    
+    def update_game_from_locraw(
+        self,
+        bridge: type[Bridge],
+        buff: Buffer1_7,
+        chat_message
+    ):
+        if self.waiting_for_locraw:
+            if 'limbo' in chat_message:
+                return bridge.update_game(buff, self.locraw_retry + 1)
+
+            game: dict = json.loads(chat_message)
+            bridge.settings.game.server = game.get("server")
+            bridge.settings.game.gametype = game.get("gametype")
+            bridge.settings.game.mode = game.get("mode")
+            bridge.settings.game.map = game.get("map")
+            bridge.settings.game.lobbyname = game.get("lobbyname")
+
+            # TODO determine if pregame
+
+            if bridge.settings.game.mode:
+                bridge.settings.rq_game = dataclasses.replace(
+                    bridge.settings.game
+                )
+
+            self.waiting_for_locraw = False
+        else:
+            buff.restore()
+            bridge.downstream.send_packet("chat_message", buff.read())
