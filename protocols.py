@@ -3,15 +3,22 @@ import os
 from xmlrpc.client import ProtocolError
 
 import requests
-from quarry.net import auth, crypto
-from quarry.net.proxy import Downstream, Upstream, UpstreamFactory
-from twisted.python import failure
+from quarry.net import crypto
+from quarry.net.proxy import Downstream, Upstream
 
-from patches import data_received
+from patches import data_received, downstream_send_chat, send_packet, upstream_send_chat
 
 
 class UpstreamProtocol(Upstream):
-    protocol_version = 47  
+    protocol_version = 47
+
+    # PATCH thread safe packet sending
+    def send_packet(self, name, *data):
+        return send_packet(self, name, *data)
+    
+    # PATCH chat message sending
+    def send_chat(self, *data):
+        return upstream_send_chat(self, *data)
 
     # PATCH Packet is too long:
     def data_received(self, data):
@@ -77,6 +84,14 @@ class UpstreamProtocol(Upstream):
 
 class DownstreamProtocol(Downstream):
     protocol_version = 47
+
+    # PATCH thread safe packet sending
+    def send_packet(self, name, *data):
+        return send_packet(self, name, *data)
+
+    # PATCH chat message sending
+    def send_chat(self, *data):
+        return downstream_send_chat(self, *data)
 
     # PATCH Packet is too long:
     def data_received(self, data):
@@ -150,8 +165,3 @@ class DownstreamProtocol(Downstream):
             # self.auth_failed(failure.Failure(
             #     auth.AuthException('invalid', 'invalid session'))
             # )
-
-
-class ProxhyUpstreamFactory(UpstreamFactory):
-    protocol = UpstreamProtocol
-    connection_timeout = 10

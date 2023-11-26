@@ -3,20 +3,13 @@ import re
 
 from hypixel.errors import HypixelException, InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
-from twisted.internet import reactor
-from twisted.python import threadable
 
 from aliases import Gamemode, Statistic
+from errors import CommandException
 from formatting import FormattedPlayer
-from patches import Client, pack_chat
+from patches import Client
 
 commands = {}
-
-
-class CommandException(Exception):
-    """If a command has an error then stuff happens"""
-    def __init__(self, message):
-        self.message = message
 
 
 class Parameter:
@@ -43,8 +36,13 @@ class Command:
 
         sig = inspect.signature(function)
         # first two parameters should be bridge and buff
-        self.parameters = [Parameter(sig.parameters[param]) for param in sig.parameters][2:]
-        self.required_parameters = [param for param in self.parameters if param.required]
+        self.parameters = [
+            Parameter(sig.parameters[param])
+            for param in sig.parameters
+        ][2:]
+        self.required_parameters = [
+            param for param in self.parameters if param.required
+        ]
 
         self.aliases = aliases
         commands.update({self.name: self})
@@ -56,50 +54,58 @@ class Command:
         segments = message.split()
         args = segments[1:]
         if not self.parameters and args:
-            raise CommandException(f"§9§l∎ §4Command <{segments[0]}> takes no arguments!")
-        elif (len(args) > len(self.parameters)) and not any(p.infinite for p in self.parameters):
-            raise CommandException(f"§9§l∎ §4Command <{segments[0]}> takes at most {len(self.parameters)} argument(s)!")
+            raise CommandException(
+                f"§9§l∎ §4Command <{segments[0]}> takes no arguments!"
+            )
+        elif ((len(args) > len(self.parameters))
+              and not any(p.infinite for p in self.parameters)):
+            raise CommandException(
+                f"§9§l∎ §4Command <{segments[0]}> takes at most"
+                f"{len(self.parameters)} argument(s)!"
+            )
         elif len(args) < len(self.required_parameters):
-            names = ', '.join([param.name for param in self.required_parameters])
-            raise CommandException(f"§9§l∎ §4Command <{segments[0]}> needs at least {len(self.required_parameters)} arguments! ({names})")
+            names = ', '.join([
+                param.name for param in self.required_parameters
+            ])
+            raise CommandException(
+                f"§9§l∎ §4Command <{segments[0]}> needs at least"
+                f"{len(self.required_parameters)} arguments! ({names})"
+            )
         else:
             return self.function(bridge, buff, *args)
 
-def command(*aliases):
-    return lambda func: Command(func, *aliases)
-
 def run_command(bridge, buff, message: str):
     segments = message.split()
-    command = commands.get(segments[0].removeprefix('/')) or commands.get(segments[0].removeprefix('//'))
+    command = (commands.get(segments[0].removeprefix('/'))
+        or commands.get(segments[0].removeprefix('//')))
     if command:
         try:
             output = command(bridge, buff, message)
         except CommandException as err:
-            reactor.callFromThread(bridge.downstream.send_packet, "chat_message", pack_chat(err.message))
+            bridge.downstream.send_chat(err.message)
         else:
             if output:
                 if segments[0].startswith('//'): # send output of command
                     # remove chat formatting
                     output = re.sub(r'§.', '', output)
-                    reactor.callFromThread(bridge.upstream.send_packet, "chat_message", buff.pack_string(output))
+                    bridge.upstream.send_chat(output)
                 else:
-                    reactor.callFromThread(bridge.downstream.send_packet, "chat_message", pack_chat(output))
+                    bridge.downstream.send_chat(output)
     else:
         buff.restore()
-        reactor.callFromThread(bridge.upstream.send_packet, "chat_message", buff.pack_string(message))
+        bridge.upstream.send_chat(message)
+
+def command(*aliases):
+    return lambda func: Command(func, *aliases)
 
 
 # COMMANDS
 @command("rq")
 def requeue(bridge, buff: Buffer1_7):
-    if not bridge.game.mode:
+    if not bridge.settings.game.mode:
         raise CommandException("§9§l∎ §4No game to requeue!")
     else:
-        reactor.callFromThread(
-            bridge.upstream.send_packet,
-            "chat_message",
-            buff.pack_string(f"/play {bridge.game.mode}")
-        )
+        bridge.upstream.send_chat(f"/play {bridge.settings.game.mode}")
         
 @command() # Mmm, garlic bread. 
 def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread. 
@@ -111,7 +117,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
     ign = ign or bridge.username
     # verify gamemode
     if mode is None:
-        gamemode = Gamemode(bridge.game.gametype) or "bedwars"
+        gamemode = Gamemode(bridge.settings.game.gametype) or "bedwars"
     elif (gamemode := Gamemode(mode)) is None:
         raise CommandException(f"§9§l∎ §4Unknown gamemode '{mode}'!")
 
@@ -151,5 +157,5 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
 
 # DEBUG
 @command('t')
-def teams(bridge, buff):
-    print(bridge.teams)
+def teams(bridge, _):
+    print(bridge.settings.teams)

@@ -1,24 +1,34 @@
 import asyncio
+import os
 import pathlib
 import pickle
+import sys
 import time
 
 import aiohttp
 import hypixel
 import quarry
+from dotenv import load_dotenv
 from hypixel.aliases import GUILD, PLAYER, STATUS
 from hypixel.errors import PlayerNotFound
 from hypixel.game import Game
 from hypixel.models import Player
+from quarry.net.proxy import Downstream, Upstream
 from quarry.types import chat
-from quarry.types.buffer import BufferUnderrun
+from quarry.types.buffer import Buffer1_7, BufferUnderrun
 from twisted.internet import reactor
+from twisted.python import threadable
 
 
 class Client():
     """Synchronous wrapper for hypixel.Client that supports caching across program runs"""
-    def __init__(self, api_key):
-        self.api_key = api_key
+    def __init__(self):
+        load_dotenv()
+        if not os.environ.get("HYPIXEL_API_KEY"):
+            print("Please put your Hypixel API Key in .env file")
+            sys.exit()
+        
+        self.api_key = os.environ.get("HYPIXEL_API_KEY")
         
         # load cached info
         dir = pathlib.Path(__file__).parent
@@ -38,7 +48,13 @@ class Client():
 
     @staticmethod
     def _clean(data: dict, mode: str) -> dict:
-        alias = globals()[mode]
+        #alias = globals()[mode]
+        if mode == "GUILD":
+            alias = GUILD
+        elif mode == "PLAYER":
+            alias = PLAYER
+        elif mode == "STATUS":
+            alias = STATUS
 
         if mode == 'PLAYER':
             # Avoid name conflicts
@@ -173,3 +189,24 @@ def pack_chat(message: str, _type: int = 0):
     elif _type == 2:
         byte = b'\x02' # above hotbar
     return message.to_bytes() + byte
+
+def upstream_send_chat(self, *data):
+    packed_data = [Buffer1_7().pack_string(item) for item in data]
+    return self.send_packet("chat_message", *packed_data)
+
+def downstream_send_chat(self, *data):
+    packed_data = [pack_chat(item) for item in data]
+    return self.send_packet("chat_message", *packed_data)
+
+
+# thread safe (?) packet sending
+def send_packet(self, name, *data):
+    if isinstance(self, Downstream):
+        kind = Downstream
+    else:
+        kind = Upstream
+    send = lambda: kind.send_packet(self, name, *data)
+    
+    if not threadable.isInIOThread():
+        return reactor.callFromThread(send)
+    return send()
