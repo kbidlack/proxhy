@@ -1,5 +1,4 @@
 import os
-import re
 import sys
 import time
 
@@ -12,7 +11,6 @@ from quarry.types.uuid import UUID
 from twisted.internet import reactor
 
 from commands import run_command
-from errors import CommandException
 from models import Settings, Team
 from patches import Client
 from protocols import DownstreamProtocol, UpstreamProtocol
