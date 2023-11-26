@@ -103,7 +103,7 @@ class ProxhyBridge(Bridge):
             self.settings.sent_commands.append(chat_message) #!
         elif chat_message.startswith('!'):
             event = chat_message.replace('!', '')
-            for command in reversed(self.settings.ent_commands):
+            for command in reversed(self.settings.sent_commands):
                 if command.startswith('/' + event):
                     reactor.callInThread(run_command, self, buff, command)
                     break
@@ -111,7 +111,7 @@ class ProxhyBridge(Bridge):
                 self.downstream.send_chat(f"Event not found: {event}")
         else:
             buff.restore()
-            self.upstream.send_chat(f"Event not found: {event}")
+            self.upstream.send_packet("chat_message", buff.read())
 
     def packet_downstream_join_game(self, buff: Buffer1_7):
         self.downstream.send_packet("join_game", buff.read())
