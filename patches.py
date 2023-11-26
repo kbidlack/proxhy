@@ -10,7 +10,7 @@ import hypixel
 import quarry
 from dotenv import load_dotenv
 from hypixel.aliases import GUILD, PLAYER, STATUS
-from hypixel.errors import PlayerNotFound
+from hypixel.errors import HypixelException
 from hypixel.game import Game
 from hypixel.models import Player
 from quarry.net.proxy import Downstream, Upstream
@@ -118,9 +118,7 @@ class Client():
 
         requested_players: list = asyncio.run(self.players_async(*players_to_request)) 
         for player in requested_players:
-            # if player is a nick
-            # TODO NickedPlayer class?
-            if isinstance(player, PlayerNotFound):
+            if isinstance(player, HypixelException):
                 players.append(player)
                 continue
             # cache data

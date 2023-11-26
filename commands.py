@@ -151,7 +151,7 @@ def autoboop(bridge, buff: Buffer1_7, action: Literal["add", "remove", "list"], 
 @command("sc")
 def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
     # TODO default gamemode is hypixel stats
-    ign = ign or bridge.username
+    ign = ign or bridge.settings.username
     # verify gamemode
     if mode is None:
         gamemode = Gamemode(bridge.settings.game.gametype) or "bedwars"
