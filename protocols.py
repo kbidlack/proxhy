@@ -3,8 +3,9 @@ import os
 from xmlrpc.client import ProtocolError
 
 import requests
-from quarry.net import crypto
+from quarry.net import auth, crypto
 from quarry.net.proxy import Downstream, Upstream
+from twisted.python import failure
 
 from patches import data_received, downstream_send_chat, send_packet, upstream_send_chat
 
@@ -76,10 +77,10 @@ class UpstreamProtocol(Upstream):
         elif r.status_code == 204:
             self.auth_ok({"id": os.environ["UUID"]})
         else:
-            self.auth_ok({"id": os.environ["UUID"]})
-            # self.auth_failed(failure.Failure(
-            #     auth.AuthException('unverified', 'unverified username'))
-            # )
+            #self.auth_ok({"id": os.environ["UUID"]})
+            self.auth_failed(failure.Failure(
+                auth.AuthException('unverified', 'unverified username'))
+            )
 
 
 class DownstreamProtocol(Downstream):
