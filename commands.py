@@ -1,5 +1,6 @@
 import inspect
 import re
+from typing import Literal, get_args, get_origin
 
 from hypixel.errors import HypixelException, InvalidApiKey, PlayerNotFound
 from quarry.types.buffer import Buffer1_7
@@ -13,7 +14,7 @@ commands = {}
 
 
 class Parameter:
-    def __init__(self, param):
+    def __init__(self, param: inspect.Parameter):
         self.name = param.name
 
         if param.default is not inspect._empty:
@@ -27,6 +28,11 @@ class Parameter:
             self.required = False
         else:
             self.infinite = False
+
+        if get_origin(param.annotation) is Literal:
+            self.options = get_args(param.annotation)
+        else:
+            self.options = None
 
 
 class Command:
@@ -42,6 +48,9 @@ class Command:
         ][2:]
         self.required_parameters = [
             param for param in self.parameters if param.required
+        ]
+        self.restricted_parameters = [
+            (i, param) for i, param in enumerate(self.parameters) if param.options
         ]
 
         self.aliases = aliases
@@ -60,7 +69,7 @@ class Command:
         elif ((len(args) > len(self.parameters))
               and not any(p.infinite for p in self.parameters)):
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> takes at most"
+                f"§9§l∎ §4Command <{segments[0]}> takes at most "
                 f"{len(self.parameters)} argument(s)!"
             )
         elif len(args) < len(self.required_parameters):
@@ -68,10 +77,17 @@ class Command:
                 param.name for param in self.required_parameters
             ])
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> needs at least"
-                f"{len(self.required_parameters)} arguments! ({names})"
+                f"§9§l∎ §4Command <{segments[0]}> needs at least "
+                f"{len(self.required_parameters)} argument(s)! ({names})"
             )
         else:
+            for index, param in self.restricted_parameters:
+                if param.options and args[index].lower() not in param.options:
+                    raise CommandException(
+                        f"§9§l∎ §4Invalid option '{args[index]}'. "
+                        f"Please choose a correct argument! ({', '.join(param.options)})"
+                    )
+
             return self.function(bridge, buff, *args)
 
 def run_command(bridge, buff, message: str):
@@ -110,6 +126,27 @@ def requeue(bridge, buff: Buffer1_7):
 @command() # Mmm, garlic bread. 
 def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread. 
        return "§eMmm, garlic bread." # Mmm, garlic bread. 
+
+@command('ab')
+def autoboop(bridge, buff: Buffer1_7, action: Literal["add", "remove", "list"], ign=""):
+    ign = ign.lower()
+    if not ign and action != "list":
+        raise CommandException(f"§9§l∎ §4Please specify a user to add/remove!")
+    if action == "add":
+        if ign in bridge.settings.autoboops:
+            raise CommandException(f"§9§l∎ §4'{ign}' is already in autoboop list!")
+        bridge.settings.autoboops.append(ign)
+        return f"§9§l∎ §c{ign} §3has been added to autoboop"
+    elif action == "remove":
+        if ign not in bridge.settings.autoboops:
+            raise CommandException(f"§9§l∎ §4'{ign}' is not in autoboop list!")
+        bridge.settings.autoboops.remove(ign)
+        return f"§9§l∎ §c{ign} §3has been removed from autoboop"
+    else: # list
+        if not bridge.settings.autoboops:
+            return f"§9§l∎ §3No one in autoboop list!"
+        autoboops = "§3,§c".join(bridge.settings.autoboops)
+        return f"§9§l∎ §3People in autoboop list: §c{autoboops}§c"
 
 @command("sc")
 def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
