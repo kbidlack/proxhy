@@ -33,8 +33,7 @@ class Client():
         
         # load cached info
         self.cache_dir = Path(user_cache_dir("proxhy"))
-        if not self.cache_dir.exists():
-            os.mkdir(self.cache_dir)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
 
         self.cache_path = self.cache_dir / Path("players.pkl")
         if self.cache_path.exists():
