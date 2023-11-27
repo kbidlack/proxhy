@@ -1,13 +1,14 @@
 import asyncio
 import os
-import pathlib
 import pickle
 import sys
 import time
+from pathlib import Path
 
 import aiohttp
 import hypixel
 import quarry
+from appdirs import user_cache_dir
 from dotenv import load_dotenv
 from hypixel.aliases import GUILD, PLAYER, STATUS
 from hypixel.errors import HypixelException
@@ -31,8 +32,11 @@ class Client():
         self.api_key = os.environ.get("HYPIXEL_API_KEY")
         
         # load cached info
-        dir = pathlib.Path(__file__).parent
-        self.cache_path = dir / pathlib.Path('proxhy_cache.pkl')
+        self.cache_dir = Path(user_cache_dir("proxhy"))
+        if not self.cache_dir.exists():
+            os.mkdir(self.cache_dir)
+
+        self.cache_path = self.cache_dir / Path("players.pkl")
         if self.cache_path.exists():
             with open(self.cache_path, 'rb') as cache_file:
                 self.cached_data = pickle.load(cache_file)
