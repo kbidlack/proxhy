@@ -436,14 +436,19 @@ class FormattedPlayer:
 
         return player
 
-    def format_stats(self, gamemode: str, stats: tuple[str]) -> str:
+    def format_stats(self, mode: str, *stats: str, sep=" ", name: bool = True) -> str:
         formatted_stats = [
-            getattr(getattr(self, gamemode), "level"), self.rankname
+            f"{getattr(getattr(self, mode), 'level')} {self.rankname}"
         ]
-        formatted_stats += [
-            f"{stat}: {getattr(getattr(self, gamemode), stat.lower())}"
-            for stat in stats
-        ]
-        stats_message = '§f '.join(formatted_stats)
+        if name:
+            formatted_stats += [
+                f"{stat}: {getattr(getattr(self, mode), stat.lower())}"
+                for stat in stats
+            ]
+        else:
+            formatted_stats += [
+                getattr(getattr(self, mode), stat.lower()) for stat in stats
+            ]
+        stats_message = f'§f{sep}'.join(formatted_stats)
 
         return stats_message 

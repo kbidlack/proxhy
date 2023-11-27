@@ -189,7 +189,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
         )
 
     fplayer = FormattedPlayer(player)
-    return fplayer.format_stats(gamemode, stats)
+    return fplayer.format_stats(gamemode, *stats)
 
 
 # DEBUG
