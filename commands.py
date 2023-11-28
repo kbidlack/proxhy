@@ -2,7 +2,12 @@ import inspect
 import re
 from typing import Literal, get_args, get_origin
 
-from hypixel.errors import HypixelException, InvalidApiKey, PlayerNotFound
+from hypixel.errors import (
+    HypixelException,
+    InvalidApiKey,
+    PlayerNotFound,
+    RateLimitError,
+)
 from quarry.types.buffer import Buffer1_7
 
 from aliases import Gamemode, Statistic
@@ -182,6 +187,10 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
         raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
     elif isinstance(player, InvalidApiKey):
         raise CommandException(f"§9§l∎ §4Invalid API Key!")
+    elif isinstance(player, RateLimitError):
+        raise CommandException(
+            f"§9§l∎ §4Your API key is being rate limited; please wait a little bit!"
+        )
     elif isinstance(player, HypixelException):
         raise CommandException(
             f"§9§l∎ §4An unknown error occurred"
