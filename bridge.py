@@ -184,7 +184,8 @@ class ProxhyBridge(Bridge):
     
 
     def update_game(self, buff: Buffer1_7, retry=0):
-        if retry > 2:
+        if retry > 5:
+            self.settings.waiting_for_locraw = False
             return
 
         # sometimes it doesn't come back properly, so wait a bit
