@@ -205,3 +205,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
 @command('t')
 def teams(bridge, _):
     print(bridge.settings.teams)
+
+@command('g')
+def game(bridge, _):
+    print(bridge.settings.game)

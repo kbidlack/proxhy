@@ -4,8 +4,12 @@ import re
 import time
 from dataclasses import dataclass
 
+from hypixel import HypixelException, InvalidApiKey, PlayerNotFound, RateLimitError
 from quarry.net.proxy import Bridge
 from quarry.types.buffer import Buffer1_7
+
+from formatting import FormattedPlayer
+from patches import pack_chat
 
 
 class Teams(list):
@@ -130,14 +134,18 @@ class Settings:
         self.teams = Teams()
 
         self.sent_commands = []
-        self.autoboops = []
         self.waiting_for_locraw = True
+
+        self.autoboops = []
+        self.add_join_stats = True
 
         self.patterns = {
             # waiting_for_locraw
             "wflp": re.compile("^{.*}$"),
             # autoboop
-            "abp": re.compile(r"^Friend >.* joined\.")
+            "abp": re.compile(r"^Friend >.* joined\."),
+            # join lobby queue
+            "lq": re.compile(r"^.*has joined (.*)!$")
         }
 
         self.checks = {
@@ -148,6 +156,10 @@ class Settings:
             "waiting_for_locraw": (
                 lambda x: bool(self.patterns["wflp"].match(x)),
                 self.update_game_from_locraw
+            ),
+            "join_queue": (
+                lambda x: bool(self.patterns["lq"].match(x)),
+                self.add_stats_to_join
             )
         }
 
@@ -190,3 +202,58 @@ class Settings:
         else:
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
+
+    def add_stats_to_join(self, bridge, buff: Buffer1_7, join_message: str):
+        if not self.add_join_stats:
+            return
+
+        ign = join_message.split(' ')[0]
+        nump1, nump2 = re.findall(r'\((\d+)/(\d+)\)', join_message)[0]
+
+        player = bridge.client.player(ign)
+        if isinstance(player, InvalidApiKey):
+            buff.restore()
+            bridge.downstream.send_packet("chat_message", buff.read())
+            return bridge.downstream.send_packet(
+                "chat_message",
+                pack_chat("§4Invalid API Key!", 2)
+            )
+        elif isinstance(player, RateLimitError):
+            buff.restore()
+            bridge.downstream.send_packet("chat_message", buff.read())
+            return bridge.downstream.send_packet(
+                "chat_message",
+                pack_chat("§4Your API key has been rate limited; please wait")
+            )
+        elif isinstance(player, PlayerNotFound):
+            rc = next( # preserve rank color
+                (t.prefix for t in bridge.settings.teams if ign in t.players), "§f"
+            )
+            stats_join_message = (
+                f"§5[NICK] {rc}{ign} §ehas joined (§b{nump1}§e/§b{nump2}§e)!"
+            )
+            return bridge.downstream.send_chat(stats_join_message)
+        elif isinstance(player, HypixelException):
+            buff.restore()
+            return bridge.downstream.send_packet("chat_message", buff.read())
+
+        while self.waiting_for_locraw:
+            time.sleep(0.01) 
+
+        if self.game.gametype == "bedwars":
+            fplayer = FormattedPlayer(player)
+            stats_join_message = (
+                f"{fplayer.bedwars.level} {fplayer.bedwars.fkdr} {fplayer.rankname} "
+                + f"§ehas joined (§b{nump1}§e/§b{nump2}§e)!"
+            )
+            return bridge.downstream.send_chat(stats_join_message)
+        elif self.game.gametype == "skywars":
+            fplayer = FormattedPlayer(player)
+            stats_join_message = (
+                f"{fplayer.skywars.level} {fplayer.skywars.kdr} {fplayer.rankname} "
+                + f"§ehas joined (§b{nump1}§e/§b{nump2}§e)!"
+            )
+            return bridge.downstream.send_chat(stats_join_message)
+
+        buff.restore()
+        bridge.downstream.send_packet("chat_message", buff.read())
