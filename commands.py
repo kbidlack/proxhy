@@ -209,7 +209,7 @@ def clearcache(bridge, _):
 @command('rs')
 def refresh_stats(bridge, buff):
     bridge.settings.add_stats_in_tab(bridge, buff, "")
-    return f"§Refreshed stats!"
+    return f"§aRefreshed stats!"
 
 # DEBUG
 @command('t')
