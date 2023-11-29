@@ -1,6 +1,8 @@
 import dataclasses
 import json
+import random
 import re
+import string
 import time
 from dataclasses import dataclass
 
@@ -124,7 +126,9 @@ class Game:
 
     def __setattr__(self, name: str, value) -> None:
         if isinstance(value, str):
-            super().__setattr__(name, value.lower())
+            super().__setattr__(name, value.casefold())
+        else:
+            super().__setattr__(name, value)
 
 
 class Settings:
@@ -135,9 +139,11 @@ class Settings:
 
         self.sent_commands = []
         self.waiting_for_locraw = True
+        self.adding_stats_in_tab = False
 
         self.autoboops = []
         self.add_join_stats = True
+        self.stats_in_tab = True
 
         self.patterns = {
             # waiting_for_locraw
@@ -159,7 +165,7 @@ class Settings:
             ),
             "join_queue": (
                 lambda x: bool(self.patterns["lq"].match(x)),
-                self.add_stats_to_join
+                self.add_stats
             )
         }
 
@@ -185,23 +191,38 @@ class Settings:
                 return bridge.update_game(buff, self.locraw_retry + 1)
 
             game: dict = json.loads(chat_message)
-            bridge.settings.game.server = game.get("server")
-            bridge.settings.game.gametype = game.get("gametype")
-            bridge.settings.game.mode = game.get("mode")
-            bridge.settings.game.map = game.get("map")
-            bridge.settings.game.lobbyname = game.get("lobbyname")
+            self.game.server = game.get("server")
+            self.game.gametype = game.get("gametype")
+            self.game.mode = game.get("mode")
+            self.game.map = game.get("map")
+            self.game.lobbyname = game.get("lobbyname")
 
-            # TODO determine if pregame
+            if (
+                self.game.gametype == "bedwars"
+                and "§7v1.8" in self.teams["team_3"].prefix
+            ):
+                self.game.pregame = True
+            # TODO add more gamemode pregame checks
 
-            if bridge.settings.game.mode:
-                bridge.settings.rq_game = dataclasses.replace(
-                    bridge.settings.game
-                )
+            if not self.game.mode:
+                # not pregame; remove stats from tab
+                self.game.pregame = False
+                for team in self.teams:
+                    if "proxhyqs" in team.name:
+                        team.delete()
+                        del self.teams[team.name]
+
+            if self.game.mode:
+                self.rq_game = dataclasses.replace(self.game)
 
             self.waiting_for_locraw = False
         else:
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
+
+    def add_stats(self, *args, **kwargs):
+        self.add_stats_to_join(*args, **kwargs)
+        self.add_stats_in_tab(*args, **kwargs)
 
     def add_stats_to_join(self, bridge, buff: Buffer1_7, join_message: str):
         if not self.add_join_stats:
@@ -209,22 +230,23 @@ class Settings:
 
         ign = join_message.split(' ')[0]
         nump1, nump2 = re.findall(r'\((\d+)/(\d+)\)', join_message)[0]
-
         player = bridge.client.player(ign)
         if isinstance(player, InvalidApiKey):
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
-            return bridge.downstream.send_packet(
+            bridge.downstream.send_packet(
                 "chat_message",
                 pack_chat("§4Invalid API Key!", 2)
             )
+            return
         elif isinstance(player, RateLimitError):
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
-            return bridge.downstream.send_packet(
+            bridge.downstream.send_packet(
                 "chat_message",
-                pack_chat("§4Your API key has been rate limited; please wait")
+                pack_chat("§4Your API key has been rate limited!", 2)
             )
+            return
         elif isinstance(player, PlayerNotFound):
             rc = next( # preserve rank color
                 (t.prefix for t in bridge.settings.teams if ign in t.players), "§f"
@@ -235,10 +257,12 @@ class Settings:
             return bridge.downstream.send_chat(stats_join_message)
         elif isinstance(player, HypixelException):
             buff.restore()
-            return bridge.downstream.send_packet("chat_message", buff.read())
+            bridge.downstream.send_packet("chat_message", buff.read())
+            return
 
         while self.waiting_for_locraw:
             time.sleep(0.01) 
+        self.game.pregame = True
 
         if self.game.gametype == "bedwars":
             fplayer = FormattedPlayer(player)
@@ -246,14 +270,98 @@ class Settings:
                 f"{fplayer.bedwars.level} {fplayer.bedwars.fkdr} {fplayer.rankname} "
                 + f"§ehas joined (§b{nump1}§e/§b{nump2}§e)!"
             )
-            return bridge.downstream.send_chat(stats_join_message)
+            bridge.downstream.send_chat(stats_join_message)
+            return
         elif self.game.gametype == "skywars":
             fplayer = FormattedPlayer(player)
             stats_join_message = (
                 f"{fplayer.skywars.level} {fplayer.skywars.kdr} {fplayer.rankname} "
                 + f"§ehas joined (§b{nump1}§e/§b{nump2}§e)!"
             )
-            return bridge.downstream.send_chat(stats_join_message)
+            bridge.downstream.send_chat(stats_join_message)
+            return
 
         buff.restore()
         bridge.downstream.send_packet("chat_message", buff.read())
+
+    def add_stats_in_tab(self, bridge, buff: Buffer1_7, _):
+        if not self.stats_in_tab or not self.game.pregame:
+            return
+
+        for _ in range(30):
+            # wait a little for other stats to be added
+            # only do 30 times so program exits properly
+            if not self.adding_stats_in_tab:
+                break
+            time.sleep(0.1)
+        
+        self.adding_stats_in_tab = True 
+        # team names in pregame are rank colors
+        teams_players: dict = {}
+        for color_code_team in ('§a', '§b', '§6', '§c', '§2', '§c', '§d', '§7'):
+            if team := self.teams[color_code_team]:
+                teams_players[color_code_team] = team.players.copy()
+
+        players_in_queue = set()
+        for team in teams_players.values():
+            players_in_queue.update(team)
+
+        players = [
+            player for player in bridge.client.players(*players_in_queue)
+        ]
+        for player in players:
+            if isinstance(player, PlayerNotFound):
+                if self.teams["proxhyqsnicks"]:
+                    nick_team = self.teams["proxhyqsnicks"]
+                else:
+                    nick_team = Team(
+                        "proxhyqsnicks",
+                        "",
+                        f"§5[NICK] ",
+                        "",
+                        friendly_fire=3,
+                        name_tag_visibility="always",
+                        color=15,
+                        players=set((player.player,)),
+                        bridge=bridge
+                    )
+                    nick_team.create()
+                    self.teams.append(nick_team)
+                continue
+            elif isinstance(player, InvalidApiKey):
+                return bridge.downstream.send_packet(
+                    "chat_message",
+                    pack_chat("§4Invalid API Key!", 2)
+                )
+            elif isinstance(player, RateLimitError):
+                return bridge.downstream.send_packet(
+                    "chat_message",
+                    pack_chat("§4Your API key has been rate limited!", 2)
+                )
+            elif isinstance(player, HypixelException):
+                return
+
+            fplayer = FormattedPlayer(player)            
+
+            # hash player name to (potentially?) identify later;
+            # also makes shorter for team name char limit
+            playername_hash = hash(fplayer.raw_name)
+            random.seed(playername_hash)
+            not_number_hash = ''.join(random.choice(string.ascii_letters) for _ in range(6))
+            
+            team = Team(
+                # proxhy queuestats
+                f"proxhyqs{not_number_hash}",
+                "",
+                f"{fplayer.bedwars.level} {fplayer.rank_color}",
+                f"§f | {fplayer.bedwars.fkdr}",
+                friendly_fire=3,
+                name_tag_visibility="always",
+                color=15,
+                players=set((fplayer.raw_name,)),
+                bridge=bridge
+            )
+            team.create()
+            self.teams.append(team)
+            
+            self.adding_stats_in_tab = False

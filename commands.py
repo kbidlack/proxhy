@@ -200,6 +200,16 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
     fplayer = FormattedPlayer(player)
     return fplayer.format_stats(gamemode, *stats)
 
+@command('cc')
+def clearcache(bridge, _):
+    bridge.client.cached_data = {}
+    bridge.client.cache_data()
+    return f"§aCleared cache!"
+
+@command('rs')
+def refresh_stats(bridge, buff):
+    bridge.settings.add_stats_in_tab(bridge, buff, "")
+    return f"§Refreshed stats!"
 
 # DEBUG
 @command('t')
