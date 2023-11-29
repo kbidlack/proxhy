@@ -311,22 +311,6 @@ class Settings:
         ]
         for player in players:
             if isinstance(player, PlayerNotFound):
-                if self.teams["proxhyqsnicks"]:
-                    nick_team = self.teams["proxhyqsnicks"]
-                else:
-                    nick_team = Team(
-                        "proxhyqsnicks",
-                        "",
-                        f"§5[NICK] ",
-                        "",
-                        friendly_fire=3,
-                        name_tag_visibility="always",
-                        color=15,
-                        players=set((player.player,)),
-                        bridge=bridge
-                    )
-                    nick_team.create()
-                    self.teams.append(nick_team)
                 continue
             elif isinstance(player, InvalidApiKey):
                 return bridge.downstream.send_packet(
@@ -341,14 +325,14 @@ class Settings:
             elif isinstance(player, HypixelException):
                 return
 
-            fplayer = FormattedPlayer(player)            
+            fplayer = FormattedPlayer(player)
 
             # hash player name to (potentially?) identify later;
             # also makes shorter for team name char limit
             playername_hash = hash(fplayer.raw_name)
             random.seed(playername_hash)
             not_number_hash = ''.join(random.choice(string.ascii_letters) for _ in range(6))
-            
+
             team = Team(
                 # proxhy queuestats
                 f"proxhyqs{not_number_hash}",
@@ -363,5 +347,27 @@ class Settings:
             )
             team.create()
             self.teams.append(team)
+
+        nicks = players_in_queue - {
+            player.name for player in players
+            if not isinstance(player, PlayerNotFound)
+        }
+        if self.teams["proxhyqsnicks"]:
+            nick_team = self.teams["proxhyqsnicks"]
+            nick_team.update(*nicks)
+        else:
+            nick_team = Team(
+                "proxhyqsnicks",
+                "",
+                f"§5[NICK] ",
+                "",
+                friendly_fire=3,
+                name_tag_visibility="always",
+                color=15,
+                players=nicks,
+                bridge=bridge
+            )
+            nick_team.create()
+            self.teams.append(nick_team)
             
-            self.adding_stats_in_tab = False
+        self.adding_stats_in_tab = False
