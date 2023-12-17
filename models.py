@@ -17,7 +17,7 @@ from patches import pack_chat
 class Teams(list):
     def __getitem__(self, key):
         return next((team for team in self if team.name == key), None)
-    
+
     def __delitem__(self, key):
         team = self[key]
         if team:
@@ -40,37 +40,46 @@ class Team:
 
     def __post_init__(self):
         self.team_attrs: set = {
-            "name", "display_name", "prefix", "suffix",
-            "friendly_fire", "name_tag_visibility", "color"
+            "name",
+            "display_name",
+            "prefix",
+            "suffix",
+            "friendly_fire",
+            "name_tag_visibility",
+            "color",
         }
 
     def create(self):
-        packet = b''.join((
-            self.buff.pack_string(self.name),
-            b'\x00', # mode
-            self.buff.pack_string(self.display_name),
-            self.buff.pack_string(self.prefix),
-            self.buff.pack_string(self.suffix),
-            self.friendly_fire.to_bytes(),
-            self.buff.pack_string(self.name_tag_visibility),
-            self.color.to_bytes(),
-            self.buff.pack_varint(len(self.players)),
-            *(self.buff.pack_string(player) for player in self.players)
-        ))
+        packet = b"".join(
+            (
+                self.buff.pack_string(self.name),
+                b"\x00",  # mode
+                self.buff.pack_string(self.display_name),
+                self.buff.pack_string(self.prefix),
+                self.buff.pack_string(self.suffix),
+                self.friendly_fire.to_bytes(),
+                self.buff.pack_string(self.name_tag_visibility),
+                self.color.to_bytes(),
+                self.buff.pack_varint(len(self.players)),
+                *(self.buff.pack_string(player) for player in self.players),
+            )
+        )
         self.bridge.downstream.send_packet("teams", packet)
 
     def delete(self):
-        packet = b''.join((
-            self.buff.pack_string(self.name),
-            b'\x01' # mode
-        ))
+        packet = b"".join((self.buff.pack_string(self.name), b"\x01"))  # mode
         self.bridge.downstream.send_packet("teams", packet)
 
     def update(
-            self, name: str = None, display_name: str = None,
-            prefix: str = None, suffix: str = None, friendly_fire: int = None,
-            name_tag_visibility: str = None, color: int = None
-        ):
+        self,
+        name: str = None,
+        display_name: str = None,
+        prefix: str = None,
+        suffix: str = None,
+        friendly_fire: int = None,
+        name_tag_visibility: str = None,
+        color: int = None,
+    ):
         self.name = name or self.name
         self.display_name = display_name or self.display_name
         self.prefix = prefix or self.prefix
@@ -79,19 +88,20 @@ class Team:
         self.name_tag_visibility = name_tag_visibility or self.name_tag_visibility
         self.color = color or self.color
 
-        packet = b''.join((
-            self.buff.pack_string(self.name),
-            b'\x02', # mode
-            self.buff.pack_string(self.display_name),
-            self.buff.pack_string(self.prefix),
-            self.buff.pack_string(self.suffix),
-            self.friendly_fire.to_bytes(),
-            self.buff.pack_string(self.name_tag_visibility),
-            self.color.to_bytes()
-        ))
+        packet = b"".join(
+            (
+                self.buff.pack_string(self.name),
+                b"\x02",  # mode
+                self.buff.pack_string(self.display_name),
+                self.buff.pack_string(self.prefix),
+                self.buff.pack_string(self.suffix),
+                self.friendly_fire.to_bytes(),
+                self.buff.pack_string(self.name_tag_visibility),
+                self.color.to_bytes(),
+            )
+        )
 
         self.bridge.downstream.send_packet("teams", packet)
-
 
     def update_players(self, add=True, *new_players: str):
         # add=True; add players, add=False; remove players
@@ -102,14 +112,16 @@ class Team:
                 try:
                     self.players.remove(player)
                 except KeyError:
-                    pass # hehe
-        
-        packet = b''.join((
-            self.buff.pack_string(self.name),
-            b'\x03' if add else b'\x04', # mode
-            self.buff.pack_varint(len(new_players)),
-            *(self.buff.pack_string(player) for player in new_players)
-        ))
+                    pass  # hehe
+
+        packet = b"".join(
+            (
+                self.buff.pack_string(self.name),
+                b"\x03" if add else b"\x04",  # mode
+                self.buff.pack_varint(len(new_players)),
+                *(self.buff.pack_string(player) for player in new_players),
+            )
+        )
 
         self.bridge.downstream.send_packet("teams", packet)
 
@@ -121,7 +133,7 @@ class Game:
     mode: str | None = None
     map: str | None = None
     lobbyname: str | None = None
- 
+
     pregame: bool | None = None
 
     def __setattr__(self, name: str, value) -> None:
@@ -151,24 +163,20 @@ class Settings:
             # autoboop
             "abp": re.compile(r"^Friend >.* joined\."),
             # join lobby queue
-            "lq": re.compile(r"^.*has joined (.*)!$")
+            "lq": re.compile(r"^.*has joined (.*)!$"),
         }
 
         self.checks = {
-            "autoboop": (
-                lambda x: bool(self.patterns["abp"].match(x)),
-                self.autoboop
-            ),
+            "autoboop": (lambda x: bool(self.patterns["abp"].match(x)), self.autoboop),
             "waiting_for_locraw": (
                 lambda x: bool(self.patterns["wflp"].match(x)),
-                self.update_game_from_locraw
+                self.update_game_from_locraw,
             ),
             "join_queue": (
                 lambda x: bool(self.patterns["lq"].match(x)),
-                self.add_stats
-            )
+                self.add_stats,
+            ),
         }
-
 
     def autoboop(self, bridge, buff: Buffer1_7, join_message):
         buff.restore()
@@ -179,15 +187,12 @@ class Settings:
 
         if (player := str(join_message.split()[2]).lower()) in self.autoboops:
             bridge.upstream.send_chat(f"/boop {player}")
-    
+
     def update_game_from_locraw(
-        self,
-        bridge: type[Bridge],
-        buff: Buffer1_7,
-        chat_message
+        self, bridge: type[Bridge], buff: Buffer1_7, chat_message
     ):
         if self.waiting_for_locraw:
-            if 'limbo' in chat_message:
+            if "limbo" in chat_message:
                 return bridge.update_game(buff, self.locraw_retry + 1)
 
             game: dict = json.loads(chat_message)
@@ -228,27 +233,25 @@ class Settings:
         if not self.add_join_stats:
             return
 
-        ign = join_message.split(' ')[0]
-        nump1, nump2 = re.findall(r'\((\d+)/(\d+)\)', join_message)[0]
+        ign = join_message.split(" ")[0]
+        nump1, nump2 = re.findall(r"\((\d+)/(\d+)\)", join_message)[0]
         player = bridge.client.player(ign)
         if isinstance(player, InvalidApiKey):
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
             bridge.downstream.send_packet(
-                "chat_message",
-                pack_chat("§4Invalid API Key!", 2)
+                "chat_message", pack_chat("§4Invalid API Key!", 2)
             )
             return
         elif isinstance(player, RateLimitError):
             buff.restore()
             bridge.downstream.send_packet("chat_message", buff.read())
             bridge.downstream.send_packet(
-                "chat_message",
-                pack_chat("§4Your API key has been rate limited!", 2)
+                "chat_message", pack_chat("§4Your API key has been rate limited!", 2)
             )
             return
         elif isinstance(player, PlayerNotFound):
-            rc = next( # preserve rank color
+            rc = next(  # preserve rank color
                 (t.prefix for t in bridge.settings.teams if ign in t.players), "§f"
             )
             stats_join_message = (
@@ -261,7 +264,7 @@ class Settings:
             return
 
         while self.waiting_for_locraw:
-            time.sleep(0.01) 
+            time.sleep(0.01)
         self.game.pregame = True
 
         if self.game.gametype == "bedwars":
@@ -294,11 +297,11 @@ class Settings:
             if not self.adding_stats_in_tab:
                 break
             time.sleep(0.1)
-        
-        self.adding_stats_in_tab = True 
+
+        self.adding_stats_in_tab = True
         # team names in pregame are rank colors
         teams_players: dict = {}
-        for color_code_team in ('§a', '§b', '§6', '§c', '§2', '§c', '§d', '§7'):
+        for color_code_team in ("§a", "§b", "§6", "§c", "§2", "§c", "§d", "§7"):
             if team := self.teams[color_code_team]:
                 teams_players[color_code_team] = team.players.copy()
 
@@ -306,21 +309,18 @@ class Settings:
         for team in teams_players.values():
             players_in_queue.update(team)
 
-        players = [
-            player for player in bridge.client.players(*players_in_queue)
-        ]
+        players = [player for player in bridge.client.players(*players_in_queue)]
         for player in players:
             if isinstance(player, PlayerNotFound):
                 continue
             elif isinstance(player, InvalidApiKey):
                 return bridge.downstream.send_packet(
-                    "chat_message",
-                    pack_chat("§4Invalid API Key!", 2)
+                    "chat_message", pack_chat("§4Invalid API Key!", 2)
                 )
             elif isinstance(player, RateLimitError):
                 return bridge.downstream.send_packet(
                     "chat_message",
-                    pack_chat("§4Your API key has been rate limited!", 2)
+                    pack_chat("§4Your API key has been rate limited!", 2),
                 )
             elif isinstance(player, HypixelException):
                 return
@@ -331,8 +331,12 @@ class Settings:
             # also makes shorter for team name char limit
             playername_hash = hash(fplayer.raw_name)
             random.seed(playername_hash)
-            not_number_hash = ''.join(random.choice(string.ascii_letters) for _ in range(6))
-
+            not_number_hash = "".join(
+                random.choice(string.ascii_letters) for _ in range(6)
+            )
+            prefix = f"{fplayer.bedwars.level} {fplayer.rank_color}"
+            if len(prefix) > 16:
+                continue
             team = Team(
                 # proxhy queuestats
                 f"proxhyqs{not_number_hash}",
@@ -343,14 +347,13 @@ class Settings:
                 name_tag_visibility="always",
                 color=15,
                 players=set((fplayer.raw_name,)),
-                bridge=bridge
+                bridge=bridge,
             )
             team.create()
             self.teams.append(team)
 
         nicks = players_in_queue - {
-            player.name for player in players
-            if not isinstance(player, PlayerNotFound)
+            player.name for player in players if not isinstance(player, PlayerNotFound)
         }
         if self.teams["proxhyqsnicks"]:
             nick_team = self.teams["proxhyqsnicks"]
@@ -365,9 +368,9 @@ class Settings:
                 name_tag_visibility="always",
                 color=15,
                 players=nicks,
-                bridge=bridge
+                bridge=bridge,
             )
             nick_team.create()
             self.teams.append(nick_team)
-            
+
         self.adding_stats_in_tab = False
