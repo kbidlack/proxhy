@@ -9,6 +9,7 @@ from hypixel.errors import (
     RateLimitError,
 )
 from quarry.types.buffer import Buffer1_7
+from twisted.internet import reactor
 
 from aliases import Gamemode, Statistic
 from errors import CommandException
@@ -27,8 +28,8 @@ class Parameter:
             self.required = False
         else:
             self.required = True
-        
-        if param.kind is inspect.Parameter.VAR_POSITIONAL: # *args
+
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:  # *args
             self.infinite = True
             self.required = False
         else:
@@ -48,8 +49,7 @@ class Command:
         sig = inspect.signature(function)
         # first two parameters should be bridge and buff
         self.parameters = [
-            Parameter(sig.parameters[param])
-            for param in sig.parameters
+            Parameter(sig.parameters[param]) for param in sig.parameters
         ][2:]
         self.required_parameters = [
             param for param in self.parameters if param.required
@@ -63,7 +63,7 @@ class Command:
         for alias in self.aliases:
             commands.update({alias: self})
 
-    # decorator 
+    # decorator
     def __call__(self, bridge, buff: Buffer1_7, message: str):
         segments = message.split()
         args = segments[1:]
@@ -71,16 +71,15 @@ class Command:
             raise CommandException(
                 f"§9§l∎ §4Command <{segments[0]}> takes no arguments!"
             )
-        elif ((len(args) > len(self.parameters))
-              and not any(p.infinite for p in self.parameters)):
+        elif (len(args) > len(self.parameters)) and not any(
+            p.infinite for p in self.parameters
+        ):
             raise CommandException(
                 f"§9§l∎ §4Command <{segments[0]}> takes at most "
                 f"{len(self.parameters)} argument(s)!"
             )
         elif len(args) < len(self.required_parameters):
-            names = ', '.join([
-                param.name for param in self.required_parameters
-            ])
+            names = ", ".join([param.name for param in self.required_parameters])
             raise CommandException(
                 f"§9§l∎ §4Command <{segments[0]}> needs at least "
                 f"{len(self.required_parameters)} argument(s)! ({names})"
@@ -95,10 +94,12 @@ class Command:
 
             return self.function(bridge, buff, *args)
 
+
 def run_command(bridge, buff, message: str):
     segments = message.split()
-    command = (commands.get(segments[0].removeprefix('/'))
-        or commands.get(segments[0].removeprefix('//')))
+    command = commands.get(segments[0].removeprefix("/")) or commands.get(
+        segments[0].removeprefix("//")
+    )
     if command:
         try:
             output = command(bridge, buff, message)
@@ -106,15 +107,16 @@ def run_command(bridge, buff, message: str):
             bridge.downstream.send_chat(err.message)
         else:
             if output:
-                if segments[0].startswith('//'): # send output of command
+                if segments[0].startswith("//"):  # send output of command
                     # remove chat formatting
-                    output = re.sub(r'§.', '', output)
+                    output = re.sub(r"§.", "", output)
                     bridge.upstream.send_chat(output)
                 else:
                     bridge.downstream.send_chat(output)
     else:
         buff.restore()
         bridge.upstream.send_chat(message)
+
 
 def command(*aliases):
     return lambda func: Command(func, *aliases)
@@ -127,12 +129,14 @@ def requeue(bridge, buff: Buffer1_7):
         raise CommandException("§9§l∎ §4No game to requeue!")
     else:
         bridge.upstream.send_chat(f"/play {bridge.settings.game.mode}")
-        
-@command() # Mmm, garlic bread. 
-def garlicbread(bridge, buff: Buffer1_7): # Mmm, garlic bread. 
-       return "§eMmm, garlic bread." # Mmm, garlic bread. 
 
-@command('ab')
+
+@command()  # Mmm, garlic bread.
+def garlicbread(bridge, buff: Buffer1_7):  # Mmm, garlic bread.
+    return "§eMmm, garlic bread."  # Mmm, garlic bread.
+
+
+@command("ab")
 def autoboop(bridge, buff: Buffer1_7, action: Literal["add", "remove", "list"], ign=""):
     ign = ign.lower()
     if not ign and action != "list":
@@ -147,11 +151,12 @@ def autoboop(bridge, buff: Buffer1_7, action: Literal["add", "remove", "list"], 
             raise CommandException(f"§9§l∎ §4'{ign}' is not in autoboop list!")
         bridge.settings.autoboops.remove(ign)
         return f"§9§l∎ §c{ign} §3has been removed from autoboop"
-    else: # list
+    else:  # list
         if not bridge.settings.autoboops:
             return f"§9§l∎ §3No one in autoboop list!"
         autoboops = "§3,§c".join(bridge.settings.autoboops)
         return f"§9§l∎ §3People in autoboop list: §c{autoboops}§c"
+
 
 @command("sc")
 def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
@@ -163,7 +168,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
     elif (gamemode := Gamemode(mode)) is None:
         raise CommandException(f"§9§l∎ §4Unknown gamemode '{mode}'!")
 
-    # verify stats 
+    # verify stats
     if not stats:
         if gamemode == "bedwars":
             stats = ("Finals", "FKDR", "Wins", "WLR")
@@ -174,8 +179,7 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
             (stat for stat in stats if Statistic(stat, gamemode) is None)
         )
         raise CommandException(
-            f"§9§l∎ §4Unknown statistic '{unknown_stat}' "
-            f"for gamemode {gamemode}!"
+            f"§9§l∎ §4Unknown statistic '{unknown_stat}' " f"for gamemode {gamemode}!"
         )
     else:
         stats = tuple(Statistic(stat, gamemode) for stat in stats)
@@ -200,22 +204,26 @@ def statcheck(bridge, buff: Buffer1_7, ign=None, mode=None, *stats):
     fplayer = FormattedPlayer(player)
     return fplayer.format_stats(gamemode, *stats)
 
-@command('cc')
+
+@command("cc")
 def clearcache(bridge, _):
     bridge.client.cached_data = {}
     bridge.client.cache_data()
     return f"§aCleared cache!"
 
-@command('rs')
+
+@command("rs")
 def refresh_stats(bridge, buff):
     bridge.settings.add_stats_in_tab(bridge, buff, "")
     return f"§aRefreshed stats!"
 
+
 # DEBUG
-@command('t')
+@command("t")
 def teams(bridge, _):
     print(bridge.settings.teams)
 
-@command('g')
+
+@command("g")
 def game(bridge, _):
     print(bridge.settings.game)

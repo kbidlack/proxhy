@@ -26,10 +26,11 @@ def get_rank(player):
     elif player.rank == "PIG+++":
         return "§d[PIG§b+++§d]"
     if player.name == "Perlence":
-        return  "§4[COOL]"
+        return "§4[COOL]"
     elif player.name == "KyngK":
         return "§2[§eS§2T§eI§2N§eK§2Y§e]§2"
-    return "§7" # if there are any other weird ranks because you never know ig, also nons lmfao
+    return "§7"  # if there are any other weird ranks because you never know ig, also nons lmfao
+
 
 def return_plus_color(player):
     if player.plus_color:
@@ -37,7 +38,8 @@ def return_plus_color(player):
     else:
         return "§c"
 
-# BEDWARS 
+
+# BEDWARS
 def format_bw_fkdr(fkdr):
     if fkdr < 1:
         return "§7" + str(fkdr)
@@ -60,9 +62,10 @@ def format_bw_fkdr(fkdr):
     else:
         return "§0" + str(fkdr)
 
+
 def format_bw_wins(wins):
     if wins < 250:
-        return "§7" + str(wins) 
+        return "§7" + str(wins)
     elif wins < 1000:
         return "§e" + str(wins)
     elif wins < 2500:
@@ -75,10 +78,11 @@ def format_bw_wins(wins):
         return "§5" + str(wins)
     else:
         return "§d" + str(wins)
- 
+
+
 def format_bw_finals(finals):
     if finals < 1000:
-        return "§7" + str(finals) 
+        return "§7" + str(finals)
     elif finals < 4000:
         return "§e" + str(finals)
     elif finals < 10000:
@@ -92,9 +96,10 @@ def format_bw_finals(finals):
     else:
         return "§d" + str(finals)
 
+
 def format_bw_wlr(wlr):
-    if wlr < .5:
-        return "§7" + str(wlr) 
+    if wlr < 0.5:
+        return "§7" + str(wlr)
     elif wlr < 1:
         return "§e" + str(wlr)
     elif wlr < 2.5:
@@ -112,9 +117,12 @@ def format_bw_wlr(wlr):
     elif wlr < 1000:
         return "§9" + str(wlr)
     else:
-        return "§d" + str(wlr) 
+        return "§d" + str(wlr)
 
-def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors up to 3000
+
+def format_bw_star(
+    level,
+):  # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors up to 3000
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
@@ -170,11 +178,11 @@ def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for cre
         stars += f"§a[{level[0]}§2{level[1:3]}§6{level[3]}⚝§e]"
     elif level < 3000:
         level = str(level)
-        stars += f"§b[{level[0]}§3{level[1:3]}§9{level[3]}⚝§1]" 
+        stars += f"§b[{level[0]}§3{level[1:3]}§9{level[3]}⚝§1]"
     elif level < 3100:
         level = str(level)
         stars += f"§e[{level[0]}§6{level[1:3]}§c{level[3]}⚝§4]"
-    elif level < 3200: # oh my god all of these were so bad to make someone save
+    elif level < 3200:  # oh my god all of these were so bad to make someone save
         level = str(level)
         stars += f"§9[{level[0]}§3{level[1:3]}§6{level[3]}✥§3]"
     elif level < 3300:
@@ -234,8 +242,9 @@ def format_bw_star(level): # Thanks a ton to Tiget on the hypixel forums for cre
     else:
         level = str(level)
         stars += f"§4[{level[0]}§5{level[1]}§9{level[2:4]}§1✥§0]"
-    
+
     return stars
+
 
 # SKYWARS
 def format_sw_kills(kills):
@@ -258,6 +267,7 @@ def format_sw_kills(kills):
     else:
         return "§0" + str(kills)
 
+
 def format_sw_wins(wins):
     if wins < 250:
         return "§7" + str(wins)
@@ -278,8 +288,9 @@ def format_sw_wins(wins):
     else:
         return "§0" + str(wins)
 
+
 def format_sw_kdr(kdr):
-    if kdr < .75:
+    if kdr < 0.75:
         return "§7" + str(kdr)
     elif kdr < 1.5:
         return "§e" + str(kdr)
@@ -300,14 +311,15 @@ def format_sw_kdr(kdr):
     else:
         return "§0" + str(kdr)
 
+
 def format_sw_wlr(wlr):
-    if wlr < .1:
+    if wlr < 0.1:
         return "§7" + str(wlr)
-    elif wlr < .2:
+    elif wlr < 0.2:
         return "§e" + str(wlr)
-    elif wlr < .4:
+    elif wlr < 0.4:
         return "§2" + str(wlr)
-    elif wlr < .75:
+    elif wlr < 0.75:
         return "§b" + str(wlr)
     elif wlr < 1:
         return "§4" + str(wlr)
@@ -322,22 +334,63 @@ def format_sw_wlr(wlr):
     else:
         return "§0" + str(wlr)
 
-def sw_icon(player): # Thanks SO MUCH to hxzelx on the forums for making a list of all of these. If I had to search up all of these it would be joever
-    icons = {"angel_1":"★", "angel_2":"☆", "angel_3":"⁕", "angel_4":"✶","angel_5":"✳","angel_6":"✴","angel_7":"✷",
-             "angel_8":"❋","angel_9":"✼","angel_10":"❂","angel_11":"❁","angel_12":"☬","omega_icon":"Ω",
-             "favor_icon":"⚔","default":"⋆","iron_prestige":"✙","gold_prestige":"❤","diamond_prestige":"☠",
-             "emerald_prestige":"✦","sapphire_prestige":"✌","ruby_prestige":"❦","crystal_prestige":"✵","opal_prestige":"❣",
-             "amethyst_prestige":"☯","rainbow_prestige":"✺","first_class_prestige":"✈","assassin_prestige":"⚰",
-             "veteran_prestige":"✠","god_like_prestige":"♕","warrior_prestige":"⚡","captain_prestige":"⁂",
-             "soldier_prestige":"✰","infantry_prestige":"⁑","sergeant_prestige":"☢","lieutenant_prestige":"✥",
-             "admiral_prestige":"♝","general_prestige":"♆","villain_prestige":"☁","skilled_prestige":"⍟",
-             "sneaky_prestige":"♗","overlord_prestige":"♔","war_chief_prestige":"♞","warlock_prestige":"✏",
-             "emperor_prestige":"❈","mythic_prestige":"§lಠ§d_§5ಠ"}
+
+def sw_icon(
+    player,
+):  # Thanks SO MUCH to hxzelx on the forums for making a list of all of these. If I had to search up all of these it would be joever
+    icons = {
+        "angel_1": "★",
+        "angel_2": "☆",
+        "angel_3": "⁕",
+        "angel_4": "✶",
+        "angel_5": "✳",
+        "angel_6": "✴",
+        "angel_7": "✷",
+        "angel_8": "❋",
+        "angel_9": "✼",
+        "angel_10": "❂",
+        "angel_11": "❁",
+        "angel_12": "☬",
+        "omega_icon": "Ω",
+        "favor_icon": "⚔",
+        "default": "⋆",
+        "iron_prestige": "✙",
+        "gold_prestige": "❤",
+        "diamond_prestige": "☠",
+        "emerald_prestige": "✦",
+        "sapphire_prestige": "✌",
+        "ruby_prestige": "❦",
+        "crystal_prestige": "✵",
+        "opal_prestige": "❣",
+        "amethyst_prestige": "☯",
+        "rainbow_prestige": "✺",
+        "first_class_prestige": "✈",
+        "assassin_prestige": "⚰",
+        "veteran_prestige": "✠",
+        "god_like_prestige": "♕",
+        "warrior_prestige": "⚡",
+        "captain_prestige": "⁂",
+        "soldier_prestige": "✰",
+        "infantry_prestige": "⁑",
+        "sergeant_prestige": "☢",
+        "lieutenant_prestige": "✥",
+        "admiral_prestige": "♝",
+        "general_prestige": "♆",
+        "villain_prestige": "☁",
+        "skilled_prestige": "⍟",
+        "sneaky_prestige": "♗",
+        "overlord_prestige": "♔",
+        "war_chief_prestige": "♞",
+        "warlock_prestige": "✏",
+        "emperor_prestige": "❈",
+        "mythic_prestige": "§lಠ§d_§5ಠ",
+    }
     try:
         return icons[player._data["stats"]["SkyWars"]["selected_prestige_icon"]]
-    except KeyError: # Occasionally there are errors with the default icon
+    except KeyError:  # Occasionally there are errors with the default icon
         return "⋆"
-    
+
+
 def format_sw_star(level, player):
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
@@ -431,15 +484,13 @@ class FormattedPlayer:
 
         # other utils
         player.rank_color = player.rank[:2]
-        sep: str = '' if player.rank == "§7" else ' ' # no space for non
+        sep: str = "" if player.rank == "§7" else " "  # no space for non
         player.rankname = sep.join((f"{player.rank}", f"{player.name}"))
 
         return player
 
     def format_stats(self, mode: str, *stats: str, sep=" ", name: bool = True) -> str:
-        formatted_stats = [
-            f"{getattr(getattr(self, mode), 'level')} {self.rankname}"
-        ]
+        formatted_stats = [f"{getattr(getattr(self, mode), 'level')} {self.rankname}"]
         if name:
             formatted_stats += [
                 f"{stat}: {getattr(getattr(self, mode), stat.lower())}"
@@ -449,6 +500,6 @@ class FormattedPlayer:
             formatted_stats += [
                 getattr(getattr(self, mode), stat.lower()) for stat in stats
             ]
-        stats_message = f'§f{sep}'.join(formatted_stats)
+        stats_message = f"§f{sep}".join(formatted_stats)
 
-        return stats_message 
+        return stats_message
