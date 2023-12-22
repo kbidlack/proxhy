@@ -1,6 +1,4 @@
-msmcauth
-requests
-python-dotenv
-quarry
+aiohttp[speedups]
 hypixel.py
 appdirs
+cryptography
