@@ -11,7 +11,7 @@ from .msmcauthaio import MsMcAuth, UserProfile
 
 
 # https://pypi.org/project/msmcauthaio/
-async def load_auth_info() -> Coroutine[Any, Any, UserProfile]:
+async def load_auth_info() -> Coroutine[Any, Any, tuple]:
     msmcauth = MsMcAuth()
 
     (cache_dir := Path(user_cache_dir("proxhy"))).mkdir(parents=True, exist_ok=True)
@@ -45,7 +45,7 @@ async def load_auth_info() -> Coroutine[Any, Any, UserProfile]:
     with open(auth_cache_path, "w") as auth_cache_file:
         json.dump(auth_data, auth_cache_file)
 
-    return auth_data["access_token"], auth_data["uuid"]
+    return auth_data["access_token"], auth_data["uuid"], auth_data["username"]
 
 
 async def load_loop():

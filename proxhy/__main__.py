@@ -7,16 +7,22 @@ from proxy import ProxyClient
 
 
 async def handle_client(
-    reader: StreamReader, writer: StreamWriter, access_token: str, uuid: str
+    reader: StreamReader,
+    writer: StreamWriter,
+    access_token: str,
+    uuid: str,
+    username: str,
 ):
-    access_token, uuid = await load_auth_info()
-    ProxyClient(reader, writer, access_token, uuid)
+    access_token, uuid, username = await load_auth_info()
+    ProxyClient(reader, writer, access_token, uuid, username)
 
 
 async def main():
-    access_token, uuid = await load_auth_info()
+    access_token, uuid, username = await load_auth_info()
     server = await asyncio.start_server(
-        lambda r, w: handle_client(r, w, access_token, uuid), "localhost", 13876
+        lambda r, w: handle_client(r, w, access_token, uuid, username),
+        "localhost",
+        13876,
     )
 
     print("Started proxhy!")
