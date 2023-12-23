@@ -45,11 +45,18 @@ class Client:
     """represents a connection to a client and corresponding connection to server"""
 
     def __init__(
-        self, reader: StreamReader, writer: StreamWriter, access_token: str, uuid: str
+        self,
+        reader: StreamReader,
+        writer: StreamWriter,
+        access_token: str,
+        uuid: str,
+        username: str,
     ):
         self.client_stream = Stream(reader, writer)
+
         self.access_token = access_token
         self.uuid = uuid
+        self.username = username
 
         self.state = State.HANDSHAKING
         self.compression = False
