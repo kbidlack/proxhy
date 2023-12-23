@@ -17,7 +17,7 @@ class State(Enum):
     PLAY = 3
 
 
-def listen_client(packet_id: int, state: State, blocking=False):
+def listen_client(packet_id: int, state: State = State.PLAY, blocking=False):
     def wrapper(func):
         client_listeners.update({(packet_id, state): (func, blocking)})
 
@@ -29,7 +29,7 @@ def listen_client(packet_id: int, state: State, blocking=False):
     return wrapper
 
 
-def listen_server(packet_id: int, state: State, blocking=False):
+def listen_server(packet_id: int, state: State = State.PLAY, blocking=False):
     def wrapper(func):
         server_listeners.update({(packet_id, state): (func, blocking)})
 
