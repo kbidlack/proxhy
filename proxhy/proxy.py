@@ -6,7 +6,7 @@ from secrets import token_bytes
 
 import aiohttp
 from client import Client, State, listen_client, listen_server
-from datatypes import BuffIO, ByteArray, Long, String, UnsignedShort, VarInt
+from datatypes import Buffer, ByteArray, Long, String, UnsignedShort, VarInt
 from encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 
 
@@ -34,14 +34,14 @@ class ProxyClient(Client):
         )
 
     @listen_client(0x00, State.HANDSHAKING, blocking=True)
-    async def packet_handshake(self, buff: BuffIO):
+    async def packet_handshake(self, buff: Buffer):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
             return
 
         assert buff.unpack(VarInt) == 47  # protocol version
         buff.unpack(String)  # server address
         buff.unpack(UnsignedShort)  # server port
-        next_state: int = buff.unpack(VarInt)
+        next_state = buff.unpack(VarInt)
 
         self.state = State(next_state)
         if self.state == State.LOGIN:
@@ -59,14 +59,14 @@ class ProxyClient(Client):
             )
 
     @listen_client(0x01, State.STATUS, blocking=True)
-    async def packet_ping_request(self, buff: BuffIO):
-        payload: int = buff.unpack(Long)
+    async def packet_ping_request(self, buff: Buffer):
+        payload = buff.unpack(Long)
         self.send_packet(self.client_stream, 0x01, Long.pack(payload))
         # close connection
         await self.close()
 
     @listen_client(0x00, State.LOGIN)
-    async def packet_login_start(self, buff: BuffIO):
+    async def packet_login_start(self, buff: Buffer):
         while not self.server_stream:
             await asyncio.sleep(0.01)
 
@@ -74,7 +74,7 @@ class ProxyClient(Client):
         self.send_packet(self.server_stream, 0x00, String.pack(self.username))
 
     @listen_server(0x01, State.LOGIN, blocking=True)
-    async def packet_encryption_request(self, buff: BuffIO):
+    async def packet_encryption_request(self, buff: Buffer):
         server_id = buff.unpack(String).encode("utf-8")
         public_key = buff.unpack(ByteArray)
         verify_token = buff.unpack(ByteArray)
@@ -109,14 +109,13 @@ class ProxyClient(Client):
         self.server_stream.key = secret
 
     @listen_server(0x02, State.LOGIN, blocking=True)
-    async def packet_login_success(self, buff: BuffIO):
+    async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-
         self.send_packet(self.client_stream, 0x02, buff.read())
 
     @listen_server(0x03, State.LOGIN, blocking=True)
-    async def packet_set_compression(self, buff: BuffIO):
-        self.compression_threshold: int = buff.unpack(VarInt)
+    async def packet_set_compression(self, buff: Buffer):
+        self.compression_threshold = buff.unpack(VarInt)
         self.compression = False if self.compression_threshold == -1 else True
 
     async def close(self):

@@ -1,13 +1,19 @@
+from __future__ import annotations
+
 import struct
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import Any
 
 
-class DataType(ABC):
-    def __init__(self, value: bytes | Any):
+class Buffer(BytesIO):
+    def unpack[T](self, kind: type[DataType[T]]) -> T:
+        return kind.unpack(self)
+
+
+class DataType[T](ABC):
+    def __init__(self, value: bytes | T):
         if isinstance(value, bytes):
-            self.value = self.unpack(BytesIO(value))
+            self.value = Buffer(value).unpack(self)
             self.packed = value
         else:
             self.value = value
@@ -15,16 +21,16 @@ class DataType(ABC):
 
     @staticmethod
     @abstractmethod
-    def pack(value):
+    def pack(value: T) -> bytes:
         pass
 
     @staticmethod
     @abstractmethod
-    def unpack(value):
+    def unpack[B: BytesIO](buff: B) -> T:
         pass
 
 
-class VarInt(DataType):
+class VarInt(DataType[int]):
     def __repr__(self) -> str:
         return str(self.value)
 
@@ -44,7 +50,7 @@ class VarInt(DataType):
         return total
 
     @staticmethod
-    def unpack(buff: BytesIO) -> int:
+    def unpack(buff) -> int:
         total = 0
         shift = 0
         val = 0x80
@@ -70,58 +76,59 @@ class VarInt(DataType):
         return total - (1 << 32) if total & (1 << 31) else total
 
 
-class String(DataType):
+class String(DataType[str]):
     @staticmethod
     def pack(value: str) -> bytes:
         return VarInt(len(value)).packed + value.encode("utf-8")
 
     @staticmethod
-    def unpack(buff: BytesIO) -> str:
+    def unpack(buff) -> str:
         length = VarInt.unpack(buff)
         return buff.read(length).decode("utf-8")
 
 
-class UnsignedShort(DataType):
+class UnsignedShort(DataType[int]):
     @staticmethod
     def pack(value: int) -> bytes:
         return struct.pack(">H", value)
 
     @staticmethod
-    def unpack(buff: BytesIO) -> int:
+    def unpack(buff) -> int:
         return struct.unpack(">H", buff.read(2))[0]
 
 
-class Short(DataType):
+class Short(DataType[int]):
     @staticmethod
     def pack(value: int) -> bytes:
         return struct.pack(">h", value)
 
     @staticmethod
-    def unpack(buff: BytesIO) -> int:
+    def unpack(buff) -> int:
         return struct.unpack(">h", buff.read(2))[0]
 
 
-class Long(DataType):
+class Long(DataType[int]):
     @staticmethod
     def pack(value: int) -> bytes:
         return struct.pack(">q", value)
 
     @staticmethod
-    def unpack(buff: BytesIO) -> int:
+    def unpack(buff) -> int:
         return struct.unpack(">q", buff.read(8))[0]
 
 
-class ByteArray(DataType):
+class Byte(DataType[bytes]):
+    @staticmethod
+    def unpack(buff) -> bytes:
+        return buff.read(1)
+
+
+class ByteArray(DataType[bytes]):
     @staticmethod
     def pack(value: bytes) -> bytes:
         return VarInt.pack(len(value)) + value
 
     @staticmethod
-    def unpack(buff: BytesIO) -> bytes:
+    def unpack(buff) -> bytes:
         length = VarInt.unpack(buff)
         return buff.read(length)
-
-
-class BuffIO(BytesIO):
-    def unpack(self, kind: DataType):
-        return kind.unpack(self)
