@@ -3,7 +3,7 @@ import zlib
 from asyncio import StreamReader, StreamWriter
 from enum import Enum
 
-from datatypes import BuffIO, VarInt
+from datatypes import Buffer, VarInt
 from encryption import Stream
 
 client_listeners = {}
@@ -83,8 +83,8 @@ class Client:
     async def handle_client(self):
         while packet_length := await VarInt.unpack_stream(self.client_stream):
             if data := await self.client_stream.read(packet_length):
-                buff = BuffIO(data)
-                packet_id: int = buff.unpack(VarInt)
+                buff = Buffer(data)
+                packet_id = buff.unpack(VarInt)
 
                 # print(f"Client: {packet_id=}, {buff.getvalue()=}, {self.state=}")
 
@@ -93,9 +93,9 @@ class Client:
                 if result:
                     handler, blocking = result
                     if blocking:
-                        await handler(self, BuffIO(buff.read()))
+                        await handler(self, Buffer(buff.read()))
                     else:
-                        asyncio.create_task(handler(self, BuffIO(buff.read())))
+                        asyncio.create_task(handler(self, Buffer(buff.read())))
                 else:
                     self.send_packet(self.server_stream, packet_id, buff.read())
         await self.close()
@@ -107,15 +107,15 @@ class Client:
                 newdata = await self.server_stream.read(packet_length - len(data))
                 data += newdata
 
-            buff = BuffIO(data)
+            buff = Buffer(data)
             if self.compression:
-                data_length: int = buff.unpack(VarInt)
+                data_length = buff.unpack(VarInt)
                 if data_length >= self.compression_threshold:
                     # print(buff.getvalue())
                     data = zlib.decompress(buff.read())
-                    buff = BuffIO(data)
+                    buff = Buffer(data)
 
-            packet_id: int = buff.unpack(VarInt)
+            packet_id = buff.unpack(VarInt)
             # print(f"Server: {packet_id=}, {buff.getvalue()=}, {self.state=}")
 
             # call packet handler
@@ -123,9 +123,9 @@ class Client:
             if result:
                 handler, blocking = result
                 if blocking:
-                    await handler(self, BuffIO(buff.read()))
+                    await handler(self, Buffer(buff.read()))
                 else:
-                    asyncio.create_task(handler(self, BuffIO(buff.read())))
+                    asyncio.create_task(handler(self, Buffer(buff.read())))
             else:
                 self.send_packet(self.client_stream, packet_id, buff.read())
 
