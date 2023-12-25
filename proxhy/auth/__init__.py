@@ -18,6 +18,12 @@ async def load_auth_info() -> Coroutine[Any, Any, tuple]:
     if auth_cache_path.exists():
         with open(auth_cache_path, "r") as auth_cache_file:
             auth_data = json.load(auth_cache_file)
+            email = auth_data["email"]
+            user_profile = (
+                auth_data["access_token"],
+                auth_data["uuid"],
+                auth_data["username"],
+            )
         # tokens expire after 86400 seconds so give a little space
         if time.time() - float(auth_data["access_token_gen_time"]) > 86200.0:
             print("Regenerating credentials...", end="", flush=True)
@@ -33,13 +39,13 @@ async def load_auth_info() -> Coroutine[Any, Any, tuple]:
         user_profile = await MsMcAuth().login(email, password)
         print("done!")
 
-        auth_data = {
-            "email": email,
-            "username": user_profile[1],
-            "uuid": user_profile[2],
-            "access_token": user_profile[0],
-            "access_token_gen_time": time.time(),
-        }
+    auth_data = {
+        "email": email,
+        "username": user_profile[1],
+        "uuid": user_profile[2],
+        "access_token": user_profile[0],
+        "access_token_gen_time": time.time(),
+    }
 
     with open(auth_cache_path, "w") as auth_cache_file:
         json.dump(auth_data, auth_cache_file)
