@@ -21,8 +21,8 @@ async def load_auth_info() -> Coroutine[Any, Any, tuple]:
             email = auth_data["email"]
             user_profile = (
                 auth_data["access_token"],
-                auth_data["uuid"],
                 auth_data["username"],
+                auth_data["uuid"],
             )
         # tokens expire after 86400 seconds so give a little space
         if time.time() - float(auth_data["access_token_gen_time"]) > 86200.0:
