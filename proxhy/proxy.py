@@ -1,13 +1,15 @@
 import asyncio
 import base64
 import json
+import re
 from pathlib import Path
 from secrets import token_bytes
 
 import aiohttp
 from client import Client, State, listen_client, listen_server
-from datatypes import Buffer, ByteArray, Long, String, UnsignedShort, VarInt
+from datatypes import Buffer, ByteArray, Chat, Long, String, UnsignedShort, VarInt
 from encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
+from models import Game
 
 
 class ProxyClient(Client):
@@ -16,6 +18,14 @@ class ProxyClient(Client):
     favicon_path = Path(__file__).parent.resolve() / "assets" / "favicon.png"
     with open(favicon_path, "rb") as file:
         b64_favicon = base64.encodebytes(file.read()).decode("ascii").replace("\n", "")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.client = ""
+        self.game = Game()
+        self.rq_game = Game()
+        self.waiting_for_locraw = False
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
@@ -92,7 +102,7 @@ class ProxyClient(Client):
             ) as response:
                 if not response.status == 204:
                     raise Exception(
-                        f"Login failed: {response.status} {response.json()}"
+                        f"Login failed: {response.status} {await response.json()}"
                     )
 
         encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, secret)
@@ -117,6 +127,52 @@ class ProxyClient(Client):
     async def packet_set_compression(self, buff: Buffer):
         self.compression_threshold = buff.unpack(VarInt)
         self.compression = False if self.compression_threshold == -1 else True
+
+    @listen_client(0x17)
+    async def packet_plugin_channel(self, buff: Buffer):
+        self.send_packet(self.server_stream, 0x17, buff.getvalue())
+
+        channel = buff.unpack(String)
+        data = buff.unpack(ByteArray)
+        if channel == "MC|Brand":
+            if b"lunarclient" in data:
+                self.client = "lunar"
+            elif b"vanilla" in data:
+                self.client = "vanilla"
+
+    @listen_server(0x01, blocking=True)
+    async def packet_join_game(self, buff: Buffer):
+        self.waiting_for_locraw = True
+        self.send_packet(self.client_stream, 0x01, buff.getvalue())
+
+        if not self.client == "lunar":
+            ...  # TODO send locraw
+
+    @listen_server(0x02)
+    async def packet_chat_message(self, buff: Buffer):
+        if self.waiting_for_locraw:
+            if re.match(r"^\{.*\}$", data := buff.unpack(Chat)):  # locraw
+                game = json.loads(data)
+                self.game.update(game)
+                if game.get("mode"):
+                    self.rq_game.update(game)
+
+        self.send_packet(self.client_stream, 0x02, buff.getvalue())
+
+    @listen_client(0x01)
+    async def packet_chat_message(self, buff: Buffer):
+        data = buff.unpack(String)
+        if data == "/rq":
+            if self.rq_game.mode:
+                return self.send_packet(
+                    self.server_stream, 0x01, String.pack(f"/play {self.rq_game.mode}")
+                )
+            else:
+                return self.send_packet(
+                    self.client_stream, 0x02, Chat.pack("§9§l∎ §4No game to requeue!")
+                )
+
+        self.send_packet(self.server_stream, 0x01, buff.getvalue())
 
     async def close(self):
         if self.server_stream:
