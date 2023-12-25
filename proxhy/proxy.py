@@ -19,6 +19,16 @@ class ProxyClient(Client):
     with open(favicon_path, "rb") as file:
         b64_favicon = base64.encodebytes(file.read()).decode("ascii").replace("\n", "")
 
+    server_list_ping = {
+        "version": {"name": "1.8.9", "protocol": 47},
+        "players": {
+            "max": 1,
+            "online": 0,
+        },
+        "description": {"text": "Proxhy"},
+        "favicon": f"data:image/png;base64,{b64_favicon}",
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
@@ -29,16 +39,6 @@ class ProxyClient(Client):
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
-        self.server_list_ping = {
-            "version": {"name": "1.8.9", "protocol": 47},
-            "players": {
-                "max": 1,
-                "online": 0,
-            },
-            "description": {"text": "Proxhy"},
-            "favicon": f"data:image/png;base64,{self.b64_favicon}",
-        }
-
         self.send_packet(
             self.client_stream, 0x00, String.pack(json.dumps(self.server_list_ping))
         )
