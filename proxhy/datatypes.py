@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+import re
 import struct
 from abc import ABC, abstractmethod
 from io import BytesIO
@@ -132,3 +134,37 @@ class ByteArray(DataType[bytes]):
     def unpack(buff) -> bytes:
         length = VarInt.unpack(buff)
         return buff.read(length)
+
+
+# temporary solution
+class Chat(DataType[str]):
+    """Chat message from the server"""
+
+    @staticmethod
+    def pack(value: str) -> bytes:
+        return String.pack(json.dumps({"text": value})) + b"\x00"
+
+    @staticmethod
+    def unpack(buff) -> bytes:
+        # https://github.com/barneygale/quarry/blob/master/quarry/types/chat.py#L86-L107
+        data = json.loads(buff.unpack(String))
+
+        def parse(data):
+            text = ""
+            if isinstance(data, str):
+                return data
+            if isinstance(data, list):
+                return "".join((parse(e) for e in data))
+
+            if "translate" in data:
+                text += data["translate"]
+                if "with" in data:
+                    args = ", ".join((parse(e) for e in data["with"]))
+                    text += "{%s}" % args
+            if "text" in data:
+                text += data["text"]
+            if "extra" in data:
+                text += parse(data["extra"])
+            return text
+
+        return re.sub("\u00A7.", "", parse(data))
