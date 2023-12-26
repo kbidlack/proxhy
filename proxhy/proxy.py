@@ -275,3 +275,14 @@ class ProxyClient(Client):
 
         fplayer = FormattedPlayer(player)
         return fplayer.format_stats(gamemode, *stats)
+
+    @command("game")
+    async def _game(self):
+        self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aGame:"))
+        for key in self.game.__annotations__:
+            if value := getattr(self.game, key):
+                self.send_packet(
+                    self.client_stream,
+                    0x02,
+                    Chat.pack(f"§b{key.capitalize()}: §e{value}"),
+                )
