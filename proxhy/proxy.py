@@ -1,14 +1,26 @@
 import asyncio
 import base64
 import json
+import os
 import re
 from pathlib import Path
 from secrets import token_bytes
 
 import aiohttp
+import hypixel
+from aliases import Gamemode, Statistic
 from client import Client, State, listen_client, listen_server
+from command import command, commands
 from datatypes import Buffer, ByteArray, Chat, Long, String, UnsignedShort, VarInt
 from encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
+from errors import CommandException
+from formatting import FormattedPlayer
+from hypixel.errors import (
+    HypixelException,
+    InvalidApiKey,
+    PlayerNotFound,
+    RateLimitError,
+)
 from models import Game
 
 
@@ -33,9 +45,20 @@ class ProxyClient(Client):
         super().__init__(*args, **kwargs)
 
         self.client = ""
+        self.hypixel_client = None
         self.game = Game()
         self.rq_game = Game()
         self.waiting_for_locraw = False
+
+    async def close(self):
+        if self.server_stream:
+            self.server_stream.close()
+        if self.hypixel_client:
+            await self.hypixel_client.close()
+        self.client_stream.close()
+
+        del self  # idk if this does anything or not
+        # on second thought probably not but whatever
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
@@ -121,6 +144,9 @@ class ProxyClient(Client):
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
+        # TODO fix getting api key
+        self.hypixel_api_key = os.environ.get("HYPIXEL_API_KEY")
+        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
         self.send_packet(self.client_stream, 0x02, buff.read())
 
     @listen_server(0x03, State.LOGIN, blocking=True)
@@ -161,23 +187,91 @@ class ProxyClient(Client):
 
     @listen_client(0x01)
     async def packet_chat_message(self, buff: Buffer):
-        data = buff.unpack(String)
-        if data == "/rq":
-            if self.rq_game.mode:
-                return self.send_packet(
-                    self.server_stream, 0x01, String.pack(f"/play {self.rq_game.mode}")
-                )
+        message = buff.unpack(String)
+
+        # run command
+        if message.startswith("/"):
+            segments = message.split()
+            command = commands.get(segments[0].removeprefix("/")) or commands.get(
+                segments[0].removeprefix("//")
+            )
+            if command:
+                try:
+                    output = await command(self, message)
+                except CommandException as err:
+                    self.send_packet(self.client_stream, 0x02, Chat.pack(err.message))
+                else:
+                    if output:
+                        if segments[0].startswith("//"):  # send output of command
+                            # remove chat formatting
+                            output = re.sub(r"§.", "", output)
+                            self.send_packet(
+                                self.server_stream, 0x01, String.pack(output)
+                            )
+                        else:
+                            self.send_packet(
+                                self.client_stream, 0x02, Chat.pack(output)
+                            )
             else:
-                return self.send_packet(
-                    self.client_stream, 0x02, Chat.pack("§9§l∎ §4No game to requeue!")
-                )
+                self.send_packet(self.server_stream, 0x01, buff.getvalue())
+        else:
+            self.send_packet(self.server_stream, 0x01, buff.getvalue())
 
-        self.send_packet(self.server_stream, 0x01, buff.getvalue())
+    @command("rq")
+    async def requeue(self):
+        if not self.game.mode:
+            raise CommandException("§9§l∎ §4No game to requeue!")
+        else:
+            self.send_packet(
+                self.server_stream, 0x01, String.pack(f"/play {self.game.mode}")
+            )
 
-    async def close(self):
-        if self.server_stream:
-            self.server_stream.close()
-        self.client_stream.close()
+    @command()  # Mmm, garlic bread.
+    async def garlicbread(self):  # Mmm, garlic bread.
+        return "§eMmm, garlic bread."  # Mmm, garlic bread.
 
-        del self  # idk if this does anything or not
-        # on second thought probably not but whatever
+    @command("sc")
+    async def statcheck(self, ign=None, mode=None, *stats):
+        # TODO default gamemode is hypixel stats
+        ign = ign or self.username
+        # verify gamemode
+        if mode is None:
+            gamemode = Gamemode(self.game.gametype) or "bedwars"  # default
+        elif (gamemode := Gamemode(mode)) is None:
+            raise CommandException(f"§9§l∎ §4Unknown gamemode '{mode}'!")
+
+        # verify stats
+        if not stats:
+            if gamemode == "bedwars":
+                stats = ("Finals", "FKDR", "Wins", "WLR")
+            elif gamemode == "skywars":
+                stats = ("Kills", "KDR", "Wins", "WLR")
+        elif any(Statistic(stat, gamemode) is None for stat in stats):
+            unknown_stat = next(
+                (stat for stat in stats if Statistic(stat, gamemode) is None)
+            )
+            raise CommandException(
+                f"§9§l∎ §4Unknown statistic '{unknown_stat}' "
+                f"for gamemode {gamemode}!"
+            )
+        else:
+            stats = tuple(Statistic(stat, gamemode) for stat in stats)
+
+        try:
+            player = await self.hypixel_client.player(ign)
+        except PlayerNotFound:
+            raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
+        except InvalidApiKey:
+            raise CommandException(f"§9§l∎ §4Invalid API Key!")
+        except RateLimitError:
+            raise CommandException(
+                f"§9§l∎ §4Your API key is being rate limited; please wait a little bit!"
+            )
+        except HypixelException:
+            raise CommandException(
+                f"§9§l∎ §4An unknown error occurred"
+                f"while fetching player '{ign}'! ({player})"
+            )
+
+        fplayer = FormattedPlayer(player)
+        return fplayer.format_stats(gamemode, *stats)
