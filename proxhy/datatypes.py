@@ -81,7 +81,8 @@ class VarInt(DataType[int]):
 class String(DataType[str]):
     @staticmethod
     def pack(value: str) -> bytes:
-        return VarInt(len(value)).packed + value.encode("utf-8")
+        bvalue = value.encode("utf-8")
+        return VarInt.pack(len(bvalue)) + bvalue
 
     @staticmethod
     def unpack(buff) -> str:
