@@ -40,9 +40,10 @@ class Stream:
         return self.decryptor.update(data) if self.encrypted else data
 
     def write(self, data):
-        return self.writer.write(
-            self.encryptor.update(data) if self.encrypted else data
-        )
+        if self.open:
+            return self.writer.write(
+                self.encryptor.update(data) if self.encrypted else data
+            )
 
     async def drain(self):
         return await self.writer.drain()

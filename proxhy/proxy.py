@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import uuid
 from pathlib import Path
 from secrets import token_bytes
 
@@ -11,7 +12,18 @@ import hypixel
 from aliases import Gamemode, Statistic
 from client import Client, State, listen_client, listen_server
 from command import command, commands
-from datatypes import Buffer, ByteArray, Chat, Long, String, UnsignedShort, VarInt
+from datatypes import (
+    UUID,
+    Boolean,
+    Buffer,
+    Byte,
+    ByteArray,
+    Chat,
+    Long,
+    String,
+    UnsignedShort,
+    VarInt,
+)
 from encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from errors import CommandException
 from formatting import FormattedPlayer
@@ -21,7 +33,7 @@ from hypixel.errors import (
     PlayerNotFound,
     RateLimitError,
 )
-from models import Game
+from models import Game, Team, Teams
 
 
 class ProxyClient(Client):
@@ -46,8 +58,14 @@ class ProxyClient(Client):
 
         self.client = ""
         self.hypixel_client = None
+
         self.game = Game()
         self.rq_game = Game()
+
+        self.players = {}
+        self.players_with_stats = []
+        self.teams: list[Team] = Teams()
+
         self.waiting_for_locraw = False
 
     async def close(self):
@@ -168,20 +186,86 @@ class ProxyClient(Client):
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, buff: Buffer):
-        self.waiting_for_locraw = True
+        # flush player lists
+        self.players.clear()
+        self.players_with_stats.clear()
+
         self.send_packet(self.client_stream, 0x01, buff.getvalue())
 
-        if not self.client == "lunar":
-            ...  # TODO send locraw
+        self.waiting_for_locraw = True
+        self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
+
+    @listen_server(0x3E, blocking=True)
+    async def packet_teams(self, buff: Buffer):
+        name = buff.unpack(String)
+        mode = buff.unpack(Byte)
+        # team creation
+        if mode == b"\x00":
+            display_name = buff.unpack(String)
+            prefix = buff.unpack(String)
+            suffix = buff.unpack(String)
+            friendly_fire = buff.unpack(Byte)[0]
+            name_tag_visibility = buff.unpack(String)
+            color = buff.unpack(Byte)[0]
+
+            player_count = buff.unpack(VarInt)
+            players = set()
+            for _ in range(player_count):
+                players.add(buff.unpack(String))
+
+            self.teams.append(
+                Team(
+                    name,
+                    display_name,
+                    prefix,
+                    suffix,
+                    friendly_fire,
+                    name_tag_visibility,
+                    color,
+                    players,
+                )
+            )
+        # team removal
+        elif mode == b"\x01":
+            del self.teams[name]
+        # team information updation
+        elif mode == b"\x02":
+            self.teams[name].display_name = buff.unpack(String)
+            self.teams[name].prefix = buff.unpack(String)
+            self.teams[name].suffix = buff.unpack(String)
+            self.teams[name].friendly_fire = buff.unpack(Byte)[0]
+            self.teams[name].name_tag_visibility = buff.unpack(String)
+            self.teams[name].color = buff.unpack(Byte)[0]
+        # add players to team
+        elif mode in {b"\x03", b"\x04"}:
+            add = True if mode == b"\x03" else False
+            player_count = buff.unpack(VarInt)
+            players = {buff.unpack(String) for _ in range(player_count)}
+            if add:
+                self.teams[name].players |= players
+            else:
+                self.teams[name].players -= players
+
+        self.send_packet(self.client_stream, 0x3E, buff.getvalue())
 
     @listen_server(0x02)
     async def packet_chat_message(self, buff: Buffer):
-        if self.waiting_for_locraw:
-            if re.match(r"^\{.*\}$", data := buff.unpack(Chat)):  # locraw
-                game = json.loads(data)
+        message = buff.unpack(Chat)
+        if re.match(r"^\{.*\}$", message) and self.waiting_for_locraw:  # locraw
+            if "limbo" in message:  # sometimes returns limbo right when you join
+                if not self.teams:  # probably in limbo
+                    return
+                else:
+                    await asyncio.sleep(0.1)
+                    return self.send_packet(
+                        self.server_stream, 0x01, String.pack("/locraw")
+                    )
+            else:
+                game = json.loads(message)
                 self.game.update(game)
                 if game.get("mode"):
                     self.rq_game.update(game)
+                    return await self._update_stats()
 
         self.send_packet(self.client_stream, 0x02, buff.getvalue())
 
@@ -199,7 +283,9 @@ class ProxyClient(Client):
                 try:
                     output = await command(self, message)
                 except CommandException as err:
-                    self.send_packet(self.client_stream, 0x02, Chat.pack(err.message))
+                    self.send_packet(
+                        self.client_stream, 0x02, Chat.pack(err.message), b"\x00"
+                    )
                 else:
                     if output:
                         if segments[0].startswith("//"):  # send output of command
@@ -210,12 +296,34 @@ class ProxyClient(Client):
                             )
                         else:
                             self.send_packet(
-                                self.client_stream, 0x02, Chat.pack(output)
+                                self.client_stream, 0x02, Chat.pack(output), b"\x00"
                             )
             else:
                 self.send_packet(self.server_stream, 0x01, buff.getvalue())
         else:
             self.send_packet(self.server_stream, 0x01, buff.getvalue())
+
+    @listen_server(0x38, blocking=True)
+    async def packet_player_list_item(self, buff: Buffer):
+        action = buff.unpack(VarInt)
+        num_players = buff.unpack(VarInt)
+
+        for _ in range(num_players):
+            _uuid = buff.unpack(UUID)
+            if action == 0:  # add player
+                name = buff.unpack(String)
+                self.players[_uuid] = name
+            elif action == 4:  # remove player
+                try:
+                    del self.players[_uuid]
+                except KeyError:
+                    pass  # some things fail idk
+
+        self.send_packet(self.client_stream, 0x38, buff.getvalue())
+
+        if action == 0:
+            # this doesn't work with await for some reason
+            asyncio.create_task(self._update_stats())
 
     @command("rq")
     async def requeue(self):
@@ -276,13 +384,70 @@ class ProxyClient(Client):
         fplayer = FormattedPlayer(player)
         return fplayer.format_stats(gamemode, *stats)
 
+    # debug command sorta
     @command("game")
     async def _game(self):
-        self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aGame:"))
+        self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aGame:"), b"\x00")
         for key in self.game.__annotations__:
             if value := getattr(self.game, key):
                 self.send_packet(
                     self.client_stream,
                     0x02,
                     Chat.pack(f"§b{key.capitalize()}: §e{value}"),
+                    b"\x00",
                 )
+
+    async def _update_stats(self):
+        # update stats in tab in a game, bw & sw are supported so far
+        if self.game.gametype in {"bedwars", "skywars"} and self.game.mode:
+            players_without_stats = [
+                player
+                for player in self.players.values()
+                if player not in self.players_with_stats
+            ]
+            # extend players with stats so new requests to update stats
+            # don't try to update them again
+            self.players_with_stats += players_without_stats
+            player_stats = await asyncio.gather(
+                *[
+                    self.hypixel_client.player(player)
+                    for player in players_without_stats
+                ],
+                return_exceptions=True,
+            )
+            for player in player_stats:
+                if isinstance(player, PlayerNotFound):
+                    display_name = f"§5[NICK] {player.player}"
+                elif isinstance(player, InvalidApiKey):
+                    print("Invalid API Key!")  # TODO
+                elif isinstance(player, RateLimitError):
+                    print("Rate limit!")  # TODO
+                elif not isinstance(player, hypixel.Player):
+                    print(f"An unknown error occurred! ({player})")
+                elif player.name in self.players.values():
+                    fplayer = FormattedPlayer(player)
+                    if self.game.gametype == "bedwars":
+                        display_name = " ".join(
+                            (
+                                fplayer.bedwars.level,
+                                fplayer.rankname,
+                                f"§f | {fplayer.bedwars.fkdr}",
+                            )
+                        )
+                    elif self.game.gametype == "skywars":
+                        display_name = " ".join(
+                            (
+                                fplayer.skywars.level,
+                                fplayer.rankname,
+                                f"§f | {fplayer.skywars.kills}",
+                            )
+                        )
+                    self.send_packet(
+                        self.client_stream,
+                        0x38,
+                        VarInt.pack(3),
+                        VarInt.pack(1),
+                        UUID.pack(uuid.UUID(player.uuid)),
+                        Boolean.pack(True),
+                        Chat.pack(display_name),
+                    )

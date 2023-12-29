@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import struct
+import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
 
@@ -122,6 +123,10 @@ class Long(DataType[int]):
 
 class Byte(DataType[bytes]):
     @staticmethod
+    def pack(value: bytes) -> bytes:
+        return value  # most useful method
+
+    @staticmethod
     def unpack(buff) -> bytes:
         return buff.read(1)
 
@@ -143,10 +148,10 @@ class Chat(DataType[str]):
 
     @staticmethod
     def pack(value: str) -> bytes:
-        return String.pack(json.dumps({"text": value})) + b"\x00"
+        return String.pack(json.dumps({"text": value}))
 
     @staticmethod
-    def unpack(buff) -> bytes:
+    def unpack(buff) -> str:
         # https://github.com/barneygale/quarry/blob/master/quarry/types/chat.py#L86-L107
         data = json.loads(buff.unpack(String))
 
@@ -169,3 +174,23 @@ class Chat(DataType[str]):
             return text
 
         return re.sub("\u00A7.", "", parse(data))
+
+
+class UUID(DataType[uuid.UUID]):
+    @staticmethod
+    def pack(_uuid: uuid.UUID) -> bytes:
+        return _uuid.bytes
+
+    @staticmethod
+    def unpack(buff) -> uuid.UUID:
+        return uuid.UUID(bytes=buff.read(16))
+
+
+class Boolean(DataType[bool]):
+    @staticmethod
+    def pack(val: bool) -> bytes:
+        return b"\x01" if val else b"\x00"
+
+    @staticmethod
+    def unpack(buff) -> bool:
+        return bool(buff.read(1)[0])
