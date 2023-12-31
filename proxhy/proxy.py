@@ -484,7 +484,7 @@ class ProxyClient(Client):
                                 (
                                     fplayer.skywars.level,
                                     fplayer.rankname,
-                                    f"§f | {fplayer.skywars.kills}",
+                                    f"§f | {fplayer.skywars.kdr}",
                                 )
                             )
                     else:
