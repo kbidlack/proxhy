@@ -460,17 +460,38 @@ class ProxyClient(Client):
                         if p.casefold() == player.player.casefold()
                     )
                 elif isinstance(player, InvalidApiKey):
-                    return print("Invalid API Key!")  # TODO
+                    print("Invalid API Key!")  # TODO
+                    continue
                 elif isinstance(player, RateLimitError):
-                    return print("Rate limit!")  # TODO
+                    print("Rate limit!")  # TODO
+                    continue
                 elif isinstance(player, TimeoutError):
-                    return
+                    print(f"Request timed out!")  # TODO
+                    continue
                 elif not isinstance(player, hypixel.Player):
-                    return print(f"An unknown error occurred! ({player})")
+                    print(f"An unknown error occurred! ({player})")  # TODO
+                    continue
 
                 if player.name in self.players.values():
                     if not isinstance(player, PlayerNotFound):  # nick, probably
                         fplayer = FormattedPlayer(player)
+
+                        # that red player that always shows up
+                        if red_player_team := next(
+                            (
+                                team
+                                for team in self.teams
+                                if team.prefix == "§c"
+                                and team.name_tag_visibility == "never"
+                            ),
+                            None,
+                        ):  # shortest python if statement
+                            if (
+                                player.name in red_player_team.players
+                                and not fplayer.rank.startswith("§c")
+                            ):
+                                continue
+
                         if self.game.gametype == "bedwars":
                             display_name = " ".join(
                                 (
