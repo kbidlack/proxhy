@@ -62,8 +62,9 @@ class ProxyClient(Client):
         self.game = Game()
         self.rq_game = Game()
 
-        self.players = {}
-        self.players_with_stats = []
+        self.players: dict[str, str] = {}
+        self.players_getting_stats = []
+        self.players_with_stats = {}
         self.teams: list[Team] = Teams()
 
         self.waiting_for_locraw = False
@@ -246,6 +247,25 @@ class ProxyClient(Client):
             else:
                 self.teams[name].players -= players
 
+        for name, (_uuid, display_name) in self.players_with_stats.items():
+            prefix, suffix = next(
+                (
+                    (team.prefix, team.suffix)
+                    for team in self.teams
+                    if name in team.players
+                ),
+                ("", ""),
+            )
+            self.send_packet(
+                self.client_stream,
+                0x38,
+                VarInt.pack(3),
+                VarInt.pack(1),
+                UUID.pack(uuid.UUID(str(_uuid))),
+                Boolean.pack(True),
+                Chat.pack(prefix + display_name + suffix),
+            )
+
         self.send_packet(self.client_stream, 0x3E, buff.getvalue())
 
     @listen_server(0x02)
@@ -263,6 +283,7 @@ class ProxyClient(Client):
             else:
                 game = json.loads(message)
                 self.game.update(game)
+                self.waiting_for_locraw = False
                 if game.get("mode"):
                     self.rq_game.update(game)
                     return await self._update_stats()
@@ -397,57 +418,87 @@ class ProxyClient(Client):
                     b"\x00",
                 )
 
+    @command("teams")
+    async def _teams(self):
+        print(self.teams)
+
     async def _update_stats(self):
+        if self.waiting_for_locraw:
+            return
         # update stats in tab in a game, bw & sw are supported so far
         if self.game.gametype in {"bedwars", "skywars"} and self.game.mode:
-            players_without_stats = [
-                player
-                for player in self.players.values()
-                if player not in self.players_with_stats
+            # players are in these teams in pregame
+            real_player_teams: list[Team] = [
+                team
+                for team in self.teams
+                if team.prefix in {"§a", "§b", "§6", "§c", "§2", "§c", "§d", "§7"}
             ]
-            # extend players with stats so new requests to update stats
-            # don't try to update them again
-            self.players_with_stats += players_without_stats
+            real_players = [
+                player
+                for team in real_player_teams
+                for player in team.players
+                if player.isascii()
+                and player not in self.players_with_stats.keys()
+                and player not in self.players_getting_stats
+            ]
+            self.players_getting_stats.extend(real_players)
+
             player_stats = await asyncio.gather(
-                *[
-                    self.hypixel_client.player(player)
-                    for player in players_without_stats
-                ],
+                *[self.hypixel_client.player(player) for player in real_players],
                 return_exceptions=True,
             )
+
+            for player in real_players:
+                self.players_getting_stats.remove(player)
+
             for player in player_stats:
                 if isinstance(player, PlayerNotFound):
-                    display_name = f"§5[NICK] {player.player}"
+                    player.name = player.player
+                    player.uuid = next(
+                        u
+                        for u, p in self.players.items()
+                        if p.casefold() == player.player.casefold()
+                    )
                 elif isinstance(player, InvalidApiKey):
-                    print("Invalid API Key!")  # TODO
+                    return print("Invalid API Key!")  # TODO
                 elif isinstance(player, RateLimitError):
-                    print("Rate limit!")  # TODO
+                    return print("Rate limit!")  # TODO
+                elif isinstance(player, TimeoutError):
+                    return
                 elif not isinstance(player, hypixel.Player):
-                    print(f"An unknown error occurred! ({player})")
-                elif player.name in self.players.values():
-                    fplayer = FormattedPlayer(player)
-                    if self.game.gametype == "bedwars":
-                        display_name = " ".join(
-                            (
-                                fplayer.bedwars.level,
-                                fplayer.rankname,
-                                f"§f | {fplayer.bedwars.fkdr}",
+                    return print(f"An unknown error occurred! ({player})")
+
+                if player.name in self.players.values():
+                    if not isinstance(player, PlayerNotFound):  # nick, probably
+                        fplayer = FormattedPlayer(player)
+                        if self.game.gametype == "bedwars":
+                            display_name = " ".join(
+                                (
+                                    fplayer.bedwars.level,
+                                    fplayer.rankname,
+                                    f"§f | {fplayer.bedwars.fkdr}",
+                                )
                             )
-                        )
-                    elif self.game.gametype == "skywars":
-                        display_name = " ".join(
-                            (
-                                fplayer.skywars.level,
-                                fplayer.rankname,
-                                f"§f | {fplayer.skywars.kills}",
+                        elif self.game.gametype == "skywars":
+                            display_name = " ".join(
+                                (
+                                    fplayer.skywars.level,
+                                    fplayer.rankname,
+                                    f"§f | {fplayer.skywars.kills}",
+                                )
                             )
-                        )
+                    else:
+                        display_name = f"§5[NICK] {player.name}"
+
                     self.send_packet(
                         self.client_stream,
                         0x38,
                         VarInt.pack(3),
                         VarInt.pack(1),
-                        UUID.pack(uuid.UUID(player.uuid)),
+                        UUID.pack(uuid.UUID(str(player.uuid))),
                         Boolean.pack(True),
                         Chat.pack(display_name),
+                    )
+                    self.players_with_stats.update(
+                        {player.name: (player.uuid, display_name)}
                     )
