@@ -140,7 +140,9 @@ class ProxyClient(Client):
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(
-                "https://sessionserver.mojang.com/session/minecraft/join", json=payload
+                "https://sessionserver.mojang.com/session/minecraft/join",
+                json=payload,
+                ssl=False,
             ) as response:
                 if not response.status == 204:
                     raise Exception(
