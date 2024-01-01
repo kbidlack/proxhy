@@ -24,11 +24,13 @@ async def load_auth_info() -> Coroutine[Any, Any, tuple]:
                 auth_data["username"],
                 auth_data["uuid"],
             )
+            access_token_gen_time = auth_data["access_token_gen_time"]
         # tokens expire after 86400 seconds so give a little space
         if time.time() - float(auth_data["access_token_gen_time"]) > 86200.0:
             print("Regenerating credentials...", end="", flush=True)
             email = auth_data["email"]
             user_profile = await MsMcAuth().login(email, get_password("proxhy", email))
+            access_token_gen_time = time.time()
             print("done!")
     else:
         email = input("Enter your Microsoft login email: ").strip()
@@ -37,6 +39,7 @@ async def load_auth_info() -> Coroutine[Any, Any, tuple]:
 
         print("Generating credentials...", end="", flush=True)
         user_profile = await MsMcAuth().login(email, password)
+        access_token_gen_time = time.time()
         print("done!")
 
     auth_data = {
@@ -44,7 +47,7 @@ async def load_auth_info() -> Coroutine[Any, Any, tuple]:
         "username": user_profile[1],
         "uuid": user_profile[2],
         "access_token": user_profile[0],
-        "access_token_gen_time": time.time(),
+        "access_token_gen_time": access_token_gen_time,
     }
 
     with open(auth_cache_path, "w") as auth_cache_file:
