@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import os
 import re
 import uuid
 from pathlib import Path
@@ -121,7 +120,13 @@ class ProxyClient(Client):
 
     @listen_client(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
-        user_profile = await load_auth_info()
+        (
+            self.access_token,
+            self.username,
+            self.uuid,
+            self.hypixel_api_key,
+        ) = await load_auth_info()
+
         while not self.server_stream:
             await asyncio.sleep(0.01)
 
@@ -168,8 +173,6 @@ class ProxyClient(Client):
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-        # TODO fix getting api key
-        self.hypixel_api_key = os.environ.get("HYPIXEL_API_KEY")
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
         self.send_packet(self.client_stream, 0x02, buff.read())
 
