@@ -2,7 +2,7 @@ import inspect
 from collections.abc import Awaitable, Callable
 from typing import Literal, get_args, get_origin
 
-from errors import CommandException
+from .errors import CommandException
 
 commands: dict[str, Callable[..., str], Awaitable[str | None]] = {}
 

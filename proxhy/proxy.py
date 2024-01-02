@@ -9,10 +9,18 @@ from secrets import token_bytes
 
 import aiohttp
 import hypixel
-from aliases import Gamemode, Statistic
-from client import Client, State, listen_client, listen_server
-from command import command, commands
-from datatypes import (
+from hypixel.errors import (
+    HypixelException,
+    InvalidApiKey,
+    PlayerNotFound,
+    RateLimitError,
+)
+
+from .aliases import Gamemode, Statistic
+from .auth import load_auth_info
+from .client import Client, State, listen_client, listen_server
+from .command import command, commands
+from .datatypes import (
     UUID,
     Boolean,
     Buffer,
@@ -24,16 +32,10 @@ from datatypes import (
     UnsignedShort,
     VarInt,
 )
-from encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
-from errors import CommandException
-from formatting import FormattedPlayer
-from hypixel.errors import (
-    HypixelException,
-    InvalidApiKey,
-    PlayerNotFound,
-    RateLimitError,
-)
-from models import Game, Team, Teams
+from .encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
+from .errors import CommandException
+from .formatting import FormattedPlayer
+from .models import Game, Team, Teams
 
 
 class ProxyClient(Client):
@@ -119,6 +121,7 @@ class ProxyClient(Client):
 
     @listen_client(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
+        user_profile = await load_auth_info()
         while not self.server_stream:
             await asyncio.sleep(0.01)
 
