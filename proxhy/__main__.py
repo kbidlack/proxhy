@@ -2,28 +2,17 @@ import asyncio
 import sys
 from asyncio import StreamReader, StreamWriter
 
-from auth import load_auth_info
-from proxy import ProxyClient
+from .auth import load_auth_info
+from .proxy import ProxyClient
 
 
-async def handle_client(
-    reader: StreamReader,
-    writer: StreamWriter,
-    access_token: str,
-    uuid: str,
-    username: str,
-):
-    access_token, uuid, username = await load_auth_info()
-    ProxyClient(reader, writer, access_token, uuid, username)
+async def handle_client(reader: StreamReader, writer: StreamWriter):
+    ProxyClient(reader, writer)
 
 
 async def main():
-    access_token, uuid, username = await load_auth_info()
-    server = await asyncio.start_server(
-        lambda r, w: handle_client(r, w, access_token, uuid, username),
-        "localhost",
-        13876,
-    )
+    await load_auth_info()
+    server = await asyncio.start_server(handle_client, "localhost", 13876)
 
     print("Started proxhy!")
     async with server:

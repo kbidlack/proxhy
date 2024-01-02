@@ -1,5 +1,4 @@
 import asyncio
-from typing import Optional
 
 from .errors import NotPremium
 from .helpers import Microsoft, Xbox

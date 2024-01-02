@@ -1,0 +1,18 @@
+[tool.poetry]
+name = "proxhy"
+version = "0.1.0"
+description = "An open source Hypixel proxy written in Python"
+authors = ["KyngK <mckingkb@gmail.com>"]
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.12"
+aiohttp = "^3.9.1"
+"hypixel.py" = "^0.4.2"
+cryptography = "^41.0.7"
+keyring = "^24.3.0"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
