@@ -10,7 +10,7 @@ async def handle_client(reader: StreamReader, writer: StreamWriter):
     ProxyClient(reader, writer)
 
 
-async def main():
+async def start():
     await load_auth_info()
     server = await asyncio.start_server(handle_client, "localhost", 13876)
 
@@ -19,8 +19,12 @@ async def main():
         await server.serve_forever()
 
 
-if __name__ == "__main__":
+def main():
     try:
-        asyncio.run(main())
+        asyncio.run(start())
     except KeyboardInterrupt:
         sys.exit()
+
+
+if __name__ == "__main__":
+    main()
