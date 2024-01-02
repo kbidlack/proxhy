@@ -10,7 +10,7 @@ python = "^3.12"
 aiohttp = "^3.9.1"
 "hypixel.py" = "^0.4.2"
 cryptography = "^41.0.7"
-keyring = "^24.3.0"
+appdirs = "^1.4.4"
 
 
 [build-system]
