@@ -2,12 +2,13 @@ import asyncio
 import base64
 import json
 import re
+import time
 import uuid
 from pathlib import Path
 from secrets import token_bytes
 
 import aiohttp
-import hypixel
+from hypixel import Player
 from hypixel.errors import (
     HypixelException,
     InvalidApiKey,
@@ -35,6 +36,7 @@ from .encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa
 from .errors import CommandException
 from .formatting import FormattedPlayer
 from .models import Game, Team, Teams
+from .utils import APIClient
 
 
 class ProxyClient(Client):
@@ -70,6 +72,10 @@ class ProxyClient(Client):
 
         self.waiting_for_locraw = False
 
+        # TODO move to config file or something similar; also see utils.py:5
+        self.CONNECT_HOST = "mc.hypixel.net"
+        self.CONNECT_PORT = 25565
+
     async def close(self):
         if self.server_stream:
             self.server_stream.close()
@@ -91,14 +97,16 @@ class ProxyClient(Client):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
             return
 
-        assert buff.unpack(VarInt) == 47  # protocol version
+        buff.unpack(VarInt)  # protocol version
         buff.unpack(String)  # server address
         buff.unpack(UnsignedShort)  # server port
         next_state = buff.unpack(VarInt)
 
         self.state = State(next_state)
         if self.state == State.LOGIN:
-            reader, writer = await asyncio.open_connection("mc.hypixel.net", 25565)
+            reader, writer = await asyncio.open_connection(
+                self.CONNECT_HOST, self.CONNECT_PORT
+            )
             self.server_stream = Stream(reader, writer)
             asyncio.create_task(self.handle_server())
 
@@ -106,8 +114,8 @@ class ProxyClient(Client):
                 self.server_stream,
                 0x00,
                 VarInt.pack(47),
-                String.pack("mc.hypixel.net"),
-                UnsignedShort.pack(25565),
+                String.pack(self.CONNECT_HOST),
+                UnsignedShort.pack(self.CONNECT_PORT),
                 VarInt.pack(State.LOGIN.value),
             )
 
@@ -124,7 +132,6 @@ class ProxyClient(Client):
             self.access_token,
             self.username,
             self.uuid,
-            self.hypixel_api_key,
         ) = await load_auth_info()
 
         while not self.server_stream:
@@ -173,7 +180,7 @@ class ProxyClient(Client):
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
+        self.hypixel_client = APIClient()
         self.send_packet(self.client_stream, 0x02, buff.read())
 
     @listen_server(0x03, State.LOGIN, blocking=True)
@@ -295,6 +302,8 @@ class ProxyClient(Client):
                 if game.get("mode"):
                     self.rq_game.update(game)
                     return await self._update_stats()
+                else:
+                    return
 
         self.send_packet(self.client_stream, 0x02, buff.getvalue())
 
@@ -305,9 +314,9 @@ class ProxyClient(Client):
         # run command
         if message.startswith("/"):
             segments = message.split()
-            command = commands.get(segments[0].removeprefix("/")) or commands.get(
-                segments[0].removeprefix("//")
-            )
+            command = commands.get(
+                segments[0].removeprefix("/").casefold()
+            ) or commands.get(segments[0].removeprefix("//").casefold())
             if command:
                 try:
                     output = await command(self, message)
@@ -397,6 +406,7 @@ class ProxyClient(Client):
         try:
             player = await self.hypixel_client.player(ign)
         except PlayerNotFound:
+            # TODO this throws when there's an invalid api key
             raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
         except InvalidApiKey:
             raise CommandException(f"§9§l∎ §4Invalid API Key!")
@@ -429,6 +439,13 @@ class ProxyClient(Client):
     @command("teams")
     async def _teams(self):
         print(self.teams)
+
+    @command()
+    async def updatestats(self):
+        self.send_packet(
+            self.client_stream, 0x02, Chat.pack(f"§aUpdating stats..."), b"\x00"
+        )
+        await self._update_stats()
 
     async def _update_stats(self):
         if self.waiting_for_locraw:
@@ -471,13 +488,16 @@ class ProxyClient(Client):
                     print("Invalid API Key!")  # TODO
                     continue
                 elif isinstance(player, RateLimitError):
-                    print("Rate limit!")  # TODO
+                    print("Rate limit!", time.time())  # TODO
+                    continue
+                elif isinstance(player, KeyError):  # Rate limit -- retry after x
+                    print("Rate limit!", time.time())  # TODO
                     continue
                 elif isinstance(player, TimeoutError):
                     print(f"Request timed out!")  # TODO
                     continue
-                elif not isinstance(player, hypixel.Player):
-                    print(f"An unknown error occurred! ({player})")  # TODO
+                elif not isinstance(player, Player):
+                    print(f"An unknown error occurred! ({player})", time.time())  # TODO
                     continue
 
                 if player.name in self.players.values():

@@ -62,7 +62,6 @@ class VarInt(DataType[int]):
             val = struct.unpack("B", buff.read(1))[0]
             total |= (val & 0x7F) << shift
             shift += 7
-
         return total - (1 << 32) if total & (1 << 31) else total
 
     @staticmethod

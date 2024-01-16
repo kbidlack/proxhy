@@ -8,9 +8,9 @@ readme = "README.md"
 [tool.poetry.dependencies]
 python = "^3.12"
 aiohttp = "^3.9.1"
-"hypixel.py" = "^0.4.2"
 cryptography = "^41.0.7"
 appdirs = "^1.4.4"
+hypixel-py = {extras = ["speed"], version = "^0.4.2"}
 
 
 [build-system]
