@@ -193,3 +193,23 @@ class Boolean(DataType[bool]):
     @staticmethod
     def unpack(buff) -> bool:
         return bool(buff.read(1)[0])
+
+
+class Int(DataType[int]):
+    @staticmethod
+    def pack(value: int) -> bytes:
+        return struct.pack(">i", value)
+
+    @staticmethod
+    def unpack(buff) -> int:
+        return struct.unpack(">i", buff.read(4))[0]
+
+
+class Short(DataType[int]):
+    @staticmethod
+    def pack(value: int) -> bytes:
+        return struct.pack(">h", value)
+
+    @staticmethod
+    def unpack(buff) -> int:
+        return struct.unpack(">h", buff.read(2))[0]

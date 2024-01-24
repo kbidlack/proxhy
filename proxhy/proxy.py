@@ -1,11 +1,13 @@
 import asyncio
 import base64
 import json
+import os
 import re
 import time
 import uuid
 from pathlib import Path
 from secrets import token_bytes
+from typing import Self
 
 import aiohttp
 from hypixel import Player
@@ -180,7 +182,9 @@ class ProxyClient(Client):
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-        self.hypixel_client = APIClient()
+        import hypixel
+
+        self.hypixel_client = hypixel.Client(os.environ.get("HYPIXEL_API_KEY"))
         self.send_packet(self.client_stream, 0x02, buff.read())
 
     @listen_server(0x03, State.LOGIN, blocking=True)
@@ -208,8 +212,9 @@ class ProxyClient(Client):
 
         self.send_packet(self.client_stream, 0x01, buff.getvalue())
 
-        self.waiting_for_locraw = True
-        self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
+        if not self.client == "lunar":
+            self.waiting_for_locraw = True
+            self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
 
     @listen_server(0x3E, blocking=True)
     async def packet_teams(self, buff: Buffer):
@@ -286,24 +291,30 @@ class ProxyClient(Client):
     @listen_server(0x02)
     async def packet_chat_message(self, buff: Buffer):
         message = buff.unpack(Chat)
-        if re.match(r"^\{.*\}$", message) and self.waiting_for_locraw:  # locraw
-            if "limbo" in message:  # sometimes returns limbo right when you join
-                if not self.teams:  # probably in limbo
-                    return
-                else:
-                    await asyncio.sleep(0.1)
-                    return self.send_packet(
-                        self.server_stream, 0x01, String.pack("/locraw")
-                    )
+
+        async def _update_game(self: Self, game: dict):
+            self.game.update(game)
+            if game.get("mode"):
+                self.rq_game.update(game)
+                return await self._update_stats()
             else:
-                game = json.loads(message)
-                self.game.update(game)
-                self.waiting_for_locraw = False
-                if game.get("mode"):
-                    self.rq_game.update(game)
-                    return await self._update_stats()
+                return
+
+        if re.match(r"^\{.*\}$", message):  # locraw
+            if self.waiting_for_locraw:
+                if "limbo" in message:  # sometimes returns limbo right when you join
+                    if not self.teams:  # probably in limbo
+                        return
+                    else:
+                        await asyncio.sleep(0.1)
+                        return self.send_packet(
+                            self.server_stream, 0x01, String.pack("/locraw")
+                        )
                 else:
-                    return
+                    self.waiting_for_locraw = False
+                    await _update_game(self, json.loads(message))
+            else:
+                await _update_game(self, json.loads(message))
 
         self.send_packet(self.client_stream, 0x02, buff.getvalue())
 
@@ -440,16 +451,17 @@ class ProxyClient(Client):
     async def _teams(self):
         print(self.teams)
 
-    @command()
-    async def updatestats(self):
-        self.send_packet(
-            self.client_stream, 0x02, Chat.pack(f"§aUpdating stats..."), b"\x00"
-        )
-        await self._update_stats()
+    @command("ug")
+    async def updategame(self):
+        self.waiting_for_locraw = True
+        self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
+
+        self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aUpdating!"), b"\x00")
 
     async def _update_stats(self):
         if self.waiting_for_locraw:
             return
+
         # update stats in tab in a game, bw & sw are supported so far
         if self.game.gametype in {"bedwars", "skywars"} and self.game.mode:
             # players are in these teams in pregame
@@ -479,11 +491,14 @@ class ProxyClient(Client):
             for player in player_stats:
                 if isinstance(player, PlayerNotFound):
                     player.name = player.player
-                    player.uuid = next(
-                        u
-                        for u, p in self.players.items()
-                        if p.casefold() == player.player.casefold()
-                    )
+                    try:
+                        player.uuid = next(
+                            u
+                            for u, p in self.players.items()
+                            if p.casefold() == player.player.casefold()
+                        )
+                    except StopIteration:
+                        continue
                 elif isinstance(player, InvalidApiKey):
                     print("Invalid API Key!")  # TODO
                     continue
