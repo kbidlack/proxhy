@@ -553,7 +553,8 @@ class ProxyClient(Client):
     @command()
     async def key(self, key):
         try:
-            new_client = hypixel.Client(key, autoverify=True)
+            new_client = hypixel.Client(key)
+            await new_client.validate_keys()
         except ApiError:
             raise CommandException(f"§9§l∎ §4Invalid API Key!")
 
@@ -596,7 +597,8 @@ class ProxyClient(Client):
             )
 
             for player in real_players:
-                self.players_getting_stats.remove(player)
+                if player in self.players_getting_stats:
+                    self.players_getting_stats.remove(player)
 
             for player in player_stats:
                 if isinstance(player, PlayerNotFound):
