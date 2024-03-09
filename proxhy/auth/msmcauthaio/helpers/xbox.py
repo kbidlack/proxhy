@@ -1,11 +1,11 @@
-from urllib.parse import quote_plus
-from typing import Optional
 from re import search
+from typing import Optional
+from urllib.parse import quote_plus
 
-from ..http import Http
 from ..constants import AUTHORIZE
+from ..errors import InvalidCredentials, MsMcAuthException, TwoFactorAccount
+from ..http import Http
 from ..models import PreAuthResponse, UserLoginResponse
-from ..errors import InvalidCredentials, TwoFactorAccount, MsMcAuthException
 
 __all__ = ("Xbox",)
 

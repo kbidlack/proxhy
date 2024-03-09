@@ -1,23 +1,21 @@
 from typing import Optional
 
-from ..constants import LOGIN_WITH_XBOX, XBL, XSTS, OWNERSHIP, PROFILE
-from ..http import Http
-
-from ..models import (
-    XSTSAuthenticateResponse,
-    XblAuthenticateResponse,
-    UserLoginResponse,
-    PreAuthResponse,
-    UserProfile
-)
-
+from ..constants import LOGIN_WITH_XBOX, OWNERSHIP, PROFILE, XBL, XSTS
 from ..errors import (
-    XstsAuthenticationFailed,
-    XblAuthenticationFailed,
+    ChildAccount,
     LoginWithXboxFailed,
     MsMcAuthException,
     NoXboxAccount,
-    ChildAccount,
+    XblAuthenticationFailed,
+    XstsAuthenticationFailed,
+)
+from ..http import Http
+from ..models import (
+    PreAuthResponse,
+    UserLoginResponse,
+    UserProfile,
+    XblAuthenticateResponse,
+    XSTSAuthenticateResponse,
 )
 
 __all__ = ("Microsoft",)

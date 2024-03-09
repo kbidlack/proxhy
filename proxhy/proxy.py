@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import json
-import os
 import re
 import time
 import uuid
@@ -10,8 +9,10 @@ from secrets import token_bytes
 from typing import Self
 
 import aiohttp
+import hypixel
 from hypixel import Player
 from hypixel.errors import (
+    ApiError,
     HypixelException,
     InvalidApiKey,
     PlayerNotFound,
@@ -38,7 +39,7 @@ from .encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa
 from .errors import CommandException
 from .formatting import FormattedPlayer
 from .models import Game, Team, Teams
-from .utils import APIClient
+from .packets import roll_packets
 
 
 class ProxyClient(Client):
@@ -73,8 +74,12 @@ class ProxyClient(Client):
         self.teams: list[Team] = Teams()
 
         self.waiting_for_locraw = False
+        self.game_error = None  # if error has been sent that game
 
-        # TODO move to config file or something similar; also see utils.py:5
+        self.rolling = (None, None)
+        self.rolling_target = 0
+
+        # TODO move to config file or something similar; also see utils.py:5 (?)
         self.CONNECT_HOST = "mc.hypixel.net"
         self.CONNECT_PORT = 25565
 
@@ -182,9 +187,8 @@ class ProxyClient(Client):
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-        import hypixel
 
-        self.hypixel_client = hypixel.Client(os.environ.get("HYPIXEL_API_KEY"))
+        self.hypixel_client = hypixel.Client()  # TODO
         self.send_packet(self.client_stream, 0x02, buff.read())
 
     @listen_server(0x03, State.LOGIN, blocking=True)
@@ -209,6 +213,9 @@ class ProxyClient(Client):
         # flush player lists
         self.players.clear()
         self.players_with_stats.clear()
+        self.players_getting_stats.clear()
+
+        self.game_error = None
 
         self.send_packet(self.client_stream, 0x01, buff.getvalue())
 
@@ -315,6 +322,19 @@ class ProxyClient(Client):
                     await _update_game(self, json.loads(message))
             else:
                 await _update_game(self, json.loads(message))
+        elif (
+            message.startswith("TICKET REWARD!") and self.rolling[1] == "Ticket Machine"
+        ) or (
+            re.match(r".*\[\d+/\d+\]$", message) and self.rolling[1] == "Arcade Player"
+        ):
+            # await asyncio.sleep(random.uniform(0.2, 0.5))
+            await asyncio.sleep(0.1)
+            self.send_packet(
+                self.server_stream,
+                0x02,
+                VarInt.pack(self.rolling_target),
+                VarInt.pack(1),
+            )
 
         self.send_packet(self.client_stream, 0x02, buff.getvalue())
 
@@ -451,12 +471,102 @@ class ProxyClient(Client):
     async def _teams(self):
         print(self.teams)
 
+    # ROLLING -------------------------------------------------------------------------
+
+    @command()
+    async def roll(self, target=""):
+        if not target:
+            raise CommandException(
+                f"§9§l∎ §4Please specify a target or 'off' to turn off!"
+            )
+
+        match target.casefold():
+            case "off":
+                self.rolling = (None, None)
+                self.send_packet(
+                    self.client_stream,
+                    0x02,
+                    Chat.pack(f"§bRolling §l§4OFF"),
+                    b"\x00",
+                )
+            case "ticket":
+                self.rolling = ("Ticket Machine", "Ticket Machine")
+                self.send_packet(
+                    self.client_stream,
+                    0x02,
+                    Chat.pack(f"§bRolling §l§aTicket Machine"),
+                    b"\x00",
+                )
+            case "arcade":
+                self.rolling = ("Item Submission", "Arcade Player")
+                self.send_packet(
+                    self.client_stream,
+                    0x02,
+                    Chat.pack(f"§bRolling §l§aArcade Player"),
+                    b"\x00",
+                )
+            case _:
+                raise CommandException(f"§9§l∎ §4Unknown target '{target}'!")
+
+    @listen_client(0x0E, blocking=True)
+    async def packet_click_window(self, buff: Buffer):
+        self.send_packet(self.server_stream, 0x0E, buff.getvalue())
+        # print(buff.getvalue())
+
+    @listen_server(0x2D, blocking=True)
+    async def packet_open_window(self, buff: Buffer):
+        if not self.rolling[0]:
+            return self.send_packet(self.client_stream, 0x2D, buff.getvalue())
+
+        window_id = buff.unpack(Byte)
+        buff.unpack(String)
+        window_title = buff.unpack(Chat)
+
+        if window_title == self.rolling[0] and self.rolling[1]:
+            # await asyncio.sleep(random.uniform(0.4, 1.0))
+            self.send_packet(
+                self.server_stream, 0x0E, window_id, roll_packets[self.rolling[1]]
+            )
+
+    @listen_client(0x02, blocking=True)
+    async def packet_use_entity(self, buff: Buffer):
+        self.send_packet(self.server_stream, 0x02, buff.getvalue())
+
+        target = buff.unpack(VarInt)
+        if self.rolling[0]:
+            self.rolling_target = target
+            self.send_packet(
+                self.client_stream,
+                0x02,
+                Chat.pack(f"§aSet target to §l§b{self.rolling_target}"),
+                b"\x00",
+            )
+
+    # ---------------------------------------------------------------------------------
+
     @command("ug")
     async def updategame(self):
         self.waiting_for_locraw = True
         self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
-
         self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aUpdating!"), b"\x00")
+
+    @command()
+    async def key(self, key):
+        try:
+            new_client = hypixel.Client(key, autoverify=True)
+        except ApiError:
+            raise CommandException(f"§9§l∎ §4Invalid API Key!")
+
+        if self.hypixel_client:
+            await self.hypixel_client.close()
+
+        self.hypixel_client = new_client
+        self.send_packet(
+            self.client_stream,
+            0x02,
+            Chat.pack("§aUpdated API Key!"),
+            b"\x00",
+        )
 
     async def _update_stats(self):
         if self.waiting_for_locraw:
@@ -499,20 +609,24 @@ class ProxyClient(Client):
                         )
                     except StopIteration:
                         continue
-                elif isinstance(player, InvalidApiKey):
-                    print("Invalid API Key!")  # TODO
-                    continue
-                elif isinstance(player, RateLimitError):
-                    print("Rate limit!", time.time())  # TODO
-                    continue
-                elif isinstance(player, KeyError):  # Rate limit -- retry after x
-                    print("Rate limit!", time.time())  # TODO
-                    continue
-                elif isinstance(player, TimeoutError):
-                    print(f"Request timed out!")  # TODO
+                elif isinstance(player, (InvalidApiKey, RateLimitError, TimeoutError)):
+                    err_message = {
+                        InvalidApiKey: "§cInvalid API Key!",
+                        RateLimitError: "§cRate limit!",
+                        TimeoutError: f"§cRequest timed out! ({player})",
+                    }
+
+                    if not self.game_error:
+                        self.game_error = player
+                        self.send_packet(
+                            self.client_stream,
+                            0x02,
+                            Chat.pack(err_message[type(player)]),
+                            b"\x01",
+                        )
                     continue
                 elif not isinstance(player, Player):
-                    print(f"An unknown error occurred! ({player})", time.time())  # TODO
+                    print(f"An unknown error occurred! ({player})", time.time())
                     continue
 
                 if player.name in self.players.values():

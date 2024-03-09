@@ -1,5 +1,6 @@
 from typing import NamedTuple
 
+
 class UserLoginResponse(NamedTuple):
     refresh_token: str
     access_token: str
