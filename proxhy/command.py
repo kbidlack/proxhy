@@ -1,10 +1,10 @@
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable
 from typing import Literal, get_args, get_origin
 
 from .errors import CommandException
 
-commands: dict[str, Callable[..., str], Awaitable[str | None]] = {}
+commands: dict[str, Awaitable[str | None]] = {}
 
 
 class Parameter:
@@ -28,6 +28,9 @@ class Parameter:
         else:
             self.options = None
 
+    def __repr__(self):
+        return "Parameter: " + ", ".join([f"{k}={v}" for k, v in self.__dict__.items()])
+
 
 class Command:
     def __init__(self, function, *aliases) -> None:
@@ -35,10 +38,9 @@ class Command:
         self.name = function.__name__
 
         sig = inspect.signature(function)
-        # first two parameters should be bridge and buff
         self.parameters = [
             Parameter(sig.parameters[param]) for param in sig.parameters
-        ][2:]
+        ][1:]
         self.required_parameters = [
             param for param in self.parameters if param.required
         ]
