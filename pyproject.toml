@@ -1,21 +1,29 @@
-[tool.poetry]
+[project]
 name = "proxhy"
 version = "0.1.0"
-description = "An open source Hypixel proxy written in Python"
-authors = ["KyngK <mckingkb@gmail.com>"]
+description = "Proxy for Hypixel"
+authors = [
+    { name = "Kavi Bidlack", email = "ksbidlack@gmail.com" }
+]
+dependencies = [
+    "aiohttp>=3.9.3",
+    "hypixel.py[speed]>=0.4.2",
+    "appdirs>=1.4.4",
+    "cryptography>=42.0.5",
+]
 readme = "README.md"
-
-[tool.poetry.dependencies]
-python = "^3.12"
-aiohttp = "^3.9.1"
-cryptography = "^41.0.7"
-appdirs = "^1.4.4"
-hypixel-py = {extras = ["speed"], version = "^0.4.2"}
-
+requires-python = ">= 3.12"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
-[tool.poetry.scripts]
-proxhy = "proxhy.__main__:main"
+[tool.rye]
+managed = true
+dev-dependencies = []
+
+[tool.hatch.metadata]
+allow-direct-references = true
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/proxhy"]
