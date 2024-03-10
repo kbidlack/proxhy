@@ -296,7 +296,7 @@ class ProxyClient(Client):
         self.send_packet(self.client_stream, 0x3E, buff.getvalue())
 
     @listen_server(0x02)
-    async def packet_chat_message(self, buff: Buffer):
+    async def packet_server_chat_message(self, buff: Buffer):
         message = buff.unpack(Chat)
 
         async def _update_game(self: Self, game: dict):
@@ -339,7 +339,7 @@ class ProxyClient(Client):
         self.send_packet(self.client_stream, 0x02, buff.getvalue())
 
     @listen_client(0x01)
-    async def packet_chat_message(self, buff: Buffer):
+    async def packet_client_chat_message(self, buff: Buffer):
         message = buff.unpack(String)
 
         # run command
@@ -440,14 +440,14 @@ class ProxyClient(Client):
             # TODO this throws when there's an invalid api key
             raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
         except InvalidApiKey:
-            raise CommandException(f"§9§l∎ §4Invalid API Key!")
+            raise CommandException("§9§l∎ §4Invalid API Key!")
         except RateLimitError:
             raise CommandException(
-                f"§9§l∎ §4Your API key is being rate limited; please wait a little bit!"
+                "§9§l∎ §4Your API key is being rate limited; please wait a little bit!"
             )
         except HypixelException:
             raise CommandException(
-                f"§9§l∎ §4An unknown error occurred"
+                "§9§l∎ §4An unknown error occurred"
                 f"while fetching player '{ign}'! ({player})"
             )
 
@@ -457,7 +457,7 @@ class ProxyClient(Client):
     # debug command sorta
     @command("game")
     async def _game(self):
-        self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aGame:"), b"\x00")
+        self.send_packet(self.client_stream, 0x02, Chat.pack("§aGame:"), b"\x00")
         for key in self.game.__annotations__:
             if value := getattr(self.game, key):
                 self.send_packet(
@@ -477,7 +477,7 @@ class ProxyClient(Client):
     async def roll(self, target=""):
         if not target:
             raise CommandException(
-                f"§9§l∎ §4Please specify a target or 'off' to turn off!"
+                "§9§l∎ §4Please specify a target or 'off' to turn off!"
             )
 
         match target.casefold():
@@ -486,7 +486,7 @@ class ProxyClient(Client):
                 self.send_packet(
                     self.client_stream,
                     0x02,
-                    Chat.pack(f"§bRolling §l§4OFF"),
+                    Chat.pack("§bRolling §l§4OFF"),
                     b"\x00",
                 )
             case "ticket":
@@ -494,7 +494,7 @@ class ProxyClient(Client):
                 self.send_packet(
                     self.client_stream,
                     0x02,
-                    Chat.pack(f"§bRolling §l§aTicket Machine"),
+                    Chat.pack("§bRolling §l§aTicket Machine"),
                     b"\x00",
                 )
             case "arcade":
@@ -502,7 +502,7 @@ class ProxyClient(Client):
                 self.send_packet(
                     self.client_stream,
                     0x02,
-                    Chat.pack(f"§bRolling §l§aArcade Player"),
+                    Chat.pack("§bRolling §l§aArcade Player"),
                     b"\x00",
                 )
             case _:
@@ -548,7 +548,7 @@ class ProxyClient(Client):
     async def updategame(self):
         self.waiting_for_locraw = True
         self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
-        self.send_packet(self.client_stream, 0x02, Chat.pack(f"§aUpdating!"), b"\x00")
+        self.send_packet(self.client_stream, 0x02, Chat.pack("§aUpdating!"), b"\x00")
 
     @command()
     async def key(self, key):
@@ -556,7 +556,7 @@ class ProxyClient(Client):
             new_client = hypixel.Client(key)
             await new_client.validate_keys()
         except ApiError:
-            raise CommandException(f"§9§l∎ §4Invalid API Key!")
+            raise CommandException("§9§l∎ §4Invalid API Key!")
 
         if self.hypixel_client:
             await self.hypixel_client.close()
