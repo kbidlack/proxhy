@@ -342,7 +342,7 @@ class ProxyClient(Client):
                 (stat for stat in stats if Statistic(stat, gamemode) is None)
             )
             raise CommandException(
-                f"Unknown statistic '{unknown_stat}' " f"for gamemode {gamemode}!"
+                f"Unknown statistic '{unknown_stat}' for gamemode {gamemode}!"
             )
         else:
             stats = tuple(Statistic(stat, gamemode) for stat in stats)
@@ -360,7 +360,7 @@ class ProxyClient(Client):
             )
         except HypixelException:
             raise CommandException(
-                "An unknown error occurred" f"while fetching player '{ign}'! ({player})"
+                "An unknown error occurred while fetching player '{ign}'! ({player})"
             )
 
         fplayer = FormattedPlayer(player)
@@ -433,7 +433,6 @@ class ProxyClient(Client):
         window_title = buff.unpack(Chat)
 
         if window_title == self.rolling[0] and self.rolling[1]:
-            # await asyncio.sleep(random.uniform(0.4, 1.0))
             self.send_packet(
                 self.server_stream, 0x0E, window_id, roll_packets[self.rolling[1]]
             )
