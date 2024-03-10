@@ -2,7 +2,7 @@ import asyncio
 import sys
 from asyncio import StreamReader, StreamWriter
 
-from .auth import load_auth_info
+from .auth import load_auth_info, users
 from .proxy import ProxyClient
 
 
@@ -11,7 +11,18 @@ async def handle_client(reader: StreamReader, writer: StreamWriter):
 
 
 async def start():
-    await load_auth_info()
+    if len(sys.argv) < 2:
+        sys.argv.append("")
+
+    if sys.argv[1] == "login":
+        await load_auth_info()
+    elif opt := sys.argv[1]:
+        print(f"Unknown option '{opt}'!")
+        sys.exit()
+    else:
+        for user in users():
+            await load_auth_info(user)
+
     server = await asyncio.start_server(handle_client, "localhost", 13876)
 
     print("Started proxhy!")
