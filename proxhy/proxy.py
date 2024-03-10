@@ -5,16 +5,15 @@ import re
 import time
 import uuid
 from pathlib import Path
-from secrets import token_bytes
 from typing import Self
 
-import aiohttp
 import hypixel
 from hypixel import Player
 from hypixel.errors import (
     ApiError,
     HypixelException,
     InvalidApiKey,
+    KeyRequired,
     PlayerNotFound,
     RateLimitError,
 )
@@ -23,19 +22,7 @@ from .aliases import Gamemode, Statistic
 from .auth import load_auth_info, users
 from .client import Client, State, listen_client, listen_server
 from .command import command, commands
-from .datatypes import (
-    UUID,
-    Boolean,
-    Buffer,
-    Byte,
-    ByteArray,
-    Chat,
-    Long,
-    String,
-    UnsignedShort,
-    VarInt,
-)
-from .encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
+from .datatypes import UUID, Boolean, Buffer, Byte, ByteArray, Chat, String, VarInt
 from .errors import CommandException
 from .formatting import FormattedPlayer
 from .models import Game, Team, Teams
@@ -79,59 +66,13 @@ class ProxyClient(Client):
         self.rolling = (None, None)
         self.rolling_target = 0
 
-        # TODO move to config file or something similar; also see utils.py:5 (?)
-        self.CONNECT_HOST = "mc.hypixel.net"
-        self.CONNECT_PORT = 25565
+        # TODO move to config file or something similar
+        self.CONNECT_HOST = ("mc.hypixel.net", 25565)
 
     async def close(self):
-        if self.server_stream:
-            self.server_stream.close()
+        await super().close()
         if self.hypixel_client:
             await self.hypixel_client.close()
-        self.client_stream.close()
-
-        del self  # idk if this does anything or not
-        # on second thought probably not but whatever
-
-    @listen_client(0x00, State.STATUS, blocking=True)
-    async def packet_status_request(self, _):
-        self.send_packet(
-            self.client_stream, 0x00, String.pack(json.dumps(self.server_list_ping))
-        )
-
-    @listen_client(0x00, State.HANDSHAKING, blocking=True)
-    async def packet_handshake(self, buff: Buffer):
-        if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
-            return
-
-        buff.unpack(VarInt)  # protocol version
-        buff.unpack(String)  # server address
-        buff.unpack(UnsignedShort)  # server port
-        next_state = buff.unpack(VarInt)
-
-        self.state = State(next_state)
-        if self.state == State.LOGIN:
-            reader, writer = await asyncio.open_connection(
-                self.CONNECT_HOST, self.CONNECT_PORT
-            )
-            self.server_stream = Stream(reader, writer)
-            asyncio.create_task(self.handle_server())
-
-            self.send_packet(
-                self.server_stream,
-                0x00,
-                VarInt.pack(47),
-                String.pack(self.CONNECT_HOST),
-                UnsignedShort.pack(self.CONNECT_PORT),
-                VarInt.pack(State.LOGIN.value),
-            )
-
-    @listen_client(0x01, State.STATUS, blocking=True)
-    async def packet_ping_request(self, buff: Buffer):
-        payload = buff.unpack(Long)
-        self.send_packet(self.client_stream, 0x01, Long.pack(payload))
-        # close connection
-        await self.close()
 
     @listen_client(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
@@ -159,54 +100,12 @@ class ProxyClient(Client):
 
         self.send_packet(self.server_stream, 0x00, String.pack(self.username))
 
-    @listen_server(0x01, State.LOGIN, blocking=True)
-    async def packet_encryption_request(self, buff: Buffer):
-        server_id = buff.unpack(String).encode("utf-8")
-        public_key = buff.unpack(ByteArray)
-        verify_token = buff.unpack(ByteArray)
-
-        # generate shared secret
-        secret = token_bytes(16)
-        payload = {
-            "accessToken": self.access_token,
-            "selectedProfile": self.uuid,
-            "serverId": generate_verification_hash(server_id, secret, public_key),
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
-                "https://sessionserver.mojang.com/session/minecraft/join",
-                json=payload,
-                ssl=False,
-            ) as response:
-                if not response.status == 204:
-                    raise Exception(
-                        f"Login failed: {response.status} {await response.json()}"
-                    )
-
-        encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, secret)
-        encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
-
-        self.send_packet(
-            self.server_stream,
-            0x01,
-            ByteArray.pack(encrypted_secret),
-            ByteArray.pack(encrypted_verify_token),
-        )
-
-        # enable encryption
-        self.server_stream.key = secret
-
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
 
         self.hypixel_client = hypixel.Client()  # TODO
         self.send_packet(self.client_stream, 0x02, buff.read())
-
-    @listen_server(0x03, State.LOGIN, blocking=True)
-    async def packet_set_compression(self, buff: Buffer):
-        self.compression_threshold = buff.unpack(VarInt)
-        self.compression = False if self.compression_threshold == -1 else True
 
     @listen_client(0x17)
     async def packet_plugin_channel(self, buff: Buffer):
@@ -626,6 +525,7 @@ class ProxyClient(Client):
                 elif isinstance(player, (InvalidApiKey, RateLimitError, TimeoutError)):
                     err_message = {
                         InvalidApiKey: "§cInvalid API Key!",
+                        KeyRequired: "§cNo API Key provided!",
                         RateLimitError: "§cRate limit!",
                         TimeoutError: f"§cRequest timed out! ({player})",
                     }
@@ -636,10 +536,11 @@ class ProxyClient(Client):
                             self.client_stream,
                             0x02,
                             Chat.pack(err_message[type(player)]),
-                            b"\x01",
+                            b"\x00",
                         )
                     continue
                 elif not isinstance(player, Player):
+                    # TODO log this
                     print(f"An unknown error occurred! ({player})", time.time())
                     continue
 
