@@ -264,7 +264,10 @@ class ProxyClient(Client):
                     output = await command(self, message)
                 except CommandException as err:
                     self.send_packet(
-                        self.client_stream, 0x02, Chat.pack(err.message), b"\x00"
+                        self.client_stream,
+                        0x02,
+                        Chat.pack(f"§9§l∎ §4{err.message}"),
+                        b"\x00",
                     )
                 else:
                     if output:
@@ -308,7 +311,7 @@ class ProxyClient(Client):
     @command("rq")
     async def requeue(self):
         if not self.game.mode:
-            raise CommandException("§9§l∎ §4No game to requeue!")
+            raise CommandException("No game to requeue!")
         else:
             self.send_packet(
                 self.server_stream, 0x01, String.pack(f"/play {self.game.mode}")
@@ -326,7 +329,7 @@ class ProxyClient(Client):
         if mode is None:
             gamemode = Gamemode(self.game.gametype) or "bedwars"  # default
         elif (gamemode := Gamemode(mode)) is None:
-            raise CommandException(f"§9§l∎ §4Unknown gamemode '{mode}'!")
+            raise CommandException(f"Unknown gamemode '{mode}'!")
 
         # verify stats
         if not stats:
@@ -339,8 +342,7 @@ class ProxyClient(Client):
                 (stat for stat in stats if Statistic(stat, gamemode) is None)
             )
             raise CommandException(
-                f"§9§l∎ §4Unknown statistic '{unknown_stat}' "
-                f"for gamemode {gamemode}!"
+                f"Unknown statistic '{unknown_stat}' " f"for gamemode {gamemode}!"
             )
         else:
             stats = tuple(Statistic(stat, gamemode) for stat in stats)
@@ -349,17 +351,16 @@ class ProxyClient(Client):
             player = await self.hypixel_client.player(ign)
         except PlayerNotFound:
             # TODO this throws when there's an invalid api key
-            raise CommandException(f"§9§l∎ §4Player '{ign}' not found!")
+            raise CommandException(f"Player '{ign}' not found!")
         except InvalidApiKey:
-            raise CommandException("§9§l∎ §4Invalid API Key!")
+            raise CommandException("Invalid API Key!")
         except RateLimitError:
             raise CommandException(
-                "§9§l∎ §4Your API key is being rate limited; please wait a little bit!"
+                "Your API key is being rate limited; please wait a little bit!"
             )
         except HypixelException:
             raise CommandException(
-                "§9§l∎ §4An unknown error occurred"
-                f"while fetching player '{ign}'! ({player})"
+                "An unknown error occurred" f"while fetching player '{ign}'! ({player})"
             )
 
         fplayer = FormattedPlayer(player)
@@ -387,9 +388,7 @@ class ProxyClient(Client):
     @command()
     async def roll(self, target=""):
         if not target:
-            raise CommandException(
-                "§9§l∎ §4Please specify a target or 'off' to turn off!"
-            )
+            raise CommandException("Please specify a target or 'off' to turn off!")
 
         match target.casefold():
             case "off":
@@ -417,7 +416,7 @@ class ProxyClient(Client):
                     b"\x00",
                 )
             case _:
-                raise CommandException(f"§9§l∎ §4Unknown target '{target}'!")
+                raise CommandException(f"Unknown target '{target}'!")
 
     @listen_client(0x0E, blocking=True)
     async def packet_click_window(self, buff: Buffer):
@@ -467,7 +466,7 @@ class ProxyClient(Client):
             new_client = hypixel.Client(key)
             await new_client.validate_keys()
         except ApiError:
-            raise CommandException("§9§l∎ §4Invalid API Key!")
+            raise CommandException("Invalid API Key!")
 
         if self.hypixel_client:
             await self.hypixel_client.close()
