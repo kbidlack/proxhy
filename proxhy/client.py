@@ -1,10 +1,14 @@
 import asyncio
+import json
 import zlib
 from asyncio import StreamReader, StreamWriter
 from enum import Enum
+from secrets import token_bytes
 
-from .datatypes import Buffer, VarInt
-from .encryption import Stream
+import aiohttp
+
+from .datatypes import Buffer, ByteArray, Long, String, UnsignedShort, VarInt
+from .encryption import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 
 client_listeners = {}
 server_listeners = {}
@@ -42,7 +46,15 @@ def listen_server(packet_id: int, state: State = State.PLAY, blocking=False):
 
 
 class Client:
-    """represents a connection to a client and corresponding connection to server"""
+    """
+    represents a proxied connection to a client and corresponding connection to server
+    """
+
+    server_list_ping = {  # placeholder
+        "version": {"name": "1.8.9", "protocol": 47},
+        "players": {"max": 0, "online": 0},
+        "description": {"text": "No MOTD set!"},
+    }
 
     def __init__(
         self,
@@ -54,6 +66,8 @@ class Client:
         self.state = State.HANDSHAKING
         self.compression = False
         self.server_stream: Stream | None = None
+
+        self.CONNECT_HOST = ("", 0)
 
         asyncio.create_task(self.handle_client())
 
@@ -125,3 +139,102 @@ class Client:
             data = b""
 
         await self.close()
+
+    async def close(self):
+        if self.server_stream:
+            self.server_stream.close()
+        self.client_stream.close()
+
+        del self  # idk if this does anything or not
+        # on second thought probably not but whatever
+
+    @listen_client(0x00, State.STATUS, blocking=True)
+    async def packet_status_request(self, _):
+        self.send_packet(
+            self.client_stream, 0x00, String.pack(json.dumps(self.server_list_ping))
+        )
+
+    @listen_client(0x01, State.STATUS, blocking=True)
+    async def packet_ping_request(self, buff: Buffer):
+        payload = buff.unpack(Long)
+        self.send_packet(self.client_stream, 0x01, Long.pack(payload))
+        # close connection
+        await self.close()
+
+    @listen_client(0x00, State.HANDSHAKING, blocking=True)
+    async def packet_handshake(self, buff: Buffer):
+        if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
+            return
+
+        buff.unpack(VarInt)  # protocol version
+        buff.unpack(String)  # server address
+        buff.unpack(UnsignedShort)  # server port
+        next_state = buff.unpack(VarInt)
+
+        self.state = State(next_state)
+        if self.state == State.LOGIN and self.CONNECT_HOST[0]:
+            reader, writer = await asyncio.open_connection(
+                self.CONNECT_HOST[0], self.CONNECT_HOST[1]
+            )
+            self.server_stream = Stream(reader, writer)
+            asyncio.create_task(self.handle_server())
+
+            self.send_packet(
+                self.server_stream,
+                0x00,
+                VarInt.pack(47),
+                String.pack(self.CONNECT_HOST[0]),
+                UnsignedShort.pack(self.CONNECT_HOST[1]),
+                VarInt.pack(State.LOGIN.value),
+            )
+        elif self.state == State.LOGIN and not self.CONNECT_HOST[0]:
+            ...
+
+    @listen_server(0x03, State.LOGIN, blocking=True)
+    async def packet_set_compression(self, buff: Buffer):
+        self.compression_threshold = buff.unpack(VarInt)
+        self.compression = False if self.compression_threshold == -1 else True
+
+    @listen_server(0x01, State.LOGIN, blocking=True)
+    async def packet_encryption_request(self, buff: Buffer):
+        server_id = buff.unpack(String).encode("utf-8")
+        public_key = buff.unpack(ByteArray)
+        verify_token = buff.unpack(ByteArray)
+
+        # generate shared secret
+        secret = token_bytes(16)
+        # client assumes access_token and uuid have been set
+        payload = {
+            "accessToken": self.access_token,
+            "selectedProfile": self.uuid,
+            "serverId": generate_verification_hash(server_id, secret, public_key),
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "https://sessionserver.mojang.com/session/minecraft/join",
+                json=payload,
+                ssl=False,
+            ) as response:
+                if not response.status == 204:
+                    raise Exception(
+                        f"Login failed: {response.status} {await response.json()}"
+                    )
+
+        encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, secret)
+        encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
+
+        self.send_packet(
+            self.server_stream,
+            0x01,
+            ByteArray.pack(encrypted_secret),
+            ByteArray.pack(encrypted_verify_token),
+        )
+
+        # enable encryption
+        self.server_stream.key = secret
+        self.server_stream.key = secret
+
+    @listen_server(0x02, State.LOGIN, blocking=True)
+    async def packet_login_success(self, buff: Buffer):
+        self.state = State.PLAY
+        self.send_packet(self.client_stream, 0x02, buff.read())
