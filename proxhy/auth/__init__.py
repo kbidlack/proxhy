@@ -11,11 +11,16 @@ from appdirs import user_cache_dir
 from .msmcauthaio import MsMcAuth, UserProfile
 
 
+def users() -> list[str]:
+    (cache_dir := Path(user_cache_dir("proxhy"))).mkdir(parents=True, exist_ok=True)
+    return [file.name[5:] for file in cache_dir.glob("auth_*")]
+
+
 # https://pypi.org/project/msmcauthaio/
-async def load_auth_info() -> tuple[str]:
+async def load_auth_info(username: str = "") -> tuple[str]:
     # oh my god this is so stupid lmao
     (cache_dir := Path(user_cache_dir("proxhy"))).mkdir(parents=True, exist_ok=True)
-    auth_cache_path = cache_dir / Path("auth")
+    auth_cache_path = cache_dir / Path(f"auth_{username}")
     if auth_cache_path.exists():
         with open(auth_cache_path, "rb") as file:
             auth_data = file.read()
@@ -40,14 +45,14 @@ async def load_auth_info() -> tuple[str]:
         access_token_gen_time = str(time.time())
         print("done!")
     elif time.time() - float(access_token_gen_time) > 86000.0:
-        print("Regenerating credentials...", end="", flush=True)
+        print(f"Regenerating credentials for {username}...", end="", flush=True)
         user_profile = await MsMcAuth().login(email, password)
         access_token_gen_time = str(time.time())
         print("done!")
     else:
         user_profile = UserProfile(access_token, username, uuid)
 
-    with open(auth_cache_path, "wb") as file:
+    with open(cache_dir / Path(f"auth_{user_profile.username}"), "wb") as file:
         file.write(
             base64.b64encode(
                 str(

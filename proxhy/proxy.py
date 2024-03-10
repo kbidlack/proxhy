@@ -20,7 +20,7 @@ from hypixel.errors import (
 )
 
 from .aliases import Gamemode, Statistic
-from .auth import load_auth_info
+from .auth import load_auth_info, users
 from .client import Client, State, listen_client, listen_server
 from .command import command, commands
 from .datatypes import (
@@ -135,16 +135,28 @@ class ProxyClient(Client):
 
     @listen_client(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
+        username = buff.unpack(String)
+
+        if username.casefold() not in users():
+            self.send_packet(
+                self.client_stream,
+                0x00,
+                Chat.pack(
+                    "§4You are not logged in with this account!\n"
+                    "§4Restart Proxhy with this username to log in."
+                ),
+            )
+            return await self.close()
+
         (
             self.access_token,
             self.username,
             self.uuid,
-        ) = await load_auth_info()
+        ) = await load_auth_info(username)
 
         while not self.server_stream:
             await asyncio.sleep(0.01)
 
-        self.username = buff.unpack(String)
         self.send_packet(self.server_stream, 0x00, String.pack(self.username))
 
     @listen_server(0x01, State.LOGIN, blocking=True)
