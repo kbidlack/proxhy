@@ -172,7 +172,7 @@ class Chat(DataType[str]):
                 text += parse(data["extra"])
             return text
 
-        return re.sub("\u00A7.", "", parse(data))
+        return re.sub("\u00a7.", "", parse(data))
 
 
 class UUID(DataType[uuid.UUID]):
@@ -203,13 +203,3 @@ class Int(DataType[int]):
     @staticmethod
     def unpack(buff) -> int:
         return struct.unpack(">i", buff.read(4))[0]
-
-
-class Short(DataType[int]):
-    @staticmethod
-    def pack(value: int) -> bytes:
-        return struct.pack(">h", value)
-
-    @staticmethod
-    def unpack(buff) -> int:
-        return struct.unpack(">h", buff.read(2))[0]
