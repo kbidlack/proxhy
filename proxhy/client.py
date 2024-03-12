@@ -45,7 +45,7 @@ def listen_server(packet_id: int, state: State = State.PLAY, blocking=False):
     return wrapper
 
 
-class Client:
+class Proxy:
     """
     represents a proxied connection to a client and corresponding connection to server
     """
@@ -123,7 +123,7 @@ class Client:
                     buff = Buffer(data)
 
             packet_id = buff.unpack(VarInt)
-            # print(f"Server: {packet_id=}, {buff.getvalue()=}, {self.state=}")
+            # print(f"Server: {hex(packet_id)=}, {self.state=}")
 
             # call packet handler
             result = server_listeners.get((packet_id, self.state))
@@ -172,7 +172,7 @@ class Client:
         next_state = buff.unpack(VarInt)
 
         self.state = State(next_state)
-        if self.state == State.LOGIN and self.CONNECT_HOST[0]:
+        if self.state == State.LOGIN:
             reader, writer = await asyncio.open_connection(
                 self.CONNECT_HOST[0], self.CONNECT_HOST[1]
             )
@@ -187,8 +187,6 @@ class Client:
                 UnsignedShort.pack(self.CONNECT_HOST[1]),
                 VarInt.pack(State.LOGIN.value),
             )
-        elif self.state == State.LOGIN and not self.CONNECT_HOST[0]:
-            ...
 
     @listen_server(0x03, State.LOGIN, blocking=True)
     async def packet_set_compression(self, buff: Buffer):

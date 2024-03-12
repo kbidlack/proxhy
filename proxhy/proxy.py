@@ -20,7 +20,7 @@ from hypixel.errors import (
 
 from .aliases import Gamemode, Statistic
 from .auth import load_auth_info, users
-from .client import Client, State, listen_client, listen_server
+from .client import Proxy, State, listen_client, listen_server
 from .command import command, commands
 from .datatypes import UUID, Boolean, Buffer, Byte, ByteArray, Chat, String, VarInt
 from .errors import CommandException
@@ -29,7 +29,7 @@ from .models import Game, Team, Teams
 from .packets import roll_packets
 
 
-class ProxyClient(Client):
+class Proxhy(Proxy):
     # load favicon
     # https://github.com/barneygale/quarry/blob/master/quarry/net/server.py/#L356-L357
     favicon_path = Path(__file__).parent.resolve() / "assets" / "favicon.png"
@@ -463,9 +463,10 @@ class ProxyClient(Client):
     async def key(self, key):
         try:
             new_client = hypixel.Client(key)
-            await new_client.validate_keys()
-        except ApiError:
-            raise CommandException("Invalid API Key!")
+            await new_client.player("gamerboy80")  # test key
+            # await new_client.validate_keys()
+        except ApiError as e:
+            raise CommandException(f"Invalid API Key! {e}")
 
         if self.hypixel_client:
             await self.hypixel_client.close()
