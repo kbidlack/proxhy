@@ -64,6 +64,7 @@ class Proxy:
         self.client_stream = Stream(reader, writer)
 
         self.state = State.HANDSHAKING
+        self.open = True
         self.compression = False
         self.server_stream: Stream | None = None
 
@@ -155,12 +156,14 @@ class Proxy:
         await self.close()
 
     async def close(self):
+        if not self.open:
+            return
+
+        self.open = False
+
         if self.server_stream:
             self.server_stream.close()
         self.client_stream.close()
-
-        del self  # idk if this does anything or not
-        # on second thought probably not but whatever
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
