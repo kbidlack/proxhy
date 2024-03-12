@@ -47,3 +47,12 @@ class Game:
 
         for key, value in data.items():
             setattr(self, key, value)
+
+
+@dataclass
+class Pos:
+    """integer block position"""
+
+    x: int
+    y: int
+    z: int

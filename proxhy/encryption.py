@@ -2,11 +2,16 @@ from asyncio import StreamReader, StreamWriter
 from hashlib import sha1
 
 from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.asymmetric.padding import PKCS1v15
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import CFB8
-from cryptography.hazmat.primitives.serialization import load_der_public_key
+from cryptography.hazmat.primitives.serialization import (
+    load_der_private_key,
+    load_der_public_key,
+)
 
 
 class Stream:
@@ -58,6 +63,11 @@ def pkcs1_v15_padded_rsa_encrypt(der_public_key, decrypted):
     return public_key.encrypt(decrypted, PKCS1v15())
 
 
+def pkcs1_v15_padded_rsa_decrypt(der_private_key, encrypted):
+    private_key = load_der_private_key(der_private_key, password=None)
+    return private_key.decrypt(encrypted, PKCS1v15())
+
+
 # https://github.com/ammaraskar/pyCraft/blob/master/minecraft/networking/encryption.py#L45-L62
 def generate_verification_hash(
     server_id: bytes, shared_secret: bytes, public_key: bytes
@@ -69,3 +79,28 @@ def generate_verification_hash(
 
     number = int.from_bytes(verification_hash.digest(), byteorder="big", signed=True)
     return format(number, "x")
+
+
+def generate_rsa_keypair() -> tuple[bytes, bytes]:
+    # Generate private key
+    private_key = rsa.generate_private_key(
+        public_exponent=65537, key_size=1024, backend=default_backend()
+    )
+
+    # Generate public key
+    public_key = private_key.public_key()
+
+    # Serialize private key in ASN.1 DER format
+    der_private_key = private_key.private_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    )
+
+    # Serialize public key in ASN.1 DER format
+    der_public_key = public_key.public_bytes(
+        encoding=serialization.Encoding.DER,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    )
+
+    return der_private_key, der_public_key

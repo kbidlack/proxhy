@@ -7,6 +7,8 @@ import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
 
+from models import Pos
+
 
 class Buffer(BytesIO):
     def unpack[T](self, kind: type[DataType[T]]) -> T:
@@ -121,6 +123,7 @@ class Long(DataType[int]):
 
 
 class Byte(DataType[bytes]):
+    # could unpack >b (to int)
     @staticmethod
     def pack(value: bytes) -> bytes:
         return value  # most useful method
@@ -128,6 +131,16 @@ class Byte(DataType[bytes]):
     @staticmethod
     def unpack(buff) -> bytes:
         return buff.read(1)
+
+
+class UnsignedByte(DataType[int]):
+    @staticmethod
+    def pack(value: int) -> bytes:
+        return struct.pack(">B", value)
+
+    @staticmethod
+    def unpack(buff) -> int:
+        return struct.unpack(">B", buff.read(1))[0]
 
 
 class ByteArray(DataType[bytes]):
@@ -203,3 +216,51 @@ class Int(DataType[int]):
     @staticmethod
     def unpack(buff) -> int:
         return struct.unpack(">i", buff.read(4))[0]
+
+
+class Position(DataType[Pos]):
+    @staticmethod
+    def pack(value: tuple[int, int, int] | Pos) -> bytes:
+        if isinstance(value, Pos):
+            value = value.x, value.y, value.z
+
+        x, y, z = value
+        x &= 0x3FFFFFF
+        y &= 0xFFF
+        z &= 0x3FFFFFF
+        return struct.pack(">Q", (x << 38) | (y << 26) | z)
+
+    @staticmethod
+    def unpack(buff) -> Pos:
+        # decode position (rewrite function):
+        value = struct.unpack(">Q", buff.read(8))[0]
+        x = value >> 38
+        y = (value >> 26) & 0xFFF
+        z = value & 0x3FFFFFF
+        if x >= 2**25:
+            x -= 2**26
+        if y >= 2**11:
+            y -= 2**12
+        if z >= 2**25:
+            z -= 2**26
+        return Pos(x, y, z)
+
+
+class Double(DataType[float]):
+    @staticmethod
+    def pack(value: float) -> bytes:
+        return struct.pack(">d", value)
+
+    @staticmethod
+    def unpack(buff) -> float:
+        return struct.unpack(">d", buff.read(8))[0]
+
+
+class Float(DataType[float]):
+    @staticmethod
+    def pack(value: float) -> bytes:
+        return struct.pack(">f", value)
+
+    @staticmethod
+    def unpack(buff) -> float:
+        return struct.unpack(">f", buff.read(4))[0]
