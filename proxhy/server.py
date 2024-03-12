@@ -11,7 +11,10 @@ from enum import Enum
 from secrets import token_bytes
 
 import aiohttp
-from datatypes import (
+
+from .client import Proxy
+from .datatypes import (
+    # UUID,
     Boolean,
     Buffer,
     Byte,
@@ -27,13 +30,13 @@ from datatypes import (
     UnsignedShort,
     VarInt,
 )
-from encryption import (
+from .encryption import (
     Stream,
     generate_rsa_keypair,
     generate_verification_hash,
     pkcs1_v15_padded_rsa_decrypt,
 )
-from models import Pos
+from .models import Pos
 
 listeners = {}
 
@@ -74,6 +77,8 @@ class Client:
         self.compression = False
         self.compression_threshold = -1
 
+        self.getting_data = False
+
     def send_packet(self, id: int, *data: bytes) -> None:
         packet = VarInt.pack(id) + b"".join(data)
         packet_length = VarInt.pack(len(packet))
@@ -89,8 +94,20 @@ class Client:
 
         self.stream.write(packet_length + packet)
 
-    async def close(self):
-        self.stream.close()
+    async def close(self, reason: str = ""):
+        if self.stream.open:
+            if not reason:
+                self.send_packet(0x40, Chat.pack("§4Broadcast server closed!"))
+            else:
+                self.send_packet(0x40, Chat.pack(reason))
+            self.stream.close()
+        elif self.username:
+            self.server.chat(f"§b{self.username} §4left the broadcast!")
+
+        try:
+            self.server.clients.remove(self)
+        except ValueError:
+            pass
 
     async def handle(self):
         while packet_length := await VarInt.unpack_stream(self.stream):
@@ -107,6 +124,7 @@ class Client:
                         asyncio.create_task(handler(self, Buffer(buff.read())))
                 # else:
                 #     self.send_packet(self.server_stream, packet_id, buff.read())
+        self.stream.close()
         await self.close()
 
     @listen(0x00, State.STATUS, blocking=True)
@@ -115,7 +133,7 @@ class Client:
         server_list_ping = {
             "version": {"name": "1.8.9", "protocol": 47},
             "players": {
-                "max": 3,
+                "max": 3,  # TODO enforce max players
                 "online": online,
             },
             "description": {"text": "Spectate"},
@@ -129,7 +147,7 @@ class Client:
         # close connection
         await self.close()
 
-    @listen(0x00, State.LOGIN, blocking=True)
+    @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
 
@@ -162,6 +180,7 @@ class Client:
 
     @listen(0x01, State.LOGIN, blocking=True)
     async def packet_encryption_response(self, buff: Buffer):
+        # TODO compression
         # login success
         self.shared_secret = pkcs1_v15_padded_rsa_decrypt(
             self.private_key, buff.unpack(ByteArray)
@@ -193,15 +212,16 @@ class Client:
         await self.join()
 
     async def join(self):
-        self.state = State.PLAY
-        self.server.clients.append(self)
-
         self.send_packet(0x02, String.pack(str(self.uuid)), String.pack(self.username))
 
-        possible_entity_ids = set(
-            range(0, 1000) - {c.entity_id for c in self.server.clients}
-        )  # avoid duplicate entity ids
-        self.entity_id = random.choice(list(possible_entity_ids))
+        self.server.chat(
+            f"§b{self.username} §9({self.address[0]}) §ejoined the broadcast!"
+        )
+
+        possible_entity_ids = set(range(0, 1000)) - {
+            c.entity_id for c in self.server.clients
+        }  # avoid duplicate entity ids
+        self.entity_id: int = random.choice(list(possible_entity_ids))
 
         # TODO get game state from proxy
         self.send_packet(
@@ -224,35 +244,90 @@ class Client:
             Float.pack(0),  # pitch
             Byte.pack(b"\x00"),  # flags
         )
-        self.send_packet(
-            0x02, Chat.pack("Please wait for a new join packet to be sent!"), b"\x00"
-        )
+        self.send_packet(0x02, Chat.pack_msg("Welcome to the broadcast!"))
+
+        self.state = State.PLAY
+        self.server.clients.append(self)
+        asyncio.create_task(self.keep_alive())
+
+    async def keep_alive(self):
+        while True:
+            await asyncio.sleep(10)
+            if (
+                self.state == State.PLAY
+                and self.stream.open
+                and self in self.server.clients
+            ):
+                self.send_packet(0x00, VarInt.pack(random.randint(0, 256)))
+            else:
+                break
+
+    @listen(0x01, State.PLAY)
+    async def packet_chat_message(self, buff: Buffer):
+        message = buff.unpack(String)
+        self.server.chat(f"§3[§5BROADCAST§3] §b{self.username}: §e{message}")
+
+    @listen(0x15, State.PLAY)
+    async def packet_client_settings(self, buff: Buffer):
+        _ = buff.unpack(String)  # locale
+        _ = buff.unpack(Byte)  # view distance
+        chat_mode = buff.unpack(Byte)[0]
+        chat_mode  # TODO respect chat mode
+
+    # @listen(0x18, State.PLAY)
+    # async def packet_spectate(self, buff: Buffer):
+    #     target = buff.unpack(UUID)
+    #     for client in self.server.clients:
+    #         if client.uuid == target:
+    #             # TODO
+    #             self.server.proxy.send_packet(
+    #                 self.server.proxy.client_stream,
+    #                 0x18,
+    #                 Int.pack(client.entity_id),
+    #             )
+    #             break
 
 
 class Server:
-    def __init__(self):
+    def __init__(self, proxy: Proxy):
         self.all_clients: list[Client] = []
         self.clients: list[Client] = []  # clients in play state
+
+        self.proxy = proxy
 
     def announce(self, id: int, *data: bytes) -> None:
         for client in self.clients:
             client.send_packet(id, *data)
 
-    def announce_all(self, id: int, *data: bytes) -> None:
-        for client in self.all_clients:
-            client.send_packet(id, *data)
+    def chat(self, message: str) -> None:
+        msg = Chat.pack_msg(message)
+        self.announce(0x02, msg)
+        self.proxy.send_packet(self.proxy.client_stream, 0x02, msg)
+
+    # def announce_all(self, id: int, *data: bytes) -> None:
+    #     for client in self.all_clients:
+    #         client.send_packet(id, *data)
 
     async def handle_client(self, reader: StreamReader, writer: StreamWriter):
         self.all_clients.append(client := Client(reader, writer, self))
         asyncio.create_task(client.handle())
 
+    async def close(self, reason: str = ""):
+        for client in self.all_clients:
+            await client.close(reason)
+
+        self.aserver.close()
+        await self.aserver.wait_closed()
+
+    async def serve_forever(self, port: int = 25565):
+        self.aserver = await asyncio.start_server(self.handle_client, "localhost", port)
+        async with self.aserver:
+            await self.aserver.serve_forever()
+
 
 async def main():
     server = Server()
-    server = await asyncio.start_server(server.handle_client, "localhost", 25565)
-    print("Started server!")
-    async with server:
-        await server.serve_forever()
+    await server.serve_forever()
 
 
 if __name__ == "__main__":

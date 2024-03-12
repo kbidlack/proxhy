@@ -5,7 +5,7 @@ import re
 import time
 import uuid
 from pathlib import Path
-from typing import Self
+from typing import Literal, Self
 
 import hypixel
 from hypixel import Player
@@ -27,6 +27,7 @@ from .errors import CommandException
 from .formatting import FormattedPlayer
 from .models import Game, Team, Teams
 from .packets import roll_packets
+from .server import Server
 
 
 class Proxhy(Proxy):
@@ -62,15 +63,28 @@ class Proxhy(Proxy):
 
         self.waiting_for_locraw = False
         self.game_error = None  # if error has been sent that game
+        self.logged_in = False
+
+        self.username = ""
 
         self.rolling = (None, None)
         self.rolling_target = 0
 
+        self.broadcast_server = None
+
         # TODO move to config file or something similar
-        self.CONNECT_HOST = ("mc.hypixel.net", 25565)
+        # self.CONNECT_HOST = ("mc.hypixel.net", 25565)
+        self.CONNECT_HOST = ("192.168.68.72", 25565)
 
     async def close(self):
+        if not self.open:
+            return
+
         await super().close()
+
+        if self.username and self.broadcast_server:
+            await self.stop_broadcast(disconnected=True)
+
         if self.hypixel_client:
             await self.hypixel_client.close()
 
@@ -103,6 +117,7 @@ class Proxhy(Proxy):
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
+        self.logged_in = True
 
         self.hypixel_client = hypixel.Client()  # TODO
         self.send_packet(self.client_stream, 0x02, buff.read())
@@ -266,8 +281,7 @@ class Proxhy(Proxy):
                     self.send_packet(
                         self.client_stream,
                         0x02,
-                        Chat.pack(f"§9§l∎ §4{err.message}"),
-                        b"\x00",
+                        Chat.pack_msg(f"§9§l∎ §4{err.message}"),
                     )
                 else:
                     if output:
@@ -279,7 +293,7 @@ class Proxhy(Proxy):
                             )
                         else:
                             self.send_packet(
-                                self.client_stream, 0x02, Chat.pack(output), b"\x00"
+                                self.client_stream, 0x02, Chat.pack_msg(output)
                             )
             else:
                 self.send_packet(self.server_stream, 0x01, buff.getvalue())
@@ -369,14 +383,13 @@ class Proxhy(Proxy):
     # debug command sorta
     @command("game")
     async def _game(self):
-        self.send_packet(self.client_stream, 0x02, Chat.pack("§aGame:"), b"\x00")
+        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aGame:"))
         for key in self.game.__annotations__:
             if value := getattr(self.game, key):
                 self.send_packet(
                     self.client_stream,
                     0x02,
-                    Chat.pack(f"§b{key.capitalize()}: §e{value}"),
-                    b"\x00",
+                    Chat.pack_msg(f"§b{key.capitalize()}: §e{value}"),
                 )
 
     @command("teams")
@@ -394,26 +407,21 @@ class Proxhy(Proxy):
             case "off":
                 self.rolling = (None, None)
                 self.send_packet(
-                    self.client_stream,
-                    0x02,
-                    Chat.pack("§bRolling §l§4OFF"),
-                    b"\x00",
+                    self.client_stream, 0x02, Chat.pack_msg("§bRolling §l§4OFF")
                 )
             case "ticket":
                 self.rolling = ("Ticket Machine", "Ticket Machine")
                 self.send_packet(
                     self.client_stream,
                     0x02,
-                    Chat.pack("§bRolling §l§aTicket Machine"),
-                    b"\x00",
+                    Chat.pack_msg("§bRolling §l§aTicket Machine"),
                 )
             case "arcade":
                 self.rolling = ("Item Submission", "Arcade Player")
                 self.send_packet(
                     self.client_stream,
                     0x02,
-                    Chat.pack("§bRolling §l§aArcade Player"),
-                    b"\x00",
+                    Chat.pack_msg("§bRolling §l§aArcade Player"),
                 )
             case _:
                 raise CommandException(f"Unknown target '{target}'!")
@@ -447,8 +455,7 @@ class Proxhy(Proxy):
             self.send_packet(
                 self.client_stream,
                 0x02,
-                Chat.pack(f"§aSet target to §l§b{self.rolling_target}"),
-                b"\x00",
+                Chat.pack_msg(f"§aSet target to §l§b{self.rolling_target}"),
             )
 
     # ---------------------------------------------------------------------------------
@@ -457,7 +464,7 @@ class Proxhy(Proxy):
     async def updategame(self):
         self.waiting_for_locraw = True
         self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
-        self.send_packet(self.client_stream, 0x02, Chat.pack("§aUpdating!"), b"\x00")
+        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aUpdating!"))
 
     @command()
     async def key(self, key):
@@ -472,12 +479,7 @@ class Proxhy(Proxy):
             await self.hypixel_client.close()
 
         self.hypixel_client = new_client
-        self.send_packet(
-            self.client_stream,
-            0x02,
-            Chat.pack("§aUpdated API Key!"),
-            b"\x00",
-        )
+        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aUpdated API Key!"))
 
     async def _update_stats(self):
         if self.waiting_for_locraw:
@@ -534,8 +536,7 @@ class Proxhy(Proxy):
                         self.send_packet(
                             self.client_stream,
                             0x02,
-                            Chat.pack(err_message[type(player)]),
-                            b"\x00",
+                            Chat.pack_msg(err_message[type(player)]),
                         )
                     continue
                 elif not isinstance(player, Player):
@@ -594,3 +595,78 @@ class Proxhy(Proxy):
                     self.players_with_stats.update(
                         {player.name: (player.uuid, display_name)}
                     )
+
+    @command("broadcast", "bc")
+    async def broadcast(self, action: Literal["start", "stop", "chat"], *args):
+        if action != "start" and not self.broadcast_server:
+            raise CommandException("You are not broadcasting!")
+
+        # TODO: kick, info
+        if action == "start":
+            if len(args) > 1:
+                raise CommandException(
+                    "Too many arguments for broadcast start! (expected 1; port)"
+                )
+            if self.broadcast_server:
+                raise CommandException("You are already broadcasting!")
+
+            if args and not args[0].isdigit():
+                raise CommandException("Port must be a number!")
+
+            if args and (not 1000 < int(args[0]) < 65535):
+                raise CommandException(
+                    "Port must be between 1000 and 65535 (exclusive)!"
+                )
+
+            await self.start_broadcast(*args)
+        elif action == "stop":
+            if args:
+                raise CommandException(
+                    "Too many arguments for broadcast stop! (expected 0)"
+                )
+
+            await self.stop_broadcast()
+        elif action == "chat":
+            if not args:
+                raise CommandException("No message provided!")
+
+            msg = Chat.pack_msg(
+                f"§3[§5BROADCAST§3] §b{self.username}: §e{" ".join(args)}"
+            )
+            self.broadcast_server.announce(0x02, msg)
+            self.send_packet(self.client_stream, 0x02, msg)
+        else:
+            raise CommandException(f"Unknown action '{action}'!")
+
+    async def start_broadcast(self, port: int = 25565):
+        self.broadcast_server = Server(self)
+        asyncio.create_task(self.broadcast_server.serve_forever(port))
+
+        self.send_packet(
+            self.client_stream, 0x02, Chat.pack_msg("§aStarted broadcasting!")
+        )
+
+    async def stop_broadcast(self, disconnected: bool = False):
+        if self.broadcast_server is not None:
+            reason = (
+                "§4Broadcast owner disconnected!"
+                if disconnected
+                else "§4Broadcast stopped!"
+            )
+            await self.broadcast_server.close(reason)
+
+            self.broadcast_server = None
+
+            self.send_packet(
+                self.client_stream, 0x02, Chat.pack_msg("§aStopped broadcasting!")
+            )
+
+    async def client_packet(self, packet_id: int, packet_data: Buffer):
+        if packet_id == 0x01 and self.broadcast_server:  # join game
+            for client in self.broadcast_server.clients:
+                client.getting_data = True
+
+        # this blocks, so we should move on quickly
+        # if self.broadcast_server:
+        #     for client in [c for c in self.broadcast_server.clients if c.getting_data]:
+        #         await client.send_packet(packet_id, packet_data.read())
