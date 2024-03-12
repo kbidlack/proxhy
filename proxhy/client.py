@@ -87,24 +87,34 @@ class Proxy:
 
         stream.write(packet_length + packet)
 
+    async def client_packet(self, *_):
+        pass
+
+    async def server_packet(self, *_):
+        pass
+
     async def handle_client(self):
         while packet_length := await VarInt.unpack_stream(self.client_stream):
             if data := await self.client_stream.read(packet_length):
                 buff = Buffer(data)
-                packet_id = buff.unpack(VarInt)
-
                 # print(f"Client: {packet_id=}, {buff.getvalue()=}, {self.state=}")
+
+                packet_id = buff.unpack(VarInt)
+                packet_data = buff.read()
+
+                # extra packet handling
+                await self.client_packet(packet_id, Buffer(packet_data))
 
                 # call packet handler
                 result = client_listeners.get((packet_id, self.state))
                 if result:
                     handler, blocking = result
                     if blocking:
-                        await handler(self, Buffer(buff.read()))
+                        await handler(self, Buffer(packet_data))
                     else:
-                        asyncio.create_task(handler(self, Buffer(buff.read())))
+                        asyncio.create_task(handler(self, Buffer(packet_data)))
                 else:
-                    self.send_packet(self.server_stream, packet_id, buff.read())
+                    self.send_packet(self.server_stream, packet_id, packet_data)
         await self.close()
 
     async def handle_server(self):
@@ -123,18 +133,22 @@ class Proxy:
                     buff = Buffer(data)
 
             packet_id = buff.unpack(VarInt)
+            packet_data = buff.read()
             # print(f"Server: {hex(packet_id)=}, {self.state=}")
+
+            # extra packet handling
+            await self.server_packet(packet_id, Buffer(packet_data))
 
             # call packet handler
             result = server_listeners.get((packet_id, self.state))
             if result:
                 handler, blocking = result
                 if blocking:
-                    await handler(self, Buffer(buff.read()))
+                    await handler(self, Buffer(packet_data))
                 else:
-                    asyncio.create_task(handler(self, Buffer(buff.read())))
+                    asyncio.create_task(handler(self, Buffer(packet_data)))
             else:
-                self.send_packet(self.client_stream, packet_id, buff.read())
+                self.send_packet(self.client_stream, packet_id, packet_data)
 
             data = b""
 
