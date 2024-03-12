@@ -7,7 +7,7 @@ import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
 
-from models import Pos
+from .models import Pos
 
 
 class Buffer(BytesIO):
@@ -161,6 +161,10 @@ class Chat(DataType[str]):
     @staticmethod
     def pack(value: str) -> bytes:
         return String.pack(json.dumps({"text": value}))
+
+    @staticmethod
+    def pack_msg(value: str) -> bytes:
+        return String.pack(json.dumps({"text": value})) + b"\x00"
 
     @staticmethod
     def unpack(buff) -> str:
