@@ -1,3 +1,4 @@
+import asyncio
 from asyncio import StreamReader, StreamWriter
 from hashlib import sha1
 
@@ -28,6 +29,8 @@ class Stream:
         self.encrypted = False
         self.open = True
 
+        self.paused = False
+
     @property
     def key(self):
         return self._key
@@ -42,9 +45,16 @@ class Stream:
 
     async def read(self, n=-1):
         data = await self.reader.read(n)
+
+        while self.paused:
+            await asyncio.sleep(0.1)
+
         return self.decryptor.update(data) if self.encrypted else data
 
     def write(self, data):
+        if self.writer.transport._conn_lost:
+            return self.close()
+
         if self.open:
             return self.writer.write(
                 self.encryptor.update(data) if self.encrypted else data
