@@ -13,7 +13,7 @@ class Team:
     players: set[str]
 
 
-class Teams(list):
+class Teams(list[Team]):
     def __getitem__(self, key) -> Team:
         return next((team for team in self if team.name == key), None)
 
@@ -53,6 +53,6 @@ class Game:
 class Pos:
     """integer block position"""
 
-    x: int
-    y: int
-    z: int
+    x: int = 0
+    y: int = 0
+    z: int = 0

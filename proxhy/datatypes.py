@@ -7,7 +7,7 @@ import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
 
-from .models import Pos
+from .mcmodels import Pos
 
 
 class Buffer(BytesIO):
@@ -125,8 +125,10 @@ class Long(DataType[int]):
 class Byte(DataType[bytes]):
     # could unpack >b (to int)
     @staticmethod
-    def pack(value: bytes) -> bytes:
-        return value  # most useful method
+    def pack(value: bytes | int | float) -> bytes:
+        if isinstance(value, (int, float)):
+            return struct.pack(">b", int(value))
+        return value
 
     @staticmethod
     def unpack(buff) -> bytes:
@@ -135,8 +137,13 @@ class Byte(DataType[bytes]):
 
 class UnsignedByte(DataType[int]):
     @staticmethod
-    def pack(value: int) -> bytes:
-        return struct.pack(">B", value)
+    def pack(value: bytes | int | float) -> bytes:
+        if isinstance(value, (int, float)):
+            try:
+                return struct.pack(">B", int(value))
+            except struct.error:
+                print(value)
+        return value
 
     @staticmethod
     def unpack(buff) -> int:
@@ -215,7 +222,7 @@ class Boolean(DataType[bool]):
 class Int(DataType[int]):
     @staticmethod
     def pack(value: int) -> bytes:
-        return struct.pack(">i", value)
+        return struct.pack(">i", int(value))
 
     @staticmethod
     def unpack(buff) -> int:
@@ -268,3 +275,16 @@ class Float(DataType[float]):
     @staticmethod
     def unpack(buff) -> float:
         return struct.unpack(">f", buff.read(4))[0]
+
+
+class Angle(DataType[float]):
+    @staticmethod
+    def pack(value: float) -> bytes:
+        return UnsignedByte.pack(int(256 * ((value % 360) / 360)))
+        # print(struct.pack(">B", int(value * 256 / 360) & 0xFF))
+        return struct.pack(">B", int(value * 256 / 360) & 0xFF)
+
+    @staticmethod
+    def unpack(buff: Buffer) -> float:
+        return 360 * buff.unpack(UnsignedByte) / 256
+        return (struct.unpack(">B", buff.read(1))[0] * 360) / 256

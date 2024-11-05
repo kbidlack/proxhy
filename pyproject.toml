@@ -1,29 +1,12 @@
 [project]
 name = "proxhy"
-version = "0.1.0"
-description = "Proxy for Hypixel"
-authors = [
-    { name = "Kavi Bidlack", email = "ksbidlack@gmail.com" }
-]
-dependencies = [
-    "aiohttp>=3.9.3",
-    "hypixel.py[speed]>=0.4.2",
-    "appdirs>=1.4.4",
-    "cryptography>=42.0.5",
-]
+version = "1.0.0"
+description = "A Hypixel Proxy"
 readme = "README.md"
-requires-python = ">= 3.12"
-
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.rye]
-managed = true
-dev-dependencies = []
-
-[tool.hatch.metadata]
-allow-direct-references = true
-
-[tool.hatch.build.targets.wheel]
-packages = ["src/proxhy"]
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.10.10",
+    "appdirs>=1.4.4",
+    "cryptography>=43.0.3",
+    "hypixel-py[speed]>=0.4.2",
+]

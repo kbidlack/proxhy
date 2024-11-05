@@ -9,8 +9,9 @@ from ..models import PreAuthResponse, UserLoginResponse
 
 __all__ = ("Xbox",)
 
+
 class Xbox:
-    """"Xbox requests handler.
+    """ "Xbox requests handler.
 
     Attributes
     ----------
@@ -33,7 +34,9 @@ class Xbox:
 
         return PreAuthResponse(flow_token=flow_token, post_url=post_url)
 
-    async def xbox_login(self, email: str, password: str, pre_auth: PreAuthResponse) -> UserLoginResponse:
+    async def xbox_login(
+        self, email: str, password: str, pre_auth: PreAuthResponse
+    ) -> UserLoginResponse:
         """Check user credentials.
 
         Parameters
@@ -50,30 +53,38 @@ class Xbox:
             User login response.
         """
 
-        data = f"login={self.encode(email)}&loginfmt={self.encode(email)}" \
-               f"&passwd={self.encode(password)}&PPFT={self.encode(pre_auth.flow_token)}"
+        data = (
+            f"login={self.encode(email)}&loginfmt={self.encode(email)}"
+            f"&passwd={self.encode(password)}&PPFT={self.encode(pre_auth.flow_token)}"
+        )
 
         res, text = await self.http.request(
             pre_auth.post_url,
-            "POST", data=data,
+            "POST",
+            data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            allow_redirects=True
+            allow_redirects=True,
         )
 
-        if "access_token" not in str(res.real_url) or str(res.real_url) == pre_auth.post_url:
+        if (
+            "access_token" not in str(res.real_url)
+            or str(res.real_url) == pre_auth.post_url
+        ):
             if "Sign in to" in str(text):
                 raise InvalidCredentials("Provided credentials was invalid.")
             elif "Help us protect your account" in str(text):
                 raise TwoFactorAccount("2FA is enabled but not supported yet.")
             else:
-                raise MsMcAuthException(f"Something went wrong. Status Code: {res.status}")
+                raise MsMcAuthException(
+                    f"Something went wrong. Status Code: {res.status}"
+                )
 
         data = str(res.real_url).split("#")[1].split("&")
         return UserLoginResponse(
             refresh_token=data[4].split("=")[1],
             access_token=data[0].split("=")[1],
             expires_in=int(data[2].split("=")[1]),
-            logged_in=True
+            logged_in=True,
         )
 
     def encode(self, data: str) -> str:

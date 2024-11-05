@@ -3,7 +3,7 @@ import sys
 from asyncio import StreamReader, StreamWriter
 
 from .auth import load_auth_info, users
-from .proxy import Proxhy
+from .proxhy import Proxhy
 
 
 async def handle_client(reader: StreamReader, writer: StreamWriter):
