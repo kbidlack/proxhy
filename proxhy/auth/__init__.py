@@ -57,9 +57,9 @@ async def load_auth_info(username: str = "") -> tuple[str]:
     ) = ast.literal_eval(base64.b64decode(auth_data).decode("utf-8"))
 
     if time.time() - float(access_token_gen_time) > 86000.0:
-        user_profile = await MsMcAuth().login(email, password)
+        print("Regenerating credentials...", end=" ", flush=True)
+        access_token, username, uuid = await login(email, password)
         access_token_gen_time = str(time.time())
-    else:
-        user_profile = UserProfile(access_token, username, uuid)
+        print("done!")
 
-    return user_profile.access_token, user_profile.username, user_profile.uuid
+    return access_token, username, uuid
