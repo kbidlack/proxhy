@@ -65,7 +65,6 @@ class Proxy:
 
         self.state = State.HANDSHAKING
         self.open = True
-        self.compression = False
         self.server_stream: Stream | None = None
 
         self.CONNECT_HOST = ("", 0)
@@ -73,22 +72,6 @@ class Proxy:
         self.username = ""
 
         asyncio.create_task(self.handle_client())
-
-    def send_packet(self, stream: Stream, id: int, *data: bytes) -> None:
-        packet = VarInt(id) + b"".join(data)
-        packet_length = VarInt(len(packet))
-
-        if self.compression and stream is self.server_stream:
-            if len(packet) >= self.compression_threshold:
-                compressed_packet = zlib.compress(packet)
-                data_length = packet_length
-                packet = data_length + compressed_packet
-                packet_length = VarInt(len(packet))
-            else:
-                packet = VarInt(0) + VarInt(id) + b"".join(data)
-                packet_length = VarInt(len(packet))
-
-        stream.write(packet_length + packet)
 
     async def handle_client(self):
         while packet_length := await VarInt.unpack_stream(self.client_stream):
@@ -108,7 +91,7 @@ class Proxy:
                     else:
                         asyncio.create_task(handler(self, Buffer(packet_data)))
                 else:
-                    self.send_packet(self.server_stream, packet_id, packet_data)
+                    self.server_stream.send_packet(packet_id, packet_data)
 
         await self.close()
 
@@ -120,9 +103,9 @@ class Proxy:
                 data += newdata
 
             buff = Buffer(data)
-            if self.compression:
+            if self.server_stream.compression:
                 data_length = buff.unpack(VarInt)
-                if data_length >= self.compression_threshold:
+                if data_length >= self.server_stream.compression_threshold:
                     # print(buff.getvalue())
                     data = zlib.decompress(buff.read())
                     buff = Buffer(data)
@@ -140,7 +123,7 @@ class Proxy:
                 else:
                     asyncio.create_task(handler(self, Buffer(packet_data)))
             else:
-                self.send_packet(self.client_stream, packet_id, packet_data)
+                self.client_stream.send_packet(packet_id, packet_data)
 
             data = b""
 
@@ -158,14 +141,12 @@ class Proxy:
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
-        self.send_packet(
-            self.client_stream, 0x00, String(json.dumps(self.server_list_ping))
-        )
+        self.client_stream.send_packet(0x00, String(json.dumps(self.server_list_ping)))
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self, buff: Buffer):
         payload = buff.unpack(Long)
-        self.send_packet(self.client_stream, 0x01, Long(payload))
+        self.client_stream.send_packet(0x01, Long(payload))
         # close connection
         await self.close()
 
@@ -187,8 +168,7 @@ class Proxy:
             self.server_stream = Stream(reader, writer)
             asyncio.create_task(self.handle_server())
 
-            self.send_packet(
-                self.server_stream,
+            self.server_stream.send_packet(
                 0x00,
                 VarInt(47),
                 String(self.CONNECT_HOST[0]),
@@ -198,8 +178,10 @@ class Proxy:
 
     @listen_server(0x03, State.LOGIN, blocking=True)
     async def packet_set_compression(self, buff: Buffer):
-        self.compression_threshold = buff.unpack(VarInt)
-        self.compression = False if self.compression_threshold == -1 else True
+        self.server_stream.compression_threshold = buff.unpack(VarInt)
+        self.server_stream.compression = (
+            False if self.server_stream.compression_threshold == -1 else True
+        )
 
     @listen_server(0x01, State.LOGIN, blocking=True)
     async def packet_encryption_request(self, buff: Buffer):
@@ -229,8 +211,7 @@ class Proxy:
         encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, secret)
         encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
 
-        self.send_packet(
-            self.server_stream,
+        self.server_stream.send_packet(
             0x01,
             ByteArray(encrypted_secret),
             ByteArray(encrypted_verify_token),
@@ -243,4 +224,4 @@ class Proxy:
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-        self.send_packet(self.client_stream, 0x02, buff.read())
+        self.client_stream.send_packet(0x02, buff.read())

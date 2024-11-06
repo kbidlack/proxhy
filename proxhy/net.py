@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import asyncio
+import zlib
 from asyncio import StreamReader, StreamWriter
 from hashlib import sha1
 
@@ -14,11 +17,14 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_public_key,
 )
 
+from .datatypes import VarInt
+
 
 class Stream:
     """
     Wrapper for both StreamReader and StreamWriter because
     I cannot be bothered to use them BOTH like come on man
+    also implements packet sending
     """
 
     def __init__(self, reader: StreamReader, writer: StreamWriter):
@@ -27,8 +33,11 @@ class Stream:
 
         self._key = None
         self.encrypted = False
-        self.open = True
+        self.compression = False
+        self.compression_threshold = -1
 
+        self.open = True
+        # this isn't really used but whatever
         self.paused = False
 
     @property
@@ -52,7 +61,8 @@ class Stream:
         return self.decryptor.update(data) if self.encrypted else data
 
     def write(self, data):
-        if self.writer.transport._conn_lost:
+        if self.writer.transport._conn_lost:  # AHHHH ITS FIXED !!!
+            # socket.send() raised exception can die
             return self.close()
 
         if self.open:
@@ -66,6 +76,22 @@ class Stream:
     def close(self):
         self.open = False
         return self.writer.close()
+
+    def send_packet(self, id: int, *data: bytes) -> None:
+        packet = VarInt(id) + b"".join(data)
+        packet_length = VarInt(len(packet))
+
+        if self.compression:
+            if len(packet) >= self.compression_threshold:
+                compressed_packet = zlib.compress(packet)
+                data_length = packet_length
+                packet = data_length + compressed_packet
+                packet_length = VarInt(len(packet))
+            else:
+                packet = VarInt(0) + VarInt(id) + b"".join(data)
+                packet_length = VarInt(len(packet))
+
+        self.write(packet_length + packet)
 
 
 def pkcs1_v15_padded_rsa_encrypt(der_public_key, decrypted):

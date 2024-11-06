@@ -106,9 +106,7 @@ class Proxhy(Proxy):
         while True:
             await asyncio.sleep(10)
             if self.state == State.PLAY and self.client_stream.open:
-                self.send_packet(
-                    self.client_stream, 0x00, VarInt(random.randint(0, 256))
-                )
+                self.client_stream.send_packet(0x00, VarInt(random.randint(0, 256)))
             else:
                 await self.close()
                 break
@@ -120,53 +118,34 @@ class Proxhy(Proxy):
 
         # fake server stream
         self.server_stream = Mock()
-
-        self.send_packet(
-            self.client_stream,
-            0x02,
-            String(str(uuid.uuid4())),
-            String(self.username),
+        self.client_stream.send_packet(
+            0x02, String(str(uuid.uuid4())), String(self.username)
         )
 
-        self.send_packet(
-            self.client_stream,
+        self.client_stream.send_packet(
             0x01,
-            Int(0),  # entity id
-            UnsignedByte(3),  # gamemode
-            Byte(b"\x01"),  # dimension
-            UnsignedByte(0),  # difficulty
-            UnsignedByte(1),  # max players
-            String("default"),  # level type
-            Boolean(True),  # reduced debug info
+            Int(0),
+            UnsignedByte(3),
+            Byte(b"\x01"),
+            UnsignedByte(0),
+            UnsignedByte(1),
+            String("default"),
+            Boolean(True),
         )
-        self.send_packet(self.client_stream, 0x05, Position(Pos(0, 0, 0)))
-        self.send_packet(
-            self.client_stream,
-            0x08,
-            Double(0),  # x
-            Double(0),  # y
-            Double(0),  # z
-            Float(0),  # yaw
-            Float(0),  # pitch
-            Byte(b"\x00"),  # flags
+
+        self.client_stream.send_packet(0x05, Position(Pos(0, 0, 0)))
+        self.client_stream.send_packet(
+            0x08, Double(0), Double(0), Double(0), Float(0), Float(0), Byte(b"\x00")
         )
 
         asyncio.create_task(self.login_keep_alive())
 
-        self.send_packet(
-            self.client_stream,
-            0x02,
-            Chat.pack_msg("-" * 20),
-        )
-        self.send_packet(
-            self.client_stream,
+        self.client_stream.send_packet(
             0x02,
             Chat.pack_msg("You have not logged into Proxhy with this account yet!"),
         )
-        self.send_packet(
-            self.client_stream,
-            0x02,
-            Chat.pack_msg("Use /login <email> <password> to log in."),
+        self.client_stream.send_packet(
+            0x02, Chat.pack_msg("Use /login <email> <password> to log in.")
         )
 
     @listen_client(0x00, State.HANDSHAKING, blocking=True)
@@ -196,18 +175,18 @@ class Proxhy(Proxy):
             self.server_stream = Stream(reader, writer)
             asyncio.create_task(self.handle_server())
 
-            self.send_packet(
-                self.server_stream,
+            self.server_stream.send_packet(
                 0x00,
                 VarInt(47),
                 String(self.CONNECT_HOST[0]),
                 UnsignedShort(self.CONNECT_HOST[1]),
                 VarInt(State.LOGIN.value),
             )
+
         self.access_token, self.username, self.uuid = await load_auth_info(
             self.username
         )
-        self.send_packet(self.server_stream, 0x00, String(self.username))
+        self.server_stream.send_packet(0x00, String(self.username))
 
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
@@ -215,11 +194,11 @@ class Proxhy(Proxy):
         self.logged_in = True
 
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
-        self.send_packet(self.client_stream, 0x02, buff.read())
+        self.client_stream.send_packet(0x02, buff.read())
 
     @listen_client(0x17)
     async def packet_plugin_channel(self, buff: Buffer):
-        self.send_packet(self.server_stream, 0x17, buff.getvalue())
+        self.server_stream.send_packet(0x17, buff.getvalue())
 
         channel = buff.unpack(String)
         data = buff.unpack(ByteArray)
@@ -239,12 +218,11 @@ class Proxhy(Proxy):
         self.players_getting_stats.clear()
 
         self.game_error = None
-
-        self.send_packet(self.client_stream, 0x01, buff.getvalue())
+        self.client_stream.send_packet(0x01, buff.getvalue())
 
         if not self.client == "lunar":
             self.waiting_for_locraw = True
-            self.send_packet(self.server_stream, 0x01, String("/locraw"))
+            self.server_stream.send_packet(0x01, String("/locraw"))
 
     @listen_server(0x3E, blocking=True)
     async def packet_teams(self, buff: Buffer):
@@ -306,8 +284,7 @@ class Proxhy(Proxy):
                 ),
                 ("", ""),
             )
-            self.send_packet(
-                self.client_stream,
+            self.client_stream.send_packet(
                 0x38,
                 VarInt(3),
                 VarInt(1),
@@ -315,8 +292,7 @@ class Proxhy(Proxy):
                 Boolean(True),
                 Chat(prefix + display_name + suffix),
             )
-
-        self.send_packet(self.client_stream, 0x3E, buff.getvalue())
+        self.client_stream.send_packet(0x3E, buff.getvalue())
 
         if mode in {b"\x03", b"\x04"}:
             asyncio.create_task(self._update_stats())
@@ -339,16 +315,14 @@ class Proxhy(Proxy):
                         return
                     else:
                         await asyncio.sleep(0.1)
-                        return self.send_packet(
-                            self.server_stream, 0x01, String("/locraw")
-                        )
+                        return self.server_stream.send_packet(0x01, String("/locraw"))
                 else:
                     self.waiting_for_locraw = False
                     await _update_game(self, json.loads(message))
             else:
                 await _update_game(self, json.loads(message))
 
-        self.send_packet(self.client_stream, 0x02, buff.getvalue())
+        self.client_stream.send_packet(0x02, buff.getvalue())
 
     @listen_client(0x01)
     async def packet_client_chat_message(self, buff: Buffer):
@@ -364,20 +338,16 @@ class Proxhy(Proxy):
                 try:
                     output = await command(self, message)
                 except CommandException as err:
-                    self.send_packet(
-                        self.client_stream,
-                        0x02,
-                        Chat.pack_msg(f"§9§l∎ §4{err.message}"),
+                    self.client_stream.send_packet(
+                        0x02, Chat.pack_msg(f"§9§l∎ §4{err.message}")
                     )
                 else:
                     if output:
-                        self.send_packet(
-                            self.client_stream, 0x02, Chat.pack_msg(output)
-                        )
+                        self.client_stream.send_packet(0x02, Chat.pack_msg(output))
             else:
-                self.send_packet(self.server_stream, 0x01, buff.getvalue())
+                self.server_stream.send_packet(0x01, buff.getvalue())
         else:
-            self.send_packet(self.server_stream, 0x01, buff.getvalue())
+            self.server_stream.send_packet(0x01, buff.getvalue())
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
@@ -395,11 +365,11 @@ class Proxhy(Proxy):
                 except KeyError:
                     pass  # some things fail idk
 
-        self.send_packet(self.client_stream, 0x38, buff.getvalue())
+        self.client_stream.send_packet(0x38, buff.getvalue())
 
     @command("login")
     async def login_command(self, email, password):
-        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§6Logging in..."))
+        self.client_stream.send_packet(0x02, Chat.pack_msg("§6Logging in..."))
         if not self.logging_in:
             raise CommandException("You can't use that right now!")
 
@@ -420,10 +390,8 @@ class Proxhy(Proxy):
         self.access_token = access_token
         self.uuid = uuid
 
-        self.send_packet(
-            self.client_stream,
-            0x02,
-            Chat.pack_msg("§aLogged in; rejoin proxhy to play!"),
+        self.client_stream.send_packet(
+            0x02, Chat.pack_msg("§aLogged in!; rejoin proxhy to play!")
         )
         self.state = State.LOGIN
 
@@ -432,9 +400,7 @@ class Proxhy(Proxy):
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
         else:
-            self.send_packet(
-                self.server_stream, 0x01, String(f"/play {self.rq_game.mode}")
-            )
+            self.server_stream.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
 
     @command()  # Mmm, garlic bread.
     async def garlicbread(self):  # Mmm, garlic bread.
@@ -488,31 +454,27 @@ class Proxhy(Proxy):
     # sorta debug commands
     @command("game")
     async def _game(self):
-        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aGame:"))
+        self.client_stream.send_packet(0x02, Chat.pack_msg("§aGame:"))
         for key in self.game.__annotations__:
             if value := getattr(self.game, key):
-                self.send_packet(
-                    self.client_stream,
-                    0x02,
-                    Chat.pack_msg(f"§b{key.capitalize()}: §e{value}"),
+                self.client_stream.send_packet(
+                    0x02, Chat.pack_msg(f"§b{key.capitalize()}: §e{value}")
                 )
 
     @command("rqgame")
     async def _rqgame(self):
-        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aGame:"))
+        self.client_stream.send_packet(0x02, Chat.pack_msg("§aRequeue Game:"))
         for key in self.rq_game.__annotations__:
             if value := getattr(self.rq_game, key):
-                self.send_packet(
-                    self.client_stream,
-                    0x02,
-                    Chat.pack_msg(f"§b{key.capitalize()}: §e{value}"),
+                self.client_stream.send_packet(
+                    0x02, Chat.pack_msg(f"§b{key.capitalize()}: §e{value}")
                 )
 
     @command("ug")
     async def updategame(self):
         self.waiting_for_locraw = True
-        self.send_packet(self.server_stream, 0x01, String("/locraw"))
-        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aUpdating!"))
+        self.server_stream.send_packet(0x01, String("/locraw"))
+        self.client_stream.send_packet(0x02, Chat.pack_msg("§aUpdating!"))
 
     @property
     def hypixel_api_key(self):
@@ -551,7 +513,7 @@ class Proxhy(Proxy):
         self.hypixel_api_key = key
         await self._update_stats()
         self.hypixel_client = new_client
-        self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aUpdated API Key!"))
+        self.client_stream.send_packet(0x02, Chat.pack_msg("§aUpdated API Key!"))
 
     async def _update_stats(self):
         if self.waiting_for_locraw:
@@ -603,10 +565,8 @@ class Proxhy(Proxy):
 
                     if not self.game_error:
                         self.game_error = player
-                        self.send_packet(
-                            self.client_stream,
-                            0x02,
-                            Chat.pack_msg(err_message[type(player)]),
+                        self.client_stream.send_packet(
+                            0x02, Chat.pack_msg(err_message[type(player)])
                         )
                     continue
                 elif not isinstance(player, Player):
@@ -636,9 +596,7 @@ class Proxhy(Proxy):
                             )
                     else:
                         display_name = f"§5[NICK] {player.name}"
-
-                    self.send_packet(
-                        self.client_stream,
+                    self.client_stream.send_packet(
                         0x38,
                         VarInt(3),
                         VarInt(1),
