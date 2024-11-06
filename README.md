@@ -1,4 +1,4 @@
 <div align="center">
     <h1>Proxhy</h1>
-    <p>An Hypixel proxy written in Python.</p>
+    <p>A Hypixel proxy written in Python.</p>
 </div>

@@ -135,7 +135,7 @@ class UnsignedByte(DataType[int]):
     def pack(value: bytes | int | float) -> bytes:
         if isinstance(value, (int, float)):
             try:
-                return struct(">B", int(value))
+                return struct.pack(">B", int(value))
             except struct.error:
                 print(value)
         return value
