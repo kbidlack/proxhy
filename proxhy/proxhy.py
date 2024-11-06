@@ -139,14 +139,10 @@ class Proxhy(Proxy):
         )
 
         asyncio.create_task(self.login_keep_alive())
-
-        self.client_stream.send_packet(
-            0x02,
-            Chat.pack_msg("You have not logged into Proxhy with this account yet!"),
+        self.client_stream.chat(
+            "You have not logged into Proxhy with this account yet!"
         )
-        self.client_stream.send_packet(
-            0x02, Chat.pack_msg("Use /login <email> <password> to log in.")
-        )
+        self.client_stream.chat("Use /login <email> <password> to log in.")
 
     @listen_client(0x00, State.HANDSHAKING, blocking=True)
     async def packet_handshake(self, buff: Buffer):
@@ -173,6 +169,7 @@ class Proxhy(Proxy):
                 self.CONNECT_HOST[0], self.CONNECT_HOST[1]
             )
             self.server_stream = Stream(reader, writer)
+            self.server_stream.destination = 1
             asyncio.create_task(self.handle_server())
 
             self.server_stream.send_packet(
@@ -338,12 +335,10 @@ class Proxhy(Proxy):
                 try:
                     output = await command(self, message)
                 except CommandException as err:
-                    self.client_stream.send_packet(
-                        0x02, Chat.pack_msg(f"§9§l∎ §4{err.message}")
-                    )
+                    self.client_stream.chat(f"§9§l∎ §4{err.message}")
                 else:
                     if output:
-                        self.client_stream.send_packet(0x02, Chat.pack_msg(output))
+                        self.client_stream.chat(output)
             else:
                 self.server_stream.send_packet(0x01, buff.getvalue())
         else:
@@ -369,7 +364,7 @@ class Proxhy(Proxy):
 
     @command("login")
     async def login_command(self, email, password):
-        self.client_stream.send_packet(0x02, Chat.pack_msg("§6Logging in..."))
+        self.client_stream.chat("§6Logging in...")
         if not self.logging_in:
             raise CommandException("You can't use that right now!")
 
@@ -390,9 +385,7 @@ class Proxhy(Proxy):
         self.access_token = access_token
         self.uuid = uuid
 
-        self.client_stream.send_packet(
-            0x02, Chat.pack_msg("§aLogged in!; rejoin proxhy to play!")
-        )
+        self.client_stream.chat("§aLogged in; rejoin proxhy to play!")
         self.state = State.LOGIN
 
     @command("rq")
@@ -454,27 +447,23 @@ class Proxhy(Proxy):
     # sorta debug commands
     @command("game")
     async def _game(self):
-        self.client_stream.send_packet(0x02, Chat.pack_msg("§aGame:"))
+        self.client_stream.chat("§aGame:")
         for key in self.game.__annotations__:
             if value := getattr(self.game, key):
-                self.client_stream.send_packet(
-                    0x02, Chat.pack_msg(f"§b{key.capitalize()}: §e{value}")
-                )
+                self.client_stream.chat(f"§b{key.capitalize()}: §e{value}")
 
     @command("rqgame")
     async def _rqgame(self):
-        self.client_stream.send_packet(0x02, Chat.pack_msg("§aRequeue Game:"))
+        self.client_stream.chat("§aRequeue Game:")
         for key in self.rq_game.__annotations__:
             if value := getattr(self.rq_game, key):
-                self.client_stream.send_packet(
-                    0x02, Chat.pack_msg(f"§b{key.capitalize()}: §e{value}")
-                )
+                self.client_stream.chat(f"§b{key.capitalize()}: §e{value}")
 
     @command("ug")
     async def updategame(self):
         self.waiting_for_locraw = True
         self.server_stream.send_packet(0x01, String("/locraw"))
-        self.client_stream.send_packet(0x02, Chat.pack_msg("§aUpdating!"))
+        self.client_stream.chat("§aUpdating!")
 
     @property
     def hypixel_api_key(self):
@@ -513,7 +502,7 @@ class Proxhy(Proxy):
         self.hypixel_api_key = key
         await self._update_stats()
         self.hypixel_client = new_client
-        self.client_stream.send_packet(0x02, Chat.pack_msg("§aUpdated API Key!"))
+        self.client_stream.chat("§aUpdated API Key!")
 
     async def _update_stats(self):
         if self.waiting_for_locraw:
@@ -565,9 +554,7 @@ class Proxhy(Proxy):
 
                     if not self.game_error:
                         self.game_error = player
-                        self.client_stream.send_packet(
-                            0x02, Chat.pack_msg(err_message[type(player)])
-                        )
+                        self.client_stream.chat(err_message[type(player)])
                     continue
                 elif not isinstance(player, Player):
                     # TODO log this
