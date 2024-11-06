@@ -75,18 +75,18 @@ class Proxy:
         asyncio.create_task(self.handle_client())
 
     def send_packet(self, stream: Stream, id: int, *data: bytes) -> None:
-        packet = VarInt.pack(id) + b"".join(data)
-        packet_length = VarInt.pack(len(packet))
+        packet = VarInt(id) + b"".join(data)
+        packet_length = VarInt(len(packet))
 
         if self.compression and stream is self.server_stream:
             if len(packet) >= self.compression_threshold:
                 compressed_packet = zlib.compress(packet)
                 data_length = packet_length
                 packet = data_length + compressed_packet
-                packet_length = VarInt.pack(len(packet))
+                packet_length = VarInt(len(packet))
             else:
-                packet = VarInt.pack(0) + VarInt.pack(id) + b"".join(data)
-                packet_length = VarInt.pack(len(packet))
+                packet = VarInt(0) + VarInt(id) + b"".join(data)
+                packet_length = VarInt(len(packet))
 
         stream.write(packet_length + packet)
 
@@ -159,13 +159,13 @@ class Proxy:
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
         self.send_packet(
-            self.client_stream, 0x00, String.pack(json.dumps(self.server_list_ping))
+            self.client_stream, 0x00, String(json.dumps(self.server_list_ping))
         )
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self, buff: Buffer):
         payload = buff.unpack(Long)
-        self.send_packet(self.client_stream, 0x01, Long.pack(payload))
+        self.send_packet(self.client_stream, 0x01, Long(payload))
         # close connection
         await self.close()
 
@@ -190,10 +190,10 @@ class Proxy:
             self.send_packet(
                 self.server_stream,
                 0x00,
-                VarInt.pack(47),
-                String.pack(self.CONNECT_HOST[0]),
-                UnsignedShort.pack(self.CONNECT_HOST[1]),
-                VarInt.pack(State.LOGIN.value),
+                VarInt(47),
+                String(self.CONNECT_HOST[0]),
+                UnsignedShort(self.CONNECT_HOST[1]),
+                VarInt(State.LOGIN.value),
             )
 
     @listen_server(0x03, State.LOGIN, blocking=True)
@@ -232,8 +232,8 @@ class Proxy:
         self.send_packet(
             self.server_stream,
             0x01,
-            ByteArray.pack(encrypted_secret),
-            ByteArray.pack(encrypted_verify_token),
+            ByteArray(encrypted_secret),
+            ByteArray(encrypted_verify_token),
         )
 
         # enable encryption

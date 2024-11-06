@@ -16,13 +16,8 @@ class Buffer(BytesIO):
 
 
 class DataType[T](ABC):
-    def __init__(self, value: bytes | T):
-        if isinstance(value, bytes):
-            self.value = Buffer(value).unpack(self)
-            self.packed = value
-        else:
-            self.value = value
-            self.packed = self.pack(value)
+    def __new__(cls, value: T) -> bytes:
+        return cls.pack(value)
 
     @staticmethod
     @abstractmethod
@@ -31,7 +26,7 @@ class DataType[T](ABC):
 
     @staticmethod
     @abstractmethod
-    def unpack[B: BytesIO](buff: B) -> T:
+    def unpack(buff: BytesIO) -> T:
         pass
 
 
@@ -84,7 +79,7 @@ class String(DataType[str]):
     @staticmethod
     def pack(value: str) -> bytes:
         bvalue = value.encode("utf-8")
-        return VarInt.pack(len(bvalue)) + bvalue
+        return VarInt(len(bvalue)) + bvalue
 
     @staticmethod
     def unpack(buff) -> str:
@@ -140,7 +135,7 @@ class UnsignedByte(DataType[int]):
     def pack(value: bytes | int | float) -> bytes:
         if isinstance(value, (int, float)):
             try:
-                return struct.pack(">B", int(value))
+                return struct(">B", int(value))
             except struct.error:
                 print(value)
         return value
@@ -153,7 +148,7 @@ class UnsignedByte(DataType[int]):
 class ByteArray(DataType[bytes]):
     @staticmethod
     def pack(value: bytes) -> bytes:
-        return VarInt.pack(len(value)) + value
+        return VarInt(len(value)) + value
 
     @staticmethod
     def unpack(buff) -> bytes:
@@ -167,11 +162,11 @@ class Chat(DataType[str]):
 
     @staticmethod
     def pack(value: str) -> bytes:
-        return String.pack(json.dumps({"text": value}))
+        return String(json.dumps({"text": value}))
 
     @staticmethod
     def pack_msg(value: str) -> bytes:
-        return String.pack(json.dumps({"text": value})) + b"\x00"
+        return String(json.dumps({"text": value})) + b"\x00"
 
     @staticmethod
     def unpack(buff) -> str:
@@ -280,9 +275,8 @@ class Float(DataType[float]):
 class Angle(DataType[float]):
     @staticmethod
     def pack(value: float) -> bytes:
-        return UnsignedByte.pack(int(256 * ((value % 360) / 360)))
-        # print(struct.pack(">B", int(value * 256 / 360) & 0xFF))
-        return struct.pack(">B", int(value * 256 / 360) & 0xFF)
+        return UnsignedByte(int(256 * ((value % 360) / 360)))
+        # return struct.pack(">B", int(value * 256 / 360) & 0xFF)
 
     @staticmethod
     def unpack(buff: Buffer) -> float:

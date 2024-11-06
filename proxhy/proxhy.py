@@ -107,7 +107,7 @@ class Proxhy(Proxy):
             await asyncio.sleep(10)
             if self.state == State.PLAY and self.client_stream.open:
                 self.send_packet(
-                    self.client_stream, 0x00, VarInt.pack(random.randint(0, 256))
+                    self.client_stream, 0x00, VarInt(random.randint(0, 256))
                 )
             else:
                 await self.close()
@@ -124,31 +124,31 @@ class Proxhy(Proxy):
         self.send_packet(
             self.client_stream,
             0x02,
-            String.pack(str(uuid.uuid4())),
-            String.pack(self.username),
+            String(str(uuid.uuid4())),
+            String(self.username),
         )
 
         self.send_packet(
             self.client_stream,
             0x01,
-            Int.pack(0),  # entity id
-            UnsignedByte.pack(3),  # gamemode
-            Byte.pack(b"\x01"),  # dimension
-            UnsignedByte.pack(0),  # difficulty
-            UnsignedByte.pack(1),  # max players
-            String.pack("default"),  # level type
-            Boolean.pack(True),  # reduced debug info
+            Int(0),  # entity id
+            UnsignedByte(3),  # gamemode
+            Byte(b"\x01"),  # dimension
+            UnsignedByte(0),  # difficulty
+            UnsignedByte(1),  # max players
+            String("default"),  # level type
+            Boolean(True),  # reduced debug info
         )
-        self.send_packet(self.client_stream, 0x05, Position.pack(Pos(0, 0, 0)))
+        self.send_packet(self.client_stream, 0x05, Position(Pos(0, 0, 0)))
         self.send_packet(
             self.client_stream,
             0x08,
-            Double.pack(0),  # x
-            Double.pack(0),  # y
-            Double.pack(0),  # z
-            Float.pack(0),  # yaw
-            Float.pack(0),  # pitch
-            Byte.pack(b"\x00"),  # flags
+            Double(0),  # x
+            Double(0),  # y
+            Double(0),  # z
+            Float(0),  # yaw
+            Float(0),  # pitch
+            Byte(b"\x00"),  # flags
         )
 
         asyncio.create_task(self.login_keep_alive())
@@ -199,15 +199,15 @@ class Proxhy(Proxy):
             self.send_packet(
                 self.server_stream,
                 0x00,
-                VarInt.pack(47),
-                String.pack(self.CONNECT_HOST[0]),
-                UnsignedShort.pack(self.CONNECT_HOST[1]),
-                VarInt.pack(State.LOGIN.value),
+                VarInt(47),
+                String(self.CONNECT_HOST[0]),
+                UnsignedShort(self.CONNECT_HOST[1]),
+                VarInt(State.LOGIN.value),
             )
         self.access_token, self.username, self.uuid = await load_auth_info(
             self.username
         )
-        self.send_packet(self.server_stream, 0x00, String.pack(self.username))
+        self.send_packet(self.server_stream, 0x00, String(self.username))
 
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
@@ -244,7 +244,7 @@ class Proxhy(Proxy):
 
         if not self.client == "lunar":
             self.waiting_for_locraw = True
-            self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
+            self.send_packet(self.server_stream, 0x01, String("/locraw"))
 
     @listen_server(0x3E, blocking=True)
     async def packet_teams(self, buff: Buffer):
@@ -309,11 +309,11 @@ class Proxhy(Proxy):
             self.send_packet(
                 self.client_stream,
                 0x38,
-                VarInt.pack(3),
-                VarInt.pack(1),
-                UUID.pack(uuid.UUID(str(_uuid))),
-                Boolean.pack(True),
-                Chat.pack(prefix + display_name + suffix),
+                VarInt(3),
+                VarInt(1),
+                UUID(uuid.UUID(str(_uuid))),
+                Boolean(True),
+                Chat(prefix + display_name + suffix),
             )
 
         self.send_packet(self.client_stream, 0x3E, buff.getvalue())
@@ -340,7 +340,7 @@ class Proxhy(Proxy):
                     else:
                         await asyncio.sleep(0.1)
                         return self.send_packet(
-                            self.server_stream, 0x01, String.pack("/locraw")
+                            self.server_stream, 0x01, String("/locraw")
                         )
                 else:
                     self.waiting_for_locraw = False
@@ -433,7 +433,7 @@ class Proxhy(Proxy):
             raise CommandException("No game to requeue!")
         else:
             self.send_packet(
-                self.server_stream, 0x01, String.pack(f"/play {self.rq_game.mode}")
+                self.server_stream, 0x01, String(f"/play {self.rq_game.mode}")
             )
 
     @command()  # Mmm, garlic bread.
@@ -511,7 +511,7 @@ class Proxhy(Proxy):
     @command("ug")
     async def updategame(self):
         self.waiting_for_locraw = True
-        self.send_packet(self.server_stream, 0x01, String.pack("/locraw"))
+        self.send_packet(self.server_stream, 0x01, String("/locraw"))
         self.send_packet(self.client_stream, 0x02, Chat.pack_msg("§aUpdating!"))
 
     @property
@@ -640,11 +640,11 @@ class Proxhy(Proxy):
                     self.send_packet(
                         self.client_stream,
                         0x38,
-                        VarInt.pack(3),
-                        VarInt.pack(1),
-                        UUID.pack(uuid.UUID(str(player.uuid))),
-                        Boolean.pack(True),
-                        Chat.pack(display_name),
+                        VarInt(3),
+                        VarInt(1),
+                        UUID(uuid.UUID(str(player.uuid))),
+                        Boolean(True),
+                        Chat(display_name),
                     )
                     self.players_with_stats.update(
                         {player.name: (player.uuid, display_name)}
