@@ -166,6 +166,7 @@ class Proxy:
                 self.CONNECT_HOST[0], self.CONNECT_HOST[1]
             )
             self.server_stream = Stream(reader, writer)
+            self.server_stream.destination = 1
             asyncio.create_task(self.handle_server())
 
             self.server_stream.send_packet(

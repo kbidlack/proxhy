@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_public_key,
 )
 
-from .datatypes import VarInt
+from .datatypes import Chat, String, VarInt
 
 
 class Stream:
@@ -39,6 +39,9 @@ class Stream:
         self.open = True
         # this isn't really used but whatever
         self.paused = False
+
+        # more minecraft specific stuff
+        self.destination = 0  # 0 = client, 1 = server
 
     @property
     def key(self):
@@ -77,6 +80,7 @@ class Stream:
         self.open = False
         return self.writer.close()
 
+    # more minecraft specific stuff
     def send_packet(self, id: int, *data: bytes) -> None:
         packet = VarInt(id) + b"".join(data)
         packet_length = VarInt(len(packet))
@@ -92,6 +96,12 @@ class Stream:
                 packet_length = VarInt(len(packet))
 
         self.write(packet_length + packet)
+
+    def chat(self, message: str) -> None:
+        if self.destination == 0:
+            self.send_packet(0x02, Chat.pack_msg(message))
+        else:  # self.destination == 1; server
+            self.send_packet(0x01, String(message))
 
 
 def pkcs1_v15_padded_rsa_encrypt(der_public_key, decrypted):
