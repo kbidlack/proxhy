@@ -338,11 +338,24 @@ class Proxhy(Proxy):
                     self.client_stream.chat(f"§9§l∎ §4{err.message}")
                 else:
                     if output:
-                        self.client_stream.chat(output)
+                        if segments[0].startswith("//"):  # send output of command
+                            # remove chat formatting
+                            output = re.sub(r"§.", "", output)
+                            self.server_stream.chat(output)
+                        else:
+                            self.client_stream.chat(output)
             else:
                 self.server_stream.send_packet(0x01, buff.getvalue())
         else:
             self.server_stream.send_packet(0x01, buff.getvalue())
+
+    @listen_client(0x14)
+    async def packet_tab_complete(self, buff: Buffer):
+        text = buff.unpack(String)
+        if text.startswith("//"):
+            self.server_stream.send_packet(0x14, String(text[1:]), buff.read())
+        else:
+            self.server_stream.send_packet(buff.getvalue())
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
