@@ -58,7 +58,7 @@ class Stream:
     async def read(self, n=-1):
         try:
             data = await self.reader.read(n)
-        except BrokenPipeError:
+        except (BrokenPipeError, ConnectionResetError):
             self.close()
             return b""
 
