@@ -486,8 +486,8 @@ class Proxhy(Proxy):
             new_client = hypixel.Client(key)
             await new_client.player("gamerboy80")  # test key
             # await new_client.validate_keys()
-        except ApiError as e:
-            raise CommandException(f"Invalid API Key! {e}")
+        except (InvalidApiKey, KeyRequired, ApiError):
+            raise CommandException("Invalid API Key!")
         finally:
             if new_client:
                 await new_client.close()
