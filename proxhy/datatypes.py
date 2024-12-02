@@ -6,9 +6,12 @@ import struct
 import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import BinaryIO
+from typing import TYPE_CHECKING
 
 from .mcmodels import Pos
+
+if TYPE_CHECKING:
+    from _typeshed import SupportsRead
 
 
 class Buffer(BytesIO):
@@ -27,7 +30,7 @@ class DataType[T](ABC):
 
     @staticmethod
     @abstractmethod
-    def unpack(buff: BytesIO) -> T:
+    def unpack(buff: SupportsRead[bytes]) -> T:
         pass
 
 
@@ -63,7 +66,7 @@ class VarInt(DataType[int]):
         return total - (1 << 32) if total & (1 << 31) else total
 
     @staticmethod
-    async def unpack_stream(stream: BinaryIO) -> int:
+    async def unpack_stream(stream: SupportsRead[bytes]) -> int:
         total = 0
         shift = 0
         val = 0x80
