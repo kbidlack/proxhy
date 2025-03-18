@@ -45,16 +45,12 @@ def format_bw_fkdr(fkdr):
     elif fkdr < 2.5:
         return "§f" + str(fkdr)
     elif fkdr < 5:
-        return "§e" + str(fkdr)
+        return "§6" + str(fkdr)
     elif fkdr < 10:
         return "§b" + str(fkdr)
     elif fkdr < 20:
-        return "§a" + str(fkdr)
+        return "§4" + str(fkdr)
     elif fkdr < 50:
-        return "§3" + str(fkdr)
-    elif fkdr < 100:
-        return "§c" + str(fkdr)
-    elif fkdr < 1000:
         return "§5" + str(fkdr)
     else:
         return "§0" + str(fkdr)
@@ -496,8 +492,6 @@ class FormattedPlayer:
         return player
 
     def format_stats(self, mode: str, *stats: str, sep=" ", name: bool = True) -> str:
-        # i swear i knew what i was doing when i wrote this but i don't anymore
-        # hopefully i dont have to touch it again...
         formatted_stats = [f"{getattr(getattr(self, mode), 'level')} {self.rankname}"]
         if name:
             formatted_stats += [
