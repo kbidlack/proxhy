@@ -1,6 +1,8 @@
 import asyncio
 import base64
+import datetime
 import json
+import os
 import random
 import re
 import uuid
@@ -89,6 +91,7 @@ class Proxhy(Proxy):
 
         # TODO move to config file or something similar
         self.CONNECT_HOST = ("mc.hypixel.net", 25565)
+        self.log_path = "stat_log.jsonl"
 
     async def close(self):
         if not self.open:
@@ -97,6 +100,7 @@ class Proxhy(Proxy):
         await super().close()
 
         if self.hypixel_client:
+            await self.log_bedwars_stats("logout")
             await self.hypixel_client.close()
 
     async def login_keep_alive(self):
@@ -185,6 +189,9 @@ class Proxhy(Proxy):
         self.logged_in = True
 
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
+
+        await self.log_bedwars_stats("login")
+
         self.client_stream.send_packet(0x02, buff.read())
 
     @listen_client(0x17)
@@ -452,6 +459,158 @@ class Proxhy(Proxy):
         fplayer = FormattedPlayer(player)
         return fplayer.format_stats(gamemode, *stats)
 
+    @command("scw")
+    async def scweekly(self, ign=None, mode=None, *stats):
+        """
+        Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
+        cumulative values from approximately one week ago. It then overrides the player's live FKDR and WLR attributes,
+        uses FormattedPlayer.format_stats to generate the main text, and sends a JSON chat message with a hover event.
+
+        The chosen log entry is the one whose timestamp is closest to one week ago,
+        provided its age is between 0 and 30 days old.
+        """
+
+        # Use player's name and assume gamemode is bedwars.
+        ign = ign or self.username
+        gamemode = "bedwars"
+
+        # Retrieve current player stats from the API.
+        try:
+            current_player = await self.hypixel_client.player(ign)
+            current_stats = current_player._data.get("stats", {}).get("Bedwars", {})
+        except Exception as e:
+            raise CommandException(f"Failed to fetch current stats: {e}")
+
+        # Check that necessary cumulative keys exist.
+        required_keys = [
+            "final_kills_bedwars",
+            "final_deaths_bedwars",
+            "wins_bedwars",
+            "losses_bedwars",
+        ]
+        if not all(key in current_stats for key in required_keys):
+            raise CommandException(
+                "Current stats are missing required data for weekly calculation!"
+            )
+
+        # Determine target timestamp (exactly one week ago).
+        now = datetime.datetime.now()
+        target_time = now - datetime.timedelta(days=7)
+
+        # Read and parse the stat log file.
+        if not os.path.exists(self.log_path):
+            raise CommandException("No log file found; weekly stats unavailable.")
+
+        entries = []
+        with open(self.log_path, "r") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get(
+                        "player", ""
+                    ).casefold() == ign.casefold() and entry.get("bedwars"):
+                        entry["dt"] = datetime.datetime.fromisoformat(
+                            entry["timestamp"]
+                        )
+                        entries.append(entry)
+                except Exception:
+                    continue
+
+        if not entries:
+            raise CommandException("No logged stats available for this player.")
+
+        # Filter entries: they must be at least 5 days old and at most 30 days old.
+        valid_entries = [
+            entry
+            for entry in entries
+            if now - entry["dt"] >= datetime.timedelta(days=0)
+            and now - entry["dt"] <= datetime.timedelta(days=30)
+        ]
+        if not valid_entries:
+            raise CommandException(
+                "Insufficient logged data: no entry is between 5 and 30 days old."
+            )
+
+        # Choose the entry whose timestamp is closest to one week ago.
+        chosen_entry = min(
+            valid_entries,
+            key=lambda entry: abs((entry["dt"] - target_time).total_seconds()),
+        )
+        old_stats = chosen_entry["bedwars"]
+        chosen_date = chosen_entry["dt"]
+
+        # Compute weekly differences (deltas) for each required key.
+        diffs = {}
+        for key in required_keys:
+            try:
+                current_val = float(current_stats.get(key, 0))
+                old_val = float(old_stats.get(key, 0))
+                diff = current_val - old_val
+                if diff < 0:
+                    raise CommandException(
+                        "Logged cumulative values are inconsistent (current value lower than logged value)."
+                    )
+                diffs[key] = diff
+            except Exception:
+                diffs[key] = 0
+
+        # Compute weekly FKDR and WLR.
+        try:
+            weekly_fkdr = (
+                diffs["final_kills_bedwars"] / diffs["final_deaths_bedwars"]
+                if diffs["final_deaths_bedwars"] > 0
+                else float(diffs["final_kills_bedwars"])
+            )
+        except Exception:
+            weekly_fkdr = 0
+        try:
+            weekly_wlr = (
+                diffs["wins_bedwars"] / diffs["losses_bedwars"]
+                if diffs["losses_bedwars"] > 0
+                else float(diffs["wins_bedwars"])
+            )
+        except Exception:
+            weekly_wlr = 0
+
+        # Override the live FKDR and WLR attributes on the player object.
+        current_player.bedwars.fkdr = weekly_fkdr
+        current_player.bedwars.wlr = weekly_wlr
+
+        # Generate the main text using FormattedPlayer.format_stats.
+        fplayer = FormattedPlayer(current_player)
+        main_text = fplayer.format_stats(gamemode, "FKDR", "WLR")
+
+        # Format the chosen log entry date as "Month Day, Year" with ordinal day.
+        def ordinal(n: int) -> str:
+            if 11 <= (n % 100) <= 13:
+                return f"{n}th"
+            last_digit = n % 10
+            if last_digit == 1:
+                return f"{n}st"
+            elif last_digit == 2:
+                return f"{n}nd"
+            elif last_digit == 3:
+                return f"{n}rd"
+            else:
+                return f"{n}th"
+
+        formatted_date = f"{chosen_date.strftime('%B')} {ordinal(chosen_date.day)}, {chosen_date.strftime('%Y')}"
+        # Format the time as e.g. "8:42 PM" (remove any leading zero)
+        formatted_time = chosen_date.strftime("%I:%M %p").lstrip("0")
+        hover_text = f"Weekly Stats for {fplayer.rankname}\nCalculated using data from §e{formatted_date}§f §7({formatted_time})§f"
+
+        # Construct the JSON chat payload with hoverEvent.
+        json_payload = {
+            "text": main_text,
+            "hoverEvent": {"action": "show_text", "value": hover_text},
+        }
+        json_message = json.dumps(json_payload)
+        # Build the chat packet manually and send it.
+        packet = String(json_message) + b"\x00"
+        self.client_stream.send_packet(0x02, packet)
+        # Return None so that the default chat routine doesn't resend.
+        return None
+
     # sorta debug commands
     @command("game")
     async def _game(self):
@@ -591,3 +750,49 @@ class Proxhy(Proxy):
                     self.players_with_stats.update(
                         {player.name: (player.uuid, display_name)}
                     )
+
+    async def log_bedwars_stats(self, event: str) -> None:
+        # chatgpt ahh comments
+        """
+        Fetch the current player's Bedwars stats via the API and append a log record only if the
+        Bedwars data is different from the most recent log entry.
+        The record includes a timestamp, the event ("login" or "logout"), the player's username,
+        and the complete Bedwars stats as provided by the API.
+        """
+        try:
+            # Fetch the latest player data via the API.
+            player = await self.hypixel_client.player(self.username)
+            # Extract the Bedwars statistics.
+            bedwars_stats = player._data.get("stats", {}).get("Bedwars", {})
+        except Exception as e:
+            print(f"Failed to log stats on {event}: {e}")
+            return
+
+        # Create the new log entry.
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "event": event,
+            "player": self.username,
+            "bedwars": bedwars_stats,
+        }
+
+        # Check if the most recent log entry is identical in its 'bedwars' data.
+        if os.path.exists(self.log_path):
+            try:
+                with open(self.log_path, "r") as f:
+                    lines = f.readlines()
+                if lines:
+                    last_line = lines[-1].strip()
+                    last_entry = json.loads(last_line)
+                    # If the bedwars stats haven't changed, skip logging.
+                    if last_entry.get("bedwars") == bedwars_stats:
+                        return
+            except Exception as e:
+                print(f"Error checking last log entry: {e}")
+
+        # Append the new log entry as a JSON line.
+        try:
+            with open(self.log_path, "a") as f:
+                f.write(json.dumps(log_entry) + "\n")
+        except Exception as e:
+            print(f"Error writing stat log: {e}")

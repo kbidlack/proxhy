@@ -452,7 +452,7 @@ def format_sw_star(level, player: Player):
 
 class FormattedPlayer:
     def __new__(cls, original_player: Player):
-        player: cls = deepcopy(original_player)
+        player: FormattedPlayer = deepcopy(original_player)
         player.__class__ = cls
 
         player.rank = get_rank(player)
