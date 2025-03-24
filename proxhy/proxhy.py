@@ -1,8 +1,8 @@
 import asyncio
 import base64
-import datetime
 import json
 import os
+import datetime
 import random
 import re
 import uuid
@@ -44,10 +44,11 @@ from .datatypes import (
     VarInt,
 )
 from .errors import CommandException
-from .formatting import FormattedPlayer
+from .formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from .mcmodels import Game, Team, Teams
 from .net import Stream
 from .proxy import Proxy, State, listen_client, listen_server
+
 
 
 class Proxhy(Proxy):
@@ -96,11 +97,17 @@ class Proxhy(Proxy):
     async def close(self):
         if not self.open:
             return
+    
+        # If the player was logged in, log the logout stats.
+        if self.logged_in:
+            await self.log_bedwars_stats("logout")
+        await super().close()
+        if self.hypixel_client:
+            await self.hypixel_client.close()
 
         await super().close()
 
         if self.hypixel_client:
-            await self.log_bedwars_stats("logout")
             await self.hypixel_client.close()
 
     async def login_keep_alive(self):
@@ -187,9 +194,8 @@ class Proxhy(Proxy):
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
         self.logged_in = True
-
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
-
+        
         await self.log_bedwars_stats("login")
 
         self.client_stream.send_packet(0x02, buff.read())
@@ -459,17 +465,16 @@ class Proxhy(Proxy):
         fplayer = FormattedPlayer(player)
         return fplayer.format_stats(gamemode, *stats)
 
-    @command("scw")
-    async def scweekly(self, ign=None, mode=None, *stats):
-        """
-        Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
+
+    @command("scweekly")
+    async def statcheck_weekly(self, ign=None, mode=None, *stats):
+        """ Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
         cumulative values from approximately one week ago. It then overrides the player's live FKDR and WLR attributes,
         uses FormattedPlayer.format_stats to generate the main text, and sends a JSON chat message with a hover event.
-
-        The chosen log entry is the one whose timestamp is closest to one week ago,
-        provided its age is between 0 and 30 days old.
+        In addition, the hover text now includes per-mode weekly stats for all bedwars modes (Solo, Doubles, 3v3v3v3,
+        4v4v4v4, 4v4, Rush, Ultimate, Lucky, Castle, Swap, Voidless) for which there is updated data.
+        Modes that represent dreams variants (Ultimate, Lucky, Castle, Swap, Voidless) aggregate any split stats.
         """
-
         # Use player's name and assume gamemode is bedwars.
         ign = ign or self.username
         gamemode = "bedwars"
@@ -489,11 +494,8 @@ class Proxhy(Proxy):
             "losses_bedwars",
         ]
         if not all(key in current_stats for key in required_keys):
-            raise CommandException(
-                "Current stats are missing required data for weekly calculation!"
-            )
+            raise CommandException("Current stats are missing required data for weekly calculation!")
 
-        # Determine target timestamp (exactly one week ago).
         now = datetime.datetime.now()
         target_time = now - datetime.timedelta(days=7)
 
@@ -506,12 +508,8 @@ class Proxhy(Proxy):
             for line in f:
                 try:
                     entry = json.loads(line.strip())
-                    if entry.get(
-                        "player", ""
-                    ).casefold() == ign.casefold() and entry.get("bedwars"):
-                        entry["dt"] = datetime.datetime.fromisoformat(
-                            entry["timestamp"]
-                        )
+                    if entry.get("player", "").casefold() == ign.casefold() and entry.get("bedwars"):
+                        entry["dt"] = datetime.datetime.fromisoformat(entry["timestamp"])
                         entries.append(entry)
                 except Exception:
                     continue
@@ -519,27 +517,20 @@ class Proxhy(Proxy):
         if not entries:
             raise CommandException("No logged stats available for this player.")
 
-        # Filter entries: they must be at least 5 days old and at most 30 days old.
+        # Filter entries: they must be at most 30 days old.
         valid_entries = [
-            entry
-            for entry in entries
-            if now - entry["dt"] >= datetime.timedelta(days=0)
-            and now - entry["dt"] <= datetime.timedelta(days=30)
+            entry for entry in entries
+            if now - entry["dt"] <= datetime.timedelta(days=30)
         ]
         if not valid_entries:
-            raise CommandException(
-                "Insufficient logged data: no entry is between 5 and 30 days old."
-            )
+            raise CommandException("Insufficient logged data: no entry is between 5 and 30 days old.")
 
         # Choose the entry whose timestamp is closest to one week ago.
-        chosen_entry = min(
-            valid_entries,
-            key=lambda entry: abs((entry["dt"] - target_time).total_seconds()),
-        )
+        chosen_entry = min(valid_entries, key=lambda entry: abs((entry["dt"] - target_time).total_seconds()))
         old_stats = chosen_entry["bedwars"]
         chosen_date = chosen_entry["dt"]
 
-        # Compute weekly differences (deltas) for each required key.
+        # Compute weekly differences for overall stats.
         diffs = {}
         for key in required_keys:
             try:
@@ -547,40 +538,33 @@ class Proxhy(Proxy):
                 old_val = float(old_stats.get(key, 0))
                 diff = current_val - old_val
                 if diff < 0:
-                    raise CommandException(
-                        "Logged cumulative values are inconsistent (current value lower than logged value)."
-                    )
+                    raise CommandException("Logged cumulative values are inconsistent (current value lower than logged value).")
                 diffs[key] = diff
             except Exception:
                 diffs[key] = 0
 
-        # Compute weekly FKDR and WLR.
         try:
-            weekly_fkdr = (
-                diffs["final_kills_bedwars"] / diffs["final_deaths_bedwars"]
-                if diffs["final_deaths_bedwars"] > 0
-                else float(diffs["final_kills_bedwars"])
-            )
+            weekly_fkdr = diffs["final_kills_bedwars"] / diffs["final_deaths_bedwars"] if diffs["final_deaths_bedwars"] > 0 else float(diffs["final_kills_bedwars"])
         except Exception:
             weekly_fkdr = 0
         try:
-            weekly_wlr = (
-                diffs["wins_bedwars"] / diffs["losses_bedwars"]
-                if diffs["losses_bedwars"] > 0
-                else float(diffs["wins_bedwars"])
-            )
+            weekly_wlr = diffs["wins_bedwars"] / diffs["losses_bedwars"] if diffs["losses_bedwars"] > 0 else float(diffs["wins_bedwars"])
         except Exception:
             weekly_wlr = 0
+
+        # Round overall values to 2 decimal places.
+        weekly_fkdr = round(weekly_fkdr, 2)
+        weekly_wlr = round(weekly_wlr, 2)
 
         # Override the live FKDR and WLR attributes on the player object.
         current_player.bedwars.fkdr = weekly_fkdr
         current_player.bedwars.wlr = weekly_wlr
 
-        # Generate the main text using FormattedPlayer.format_stats.
+        # Generate the main text using your existing formatting.
         fplayer = FormattedPlayer(current_player)
         main_text = fplayer.format_stats(gamemode, "FKDR", "WLR")
 
-        # Format the chosen log entry date as "Month Day, Year" with ordinal day.
+        # Format the chosen log entry date.
         def ordinal(n: int) -> str:
             if 11 <= (n % 100) <= 13:
                 return f"{n}th"
@@ -593,23 +577,120 @@ class Proxhy(Proxy):
                 return f"{n}rd"
             else:
                 return f"{n}th"
-
         formatted_date = f"{chosen_date.strftime('%B')} {ordinal(chosen_date.day)}, {chosen_date.strftime('%Y')}"
-        # Format the time as e.g. "8:42 PM" (remove any leading zero)
-        formatted_time = chosen_date.strftime("%I:%M %p").lstrip("0")
+        formatted_time = chosen_date.strftime('%I:%M %p').lstrip("0")
         hover_text = f"Weekly Stats for {fplayer.rankname}\nCalculated using data from §e{formatted_date}§f §7({formatted_time})§f"
 
-        # Construct the JSON chat payload with hoverEvent.
+        non_dream_mapping = {
+            "Solo": "eight_one",
+            "Doubles": "eight_two",
+            "3v3v3v3": "four_three",
+            "4v4v4v4": "four_four",
+            "4v4": "two_four"
+        }
+        dream_mapping = {
+            "Rush": "rush",
+            "Ultimate": "ultimate",
+            "Lucky": "lucky",
+            "Castle": "castle",
+            "Swap": "swap",
+            "Voidless": "voidless"
+        }
+
+        # List of modes in the order to appear.
+        modes = [
+            "Solo",
+            "Doubles",
+            "3v3v3v3",
+            "4v4v4v4",
+            "4v4",
+            "Rush",
+            "Ultimate",
+            "Lucky",
+            "Castle",
+            "Swap",
+            "Voidless",
+        ]
+        mode_lines = []
+
+        for mode in modes:
+            if mode in non_dream_mapping:
+                prefix = non_dream_mapping[mode]
+                fk_key = f"{prefix}_final_kills_bedwars"
+                fd_key = f"{prefix}_final_deaths_bedwars"
+                wins_key = f"{prefix}_wins_bedwars"
+                losses_key = f"{prefix}_losses_bedwars"
+
+                diff_fk = float(current_stats.get(fk_key, 0)) - float(old_stats.get(fk_key, 0))
+                diff_fd = float(current_stats.get(fd_key, 0)) - float(old_stats.get(fd_key, 0))
+                diff_wins = float(current_stats.get(wins_key, 0)) - float(old_stats.get(wins_key, 0))
+                diff_losses = float(current_stats.get(losses_key, 0)) - float(old_stats.get(losses_key, 0))
+
+            else:
+                # For dream modes, aggregate over any key that includes the dream substring.
+                dream_sub = dream_mapping[mode]
+                diff_fk = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_final_kills_bedwars") and f"_{dream_sub}_" in key
+                )
+                diff_fd = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_final_deaths_bedwars") and f"_{dream_sub}_" in key
+                )
+                diff_wins = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_wins_bedwars") and f"_{dream_sub}_" in key
+                )
+                diff_losses = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_losses_bedwars") and f"_{dream_sub}_" in key
+                )
+
+            # Skip mode if no difference in any stat.
+            if diff_fk == 0 and diff_fd == 0 and diff_wins == 0 and diff_losses == 0:
+                continue
+
+            try:
+                mode_fkdr = diff_fk / diff_fd if diff_fd > 0 else float(diff_fk)
+            except Exception:
+                mode_fkdr = 0
+
+            try:
+                mode_wlr = diff_wins / diff_losses if diff_losses > 0 else float(diff_wins)
+            except Exception:
+                mode_wlr = 0
+
+            # Round the results and apply color formatting for the numeric values.
+            mode_fkdr = round(mode_fkdr, 2)
+            mode_wlr = round(mode_wlr, 2)
+            formatted_mode_fkdr = format_bw_fkdr(mode_fkdr)
+            formatted_mode_wlr = format_bw_wlr(mode_wlr)
+
+            mode_lines.append(
+                f"\n§c§l[{mode.upper()}]  §r §fFKDR:§r {formatted_mode_fkdr} §fWLR:§r {formatted_mode_wlr}"
+            )
+
+        if mode_lines:
+            
+            hover_text += "\n" + "".join(mode_lines)
+        # ---------------------------------------------------
+
         json_payload = {
             "text": main_text,
-            "hoverEvent": {"action": "show_text", "value": hover_text},
+            "hoverEvent": {
+                "action": "show_text",
+                "value": hover_text
+            }
         }
         json_message = json.dumps(json_payload)
-        # Build the chat packet manually and send it.
         packet = String(json_message) + b"\x00"
         self.client_stream.send_packet(0x02, packet)
-        # Return None so that the default chat routine doesn't resend.
         return None
+    
 
     # sorta debug commands
     @command("game")
@@ -645,8 +726,8 @@ class Proxhy(Proxy):
             new_client = hypixel.Client(key)
             await new_client.player("gamerboy80")  # test key
             # await new_client.validate_keys()
-        except (InvalidApiKey, KeyRequired, ApiError):
-            raise CommandException("Invalid API Key!")
+        except ApiError as e:
+            raise CommandException(f"Invalid API Key! {e}")
         finally:
             if new_client:
                 await new_client.close()
@@ -750,9 +831,8 @@ class Proxhy(Proxy):
                     self.players_with_stats.update(
                         {player.name: (player.uuid, display_name)}
                     )
-
+    
     async def log_bedwars_stats(self, event: str) -> None:
-        # chatgpt ahh comments
         """
         Fetch the current player's Bedwars stats via the API and append a log record only if the
         Bedwars data is different from the most recent log entry.
