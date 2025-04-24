@@ -44,7 +44,7 @@ from .datatypes import (
     VarInt,
 )
 from .errors import CommandException
-from .formatting import FormattedPlayer
+from .formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from .mcmodels import Game, Team, Teams
 from .net import Stream
 from .proxy import Proxy, State, listen_client, listen_server
@@ -468,6 +468,10 @@ class Proxhy(Proxy):
 
         The chosen log entry is the one whose timestamp is closest to one week ago,
         provided its age is between 0 and 30 days old.
+
+        Also hovertext supports per-mode weekly stats for all bw modes with updated data
+        Modes that represent dreams variants (Ultimate, Lucky, Castle, Swap, Voidless) aggregate any split stats.
+
         """
 
         # Use player's name and assume gamemode is bedwars.
@@ -519,16 +523,15 @@ class Proxhy(Proxy):
         if not entries:
             raise CommandException("No logged stats available for this player.")
 
-        # Filter entries: they must be at least 5 days old and at most 30 days old.
+        # Filter entries: they must be at most 30 days old.
         valid_entries = [
             entry
             for entry in entries
-            if now - entry["dt"] >= datetime.timedelta(days=0)
-            and now - entry["dt"] <= datetime.timedelta(days=30)
+            if now - entry["dt"] <= datetime.timedelta(days=30)
         ]
         if not valid_entries:
             raise CommandException(
-                "Insufficient logged data: no entry is between 5 and 30 days old."
+                "Insufficient logged data: no entry less than 30 days old."
             )
 
         # Choose the entry whose timestamp is closest to one week ago.
@@ -539,7 +542,7 @@ class Proxhy(Proxy):
         old_stats = chosen_entry["bedwars"]
         chosen_date = chosen_entry["dt"]
 
-        # Compute weekly differences (deltas) for each required key.
+        # Compute weekly differences (deltas) for overall stats.
         diffs = {}
         for key in required_keys:
             try:
@@ -572,6 +575,9 @@ class Proxhy(Proxy):
         except Exception:
             weekly_wlr = 0
 
+        weekly_fkdr = round(weekly_fkdr, 2)
+        weekly_wlr = round(weekly_wlr, 2)
+
         # Override the live FKDR and WLR attributes on the player object.
         current_player.bedwars.fkdr = weekly_fkdr
         current_player.bedwars.wlr = weekly_wlr
@@ -598,6 +604,113 @@ class Proxhy(Proxy):
         # Format the time as e.g. "8:42 PM" (remove any leading zero)
         formatted_time = chosen_date.strftime("%I:%M %p").lstrip("0")
         hover_text = f"Weekly Stats for {fplayer.rankname}\nCalculated using data from §e{formatted_date}§f §7({formatted_time})§f"
+
+        non_dream_mapping = {
+            "Solo": "eight_one",
+            "Doubles": "eight_two",
+            "3v3v3v3": "four_three",
+            "4v4v4v4": "four_four",
+            "4v4": "two_four",
+        }
+        dream_mapping = {
+            "Rush": "rush",
+            "Ultimate": "ultimate",
+            "Lucky": "lucky",
+            "Castle": "castle",
+            "Swap": "swap",
+            "Voidless": "voidless",
+        }
+
+        # List of modes in the order to appear.
+        modes = [
+            "Solo",
+            "Doubles",
+            "3v3v3v3",
+            "4v4v4v4",
+            "4v4",
+            "Rush",
+            "Ultimate",
+            "Lucky",
+            "Castle",
+            "Swap",
+            "Voidless",
+        ]
+        mode_lines = []
+
+        for mode in modes:
+            if mode in non_dream_mapping:
+                prefix = non_dream_mapping[mode]
+                fk_key = f"{prefix}_final_kills_bedwars"
+                fd_key = f"{prefix}_final_deaths_bedwars"
+                wins_key = f"{prefix}_wins_bedwars"
+                losses_key = f"{prefix}_losses_bedwars"
+
+                diff_fk = float(current_stats.get(fk_key, 0)) - float(
+                    old_stats.get(fk_key, 0)
+                )
+                diff_fd = float(current_stats.get(fd_key, 0)) - float(
+                    old_stats.get(fd_key, 0)
+                )
+                diff_wins = float(current_stats.get(wins_key, 0)) - float(
+                    old_stats.get(wins_key, 0)
+                )
+                diff_losses = float(current_stats.get(losses_key, 0)) - float(
+                    old_stats.get(losses_key, 0)
+                )
+
+            else:
+                # For dream modes, aggregate over any key that includes the dream substring.
+                dream_sub = dream_mapping[mode]
+                diff_fk = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_final_kills_bedwars") and f"_{dream_sub}_" in key
+                )
+                diff_fd = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_final_deaths_bedwars") and f"_{dream_sub}_" in key
+                )
+                diff_wins = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_wins_bedwars") and f"_{dream_sub}_" in key
+                )
+                diff_losses = sum(
+                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                    for key in current_stats
+                    if key.endswith("_losses_bedwars") and f"_{dream_sub}_" in key
+                )
+
+            # Skip mode if no difference in any stat.
+            if diff_fk == 0 and diff_fd == 0 and diff_wins == 0 and diff_losses == 0:
+                continue
+
+            try:
+                mode_fkdr = diff_fk / diff_fd if diff_fd > 0 else float(diff_fk)
+            except Exception:
+                mode_fkdr = 0
+
+            try:
+                mode_wlr = (
+                    diff_wins / diff_losses if diff_losses > 0 else float(diff_wins)
+                )
+            except Exception:
+                mode_wlr = 0
+
+            # Round the results and apply color formatting for the numeric values.
+            mode_fkdr = round(mode_fkdr, 2)
+            mode_wlr = round(mode_wlr, 2)
+            formatted_mode_fkdr = format_bw_fkdr(mode_fkdr)
+            formatted_mode_wlr = format_bw_wlr(mode_wlr)
+
+            mode_lines.append(
+                f"\n§c§l[{mode.upper()}]  §r §fFKDR:§r {formatted_mode_fkdr} §fWLR:§r {formatted_mode_wlr}"
+            )
+
+        if mode_lines:
+            hover_text += "\n" + "".join(mode_lines)
+        # ---------------------------------------------------
 
         # Construct the JSON chat payload with hoverEvent.
         json_payload = {
