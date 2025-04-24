@@ -1,5 +1,5 @@
 import asyncio
-import signal
+import signal  # noqa
 import sys
 from asyncio import StreamReader, StreamWriter
 
@@ -41,7 +41,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: asyncio.Server, _):
 
 # Main entry point
 async def main():
-    loop = asyncio.get_running_loop()
+    # loop = asyncio.get_running_loop()
     # loop.add_signal_handler(
     #     signal.SIGINT,
     #     lambda: asyncio.create_task(shutdown(loop, server, signal.SIGINT)),
