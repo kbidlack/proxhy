@@ -6,12 +6,14 @@ import struct
 import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Protocol
 
 from .mcmodels import Pos
 
 if TYPE_CHECKING:
-    from _typeshed import SupportsRead
+
+    class AsyncReader[T](Protocol):
+        async def read(self, n: int = -1) -> T: ...
 
 
 class Buffer(BytesIO):
@@ -20,6 +22,8 @@ class Buffer(BytesIO):
 
 
 class DataType[T](ABC):
+    value: T
+
     def __new__(cls, value: T) -> bytes:
         return cls.pack(value)
 
@@ -30,7 +34,7 @@ class DataType[T](ABC):
 
     @staticmethod
     @abstractmethod
-    def unpack(buff: SupportsRead[bytes]) -> T:
+    def unpack(buff: Buffer) -> T:
         pass
 
 
@@ -66,7 +70,7 @@ class VarInt(DataType[int]):
         return total - (1 << 32) if total & (1 << 31) else total
 
     @staticmethod
-    async def unpack_stream(stream: SupportsRead[bytes]) -> int:
+    async def unpack_stream(stream: AsyncReader[bytes]) -> int:
         total = 0
         shift = 0
         val = 0x80
@@ -138,10 +142,7 @@ class UnsignedByte(DataType[int]):
     @staticmethod
     def pack(value: bytes | int | float) -> bytes:
         if isinstance(value, (int, float)):
-            try:
-                return struct.pack(">B", int(value))
-            except struct.error:
-                print(value)
+            return struct.pack(">B", int(value))
         return value
 
     @staticmethod
@@ -200,8 +201,8 @@ class Chat(DataType[str]):
 
 class UUID(DataType[uuid.UUID]):
     @staticmethod
-    def pack(_uuid: uuid.UUID) -> bytes:
-        return _uuid.bytes
+    def pack(value: uuid.UUID) -> bytes:
+        return value.bytes
 
     @staticmethod
     def unpack(buff) -> uuid.UUID:
@@ -210,8 +211,8 @@ class UUID(DataType[uuid.UUID]):
 
 class Boolean(DataType[bool]):
     @staticmethod
-    def pack(val: bool) -> bytes:
-        return b"\x01" if val else b"\x00"
+    def pack(value: bool) -> bytes:
+        return b"\x01" if value else b"\x00"
 
     @staticmethod
     def unpack(buff) -> bool:
