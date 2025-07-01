@@ -8,19 +8,36 @@ from .proxhy import Proxhy
 instances: list[Proxhy] = []
 
 
+class ProxhyServer(asyncio.Server):
+    """A custom server class that tracks the number of cancels."""
+
+    __slots__ = ("_srv", "num_cancels")
+    num_cancels: int
+
+    def __init__(self, srv: asyncio.Server) -> None:
+        self._srv = srv
+        self.num_cancels = 0
+
+    def __getattr__(self, name: str):
+        # delegate everything else back to the real server
+        return getattr(self._srv, name)
+
+
 async def handle_client(reader: StreamReader, writer: StreamWriter):
     instances.append(Proxhy(reader, writer))
 
 
-async def start(host: str = "localhost", port: int = 41223) -> asyncio.Server:
+async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     server = await asyncio.start_server(handle_client, host, port)
+    server = ProxhyServer(server)
+
     print(f"Started proxhy on {host}:{port}")
 
     return server
 
 
 # Function to handle graceful shutdown
-async def shutdown(loop: asyncio.AbstractEventLoop, server: asyncio.Server, _):
+async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
     server.num_cancels += 1
 
     if server.num_cancels > 1:
