@@ -84,11 +84,14 @@ default_settings = {
 }
 
 # open settings file; doesn't save metadata, just the internal name and whether it's on or off. all metadata is stored above
-with open("settings.json", "r") as t:
-    try:
-        saved_setting_states = json.load(t)
-    except json.JSONDecodeError:
-        saved_setting_states = {}
+try:
+    with open("settings.json", "r") as t:
+        try:
+            saved_setting_states = json.load(t)
+        except json.JSONDecodeError:
+            saved_setting_states = {}
+except FileNotFoundError:
+    saved_setting_states = {}
 
 # create a dictionary of Setting objects to represent all settings
 settings_dict = {}
