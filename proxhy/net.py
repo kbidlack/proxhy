@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.serialization import (
     load_der_public_key,
 )
 
-from .datatypes import Chat, String, VarInt
+from .datatypes import Chat, String, TextComponent, VarInt
 
 
 class Stream:
@@ -101,10 +101,12 @@ class Stream:
 
         self.write(packet_length + packet)
 
-    def chat(self, message: str) -> None:
+    def chat(self, message: str | TextComponent) -> None:
         if self.destination == 0:
             self.send_packet(0x02, Chat.pack_msg(message))
         else:  # self.destination == 1; server
+            # technically messages to the server should only be strings
+            # but I'm allowing TextComponents if they're needed for whatever reason
             self.send_packet(0x01, String(message))
 
 

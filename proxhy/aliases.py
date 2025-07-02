@@ -5,7 +5,7 @@ class Gamemode:
         "skywars": frozenset({"skywars", "sw", "s"}),
     }
 
-    def __new__(cls, value: str):
+    def __new__(cls, value: str | None):
         value = value or ""  # .casefold() doesn't work on None
         gamemode = (g for g, a in cls.gamemodes.items() if value.casefold() in a)
         return next(gamemode, None)
