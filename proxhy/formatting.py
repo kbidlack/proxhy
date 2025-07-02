@@ -2,6 +2,7 @@
 # credit for most of the busywork goes to someone other than me
 
 from copy import deepcopy
+from dataclasses import dataclass, field
 from math import floor
 
 from hypixel import Player
@@ -450,50 +451,101 @@ def format_sw_star(level, player: Player):
     return stars
 
 
+@dataclass
+class BedwarsStats:
+    level: str = ""
+    final_kills: str = ""
+    fkdr: str = ""
+    wins: str = ""
+    wlr: str = ""
+    raw_level: int = 0
+    raw_final_kills: int = 0
+    raw_fkdr: float = 0.0
+    raw_wins: int = 0
+    raw_wlr: float = 0.0
+
+    finals: str = ""  # alias for final_kills
+
+
+@dataclass
+class SkywarsStats:
+    level: str = ""
+    kills: str = ""
+    kdr: str = ""
+    wins: str = ""
+    wlr: str = ""
+    raw_level: float = 0.0
+    raw_kills: int = 0
+    raw_kdr: float = 0.0
+    raw_wins: int = 0
+    raw_wlr: float = 0.0
+
+
+@dataclass
 class FormattedPlayer:
-    def __new__(cls, original_player: Player):
-        player: FormattedPlayer = deepcopy(original_player)
-        player.__class__ = cls
+    original_player: Player = field(repr=False)
+    rank: str = field(init=False)
+    name: str = field(init=False)
+    raw_rank: str = field(init=False)
+    raw_name: str = field(init=False)
+    rank_color: str = field(init=False)
+    rankname: str = field(init=False)
+    bedwars: BedwarsStats = field(default_factory=BedwarsStats, init=False)
+    skywars: SkywarsStats = field(default_factory=SkywarsStats, init=False)
 
-        player.rank = get_rank(player)
-        player.name = player.name
+    def __post_init__(self):
+        # Copy all attributes from original player
+        for attr_name in dir(self.original_player):
+            if not attr_name.startswith("_") and not callable(
+                getattr(self.original_player, attr_name)
+            ):
+                setattr(
+                    self, attr_name, deepcopy(getattr(self.original_player, attr_name))
+                )
 
-        player.raw_rank = player.rank
-        player.raw_name = player.name
+        # Format player attributes
+        self.rank = get_rank(self.original_player)
+        self.name = self.original_player.name
+        self.raw_rank = self.original_player.rank or ""
+        self.raw_name = self.original_player.name
 
-        player.bedwars.level = format_bw_star(player.bedwars.level)
-        player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
-        player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
-        player.bedwars.wins = format_bw_wins(player.bedwars.wins)
-        player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
+        # Format bedwars stats
+        self.bedwars.level = format_bw_star(self.original_player.bedwars.level)
+        self.bedwars.final_kills = format_bw_finals(
+            self.original_player.bedwars.final_kills
+        )
+        self.bedwars.fkdr = format_bw_fkdr(self.original_player.bedwars.fkdr)
+        self.bedwars.wins = format_bw_wins(self.original_player.bedwars.wins)
+        self.bedwars.wlr = format_bw_wlr(self.original_player.bedwars.wlr)
 
-        player.bedwars.raw_level = player.bedwars.level
-        player.bedwars.raw_final_kills = player.bedwars.final_kills
-        player.bedwars.raw_fkdr = player.bedwars.fkdr
-        player.bedwars.raw_wins = player.bedwars.wins
-        player.bedwars.raw_wlr = player.bedwars.wlr
+        self.bedwars.raw_level = self.original_player.bedwars.level
+        self.bedwars.raw_final_kills = self.original_player.bedwars.final_kills
+        self.bedwars.raw_fkdr = self.original_player.bedwars.fkdr
+        self.bedwars.raw_wins = self.original_player.bedwars.wins
+        self.bedwars.raw_wlr = self.original_player.bedwars.wlr
 
-        player.skywars.level = format_sw_star(player.skywars.level, player)
-        player.skywars.kills = format_sw_kills(player.skywars.kills)
-        player.skywars.kdr = format_sw_kdr(player.skywars.kdr)
-        player.skywars.wins = format_sw_wins(player.skywars.wins)
-        player.skywars.wlr = format_sw_wlr(player.skywars.wlr)
+        # Format skywars stats
+        self.skywars.level = format_sw_star(
+            self.original_player.skywars.level, self.original_player
+        )
+        self.skywars.kills = format_sw_kills(self.original_player.skywars.kills)
+        self.skywars.kdr = format_sw_kdr(self.original_player.skywars.kdr)
+        self.skywars.wins = format_sw_wins(self.original_player.skywars.wins)
+        self.skywars.wlr = format_sw_wlr(self.original_player.skywars.wlr)
 
-        player.skywars.raw_level = player.skywars.level
-        player.skywars.raw_kills = player.skywars.kills
-        player.skywars.raw_kdr = player.skywars.kdr
-        player.skywars.raw_wins = player.skywars.wins
-        player.skywars.raw_wlr = player.skywars.wlr
+        self.skywars.raw_level = self.original_player.skywars.level
+        self.skywars.raw_kills = self.original_player.skywars.kills
+        self.skywars.raw_kdr = self.original_player.skywars.kdr
+        self.skywars.raw_wins = self.original_player.skywars.wins
+        self.skywars.raw_wlr = self.original_player.skywars.wlr
 
         # aliases
-        player.bedwars.finals = player.bedwars.final_kills
+        self.bedwars.finals = self.bedwars.final_kills
 
         # other utils
-        player.rank_color = player.rank[:2]
-        sep: str = "" if player.rank == "§7" else " "  # no space for non
-        player.rankname = sep.join((f"{player.rank}", f"{player.name}"))
-
-        return player
+        self.rank_color = self.rank[:2]
+        sep: str = "" if self.rank == "§7" else " "  # no space for non
+        self.rankname = sep.join((f"{self.rank}", f"{self.name}"))
 
     def format_stats(self, mode: str, *stats: str, sep=" ", name: bool = True) -> str:
         # i swear i knew what i was doing when i wrote this but i don't anymore
