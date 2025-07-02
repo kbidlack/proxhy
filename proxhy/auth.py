@@ -5,7 +5,7 @@ import keyring
 import msmcauth
 
 
-def login(email: str, password: str) -> tuple[str]:
+def login(email: str, password: str) -> tuple[str, str, str]:
     access_token, username, uuid = msmcauth.login(email, password)
 
     # save auth info
@@ -19,7 +19,7 @@ def user_exists(username: str) -> bool:
 
 
 # https://pypi.org/project/msmcauthaio/
-def load_auth_info(username: str = "") -> tuple[str]:
+def load_auth_info(username: str = "") -> tuple[str, str, str]:
     record = keyring.get_password("proxhy", username)
     if record is None:
         raise RuntimeError(f"No cached credentials for user {username!r}")
@@ -33,12 +33,14 @@ def load_auth_info(username: str = "") -> tuple[str]:
             access_token, algorithms=["HS256"], options={"verify_signature": False}
         )["iat"]
         if time.time() - float(iat) > 86_000:
-            access_token, _, _ = login(email, keyring.get_password("proxhy", email))
+            access_token, _, _ = login(
+                email, keyring.get_password("proxhy", email) or ""
+            )
         return access_token, username, uuid
 
     # new lightweight entry ─ always refresh
     email, uuid = parts
-    password = keyring.get_password("proxhy", email)
+    password = keyring.get_password("proxhy", email) or ""
     access_token, _, _ = login(email, password)
     return access_token, username, uuid
 

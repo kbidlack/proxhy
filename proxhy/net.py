@@ -31,7 +31,7 @@ class Stream:
         self.reader = reader
         self.writer = writer
 
-        self._key = None
+        self._key = b""
         self.encrypted = False
         self.compression = False
         self.compression_threshold = -1
@@ -68,7 +68,8 @@ class Stream:
         return self.decryptor.update(data) if self.encrypted else data
 
     def write(self, data):
-        if self.writer.transport._conn_lost:  # AHHHH ITS FIXED !!!
+        # AHHHH ITS FIXED !!!
+        if self.writer.transport._conn_lost:  # type:ignore
             # socket.send() raised exception can die
             return self.close()
 
@@ -112,12 +113,12 @@ class Stream:
 
 def pkcs1_v15_padded_rsa_encrypt(der_public_key, decrypted):
     public_key = load_der_public_key(der_public_key)
-    return public_key.encrypt(decrypted, PKCS1v15())
+    return public_key.encrypt(decrypted, PKCS1v15())  # type:ignore
 
 
 def pkcs1_v15_padded_rsa_decrypt(der_private_key, encrypted):
     private_key = load_der_private_key(der_private_key, password=None)
-    return private_key.decrypt(encrypted, PKCS1v15())
+    return private_key.decrypt(encrypted, PKCS1v15())  # type:ignore
 
 
 # https://github.com/ammaraskar/pyCraft/blob/master/minecraft/networking/encryption.py#L45-L62

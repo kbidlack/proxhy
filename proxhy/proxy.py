@@ -56,6 +56,8 @@ class Proxy:
         "description": {"text": "No MOTD set!"},
     }
 
+    server_stream: Stream
+
     def __init__(
         self,
         reader: StreamReader,
@@ -65,11 +67,13 @@ class Proxy:
 
         self.state = State.HANDSHAKING
         self.open = True
-        self.server_stream: Stream | None = None
 
         self.CONNECT_HOST = ("", 0)
 
         self.username = ""
+
+        self.access_token = ""
+        self.uuid = ""
 
         asyncio.create_task(self.handle_client())
 
@@ -136,8 +140,7 @@ class Proxy:
 
         self.open = False
 
-        if self.server_stream:
-            self.server_stream.close()
+        self.server_stream.close()
         self.client_stream.close()
 
     @listen_client(0x00, State.STATUS, blocking=True)
@@ -193,7 +196,10 @@ class Proxy:
 
         # generate shared secret
         secret = token_bytes(16)
-        # client assumes access_token and uuid have been set
+
+        if not (self.access_token or self.uuid):
+            raise ValueError("Access token or UUID not set")
+
         payload = {
             "accessToken": self.access_token,
             "selectedProfile": self.uuid,

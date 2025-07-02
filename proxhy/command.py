@@ -1,10 +1,10 @@
 import inspect
-from collections.abc import Awaitable
-from typing import Literal, get_args, get_origin
+from typing import Awaitable, Callable, Literal, get_args, get_origin
 
 from .errors import CommandException
+from .proxy import Proxy
 
-commands: dict[str, Awaitable[str | None]] = {}
+commands: dict[str, Callable[[Proxy, str | None], Awaitable]] = {}
 
 
 class Parameter:
