@@ -85,7 +85,7 @@ default_settings = {
 
 # open settings file; doesn't save metadata, just the internal name and whether it's on or off. all metadata is stored above
 try:
-    with open("settings.json", "r") as t:
+    with open("proxhy_settings.json", "r") as t:
         try:
             saved_setting_states = json.load(t)
         except json.JSONDecodeError:
