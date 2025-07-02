@@ -1,11 +1,12 @@
 # nearly 500 lines of fake code
 # credit for most of the busywork goes to someone other than me
-
 from copy import deepcopy
 from dataclasses import dataclass, field
 from math import floor
 
 from hypixel import Player
+
+from .datatypes import TextComponent
 
 
 def get_rank(player: Player):
@@ -547,7 +548,9 @@ class FormattedPlayer:
         sep: str = "" if self.rank == "§7" else " "  # no space for non
         self.rankname = sep.join((f"{self.rank}", f"{self.name}"))
 
-    def format_stats(self, mode: str, *stats: str, sep=" ", name: bool = True) -> str:
+    def format_stats(
+        self, mode: str, *stats: str, sep=" ", name: bool = True
+    ) -> TextComponent:
         # i swear i knew what i was doing when i wrote this but i don't anymore
         # hopefully i dont have to touch it again...
         formatted_stats = [f"{getattr(getattr(self, mode), 'level')} {self.rankname}"]
@@ -562,4 +565,4 @@ class FormattedPlayer:
             ]
         stats_message = f"§f{sep}".join(formatted_stats)
 
-        return stats_message
+        return TextComponent.from_legacy(stats_message)

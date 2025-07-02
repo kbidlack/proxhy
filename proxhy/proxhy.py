@@ -15,7 +15,6 @@ import keyring
 from hypixel import Player
 from hypixel.errors import (
     ApiError,
-    HypixelException,
     InvalidApiKey,
     KeyRequired,
     PlayerNotFound,
@@ -24,7 +23,7 @@ from hypixel.errors import (
 from msmcauth.errors import InvalidCredentials, MsMcAuthException, NotPremium
 
 from . import auth
-from .aliases import Gamemode, Statistic
+from .aliases import Gamemode
 from .command import command, commands
 from .datatypes import (
     UUID,
@@ -39,6 +38,7 @@ from .datatypes import (
     Pos,
     Position,
     String,
+    TextComponent,
     UnsignedByte,
     UnsignedShort,
     VarInt,
@@ -92,7 +92,6 @@ class Proxhy(Proxy):
         # TODO move to config file or something similar
         self.CONNECT_HOST = ("mc.hypixel.net", 25565)
         self.log_path = "stat_log.jsonl"
-        self.null_log_path = "null_stats.json"
 
     async def close(self):
         if not self.open:
@@ -335,14 +334,20 @@ class Proxhy(Proxy):
             ) or commands.get(segments[0].removeprefix("//").casefold())
             if command:
                 try:
-                    output = await command(self, message)
+                    output: str | TextComponent = await command(self, message)
                 except CommandException as err:
-                    self.client_stream.chat(f"§9§l∎ §4{err.message}")
+                    error_msg = (
+                        TextComponent("∎ ")
+                        .color("blue")
+                        .bold()
+                        .append(TextComponent(err.message).color("dark_red"))
+                    )
+                    self.client_stream.chat(error_msg)
                 else:
                     if output:
                         if segments[0].startswith("//"):  # send output of command
                             # remove chat formatting
-                            output = re.sub(r"§.", "", output)
+                            output = re.sub(r"§.", "", str(output))
                             self.server_stream.chat(output)
                         else:
                             self.client_stream.chat(output)
@@ -379,7 +384,8 @@ class Proxhy(Proxy):
 
     @command("login")
     async def login_command(self, email, password):
-        self.client_stream.chat("§6Logging in...")
+        login_msg = TextComponent("Logging in...").color("gold")
+        self.client_stream.chat(login_msg)
         if not self.logging_in:
             raise CommandException("You can't use that right now!")
 
@@ -402,7 +408,8 @@ class Proxhy(Proxy):
         self.access_token = access_token
         self.uuid = uuid
 
-        self.client_stream.chat("§aLogged in; rejoin proxhy to play!")
+        success_msg = TextComponent("Logged in; rejoin proxhy to play!").color("green")
+        self.client_stream.chat(success_msg)
 
     @command("rq")
     async def requeue(self):
@@ -413,56 +420,11 @@ class Proxhy(Proxy):
 
     @command()  # Mmm, garlic bread.
     async def garlicbread(self):  # Mmm, garlic bread.
-        return "§eMmm, garlic bread."  # Mmm, garlic bread.
-
-    @command("scold")
-    async def statcheck_old(self, ign=None, mode=None, *stats):
-        # TODO default gamemode is hypixel stats
-        ign = ign or self.username
-        # verify gamemode
-        if mode is None:
-            gamemode = Gamemode(self.game.gametype) or "bedwars"  # default
-        elif (gamemode := Gamemode(mode)) is None:
-            raise CommandException(f"Unknown gamemode '{mode}'!")
-
-        # verify stats
-        if not stats:
-            if gamemode == "bedwars":
-                stats = ("Finals", "FKDR", "Wins", "WLR")
-            elif gamemode == "skywars":
-                stats = ("Kills", "KDR", "Wins", "WLR")
-        elif any(Statistic(stat, gamemode) is None for stat in stats):
-            unknown_stat = next(
-                (stat for stat in stats if Statistic(stat, gamemode) is None)
-            )
-            raise CommandException(
-                f"Unknown statistic '{unknown_stat}' for gamemode {gamemode}!"
-            )
-        else:
-            stats = tuple(Statistic(stat, gamemode) for stat in stats)
-
-        try:
-            player = await self.hypixel_client.player(ign)
-        except PlayerNotFound:
-            # TODO this throws when there's an invalid api key
-            raise CommandException(f"Player '{ign}' not found!")
-        except InvalidApiKey:
-            raise CommandException("Invalid API Key!")
-        except RateLimitError:
-            raise CommandException(
-                "Your API key is being rate limited; please wait a little bit!"
-            )
-        except HypixelException:
-            raise CommandException(
-                "An unknown error occurred while fetching player '{ign}'! ({player})"
-            )
-
-        fplayer = FormattedPlayer(player)
-        return fplayer.format_stats(gamemode, *stats)
+        return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
     async def _sc_internal(
-        self, ign=None, mode=None, window=None, display_abridged=True, *stats
-    ):
+        self, ign=None, mode=None, window=None, *stats
+    ):  # display_abridged=True
         """
         Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
         cumulative values from approximately one week ago. It then overrides the player's live FKDR and WLR attributes,
@@ -486,6 +448,10 @@ class Proxhy(Proxy):
 
         # Use player's name and assume gamemode is bedwars.
         ign = ign or self.username
+
+        if (Gamemode(mode) or "bedwars") != "bedwars":
+            raise CommandException("Currently only Bedwars stats are supported!")
+
         gamemode = "bedwars"
 
         # verify stats
@@ -629,12 +595,10 @@ class Proxhy(Proxy):
             formatted_date = f"{chosen_date.strftime('%B')} {ordinal(chosen_date.day)}, {chosen_date.strftime('%Y')}"
             # Format the time as e.g. "8:42 PM" (remove any leading zero)
             formatted_time = chosen_date.strftime("%I:%M %p").lstrip("0")
-            hover_text = f"Recent stats for {fplayer.rankname}\nCalculated using data from §e{formatted_date}§f §7({formatted_time})§f\n"
+            hover_text = f"Recent stats for {fplayer.rankname}\nCalculated using data from {formatted_date} ({formatted_time})\n"
         else:
-            hover_text = f"Lifetime Stats for {fplayer.rankname}"
-            with open(self.null_log_path, "r") as f:
-                null_stats = json.load(f)
-                old_stats = null_stats["bedwars"]
+            hover_text = f"Lifetime Stats for {fplayer.rankname}§f:\n"
+            old_stats = {}
 
         non_dream_mapping = {
             "Solo": "eight_one",
@@ -654,10 +618,8 @@ class Proxhy(Proxy):
 
         # List of modes in the order to appear.
         modes = ["Solo", "Doubles", "3v3v3v3", "4v4v4v4"]
-        if not display_abridged:
-            modes.extend(
-                ["4v4", "Rush", "Ultimate", "Lucky", "Castle", "Swap", "Voidless"]
-            )
+        # if not display_abridged:
+        modes.extend(["4v4", "Rush", "Ultimate", "Lucky", "Castle", "Swap", "Voidless"])
         mode_lines = []
 
         dreams_linebreak_init, dreams_linebreak_complete = False, False
@@ -707,10 +669,6 @@ class Proxhy(Proxy):
                     if key.endswith("_losses_bedwars") and f"_{dream_sub}_" in key
                 )
 
-            # Skip mode if no difference in any stat.
-            if diff_fk == 0 and diff_fd == 0 and diff_wins == 0 and diff_losses == 0:
-                continue
-
             try:
                 mode_fkdr = diff_fk / diff_fd if diff_fd > 0 else float(diff_fk)
             except Exception:
@@ -739,50 +697,50 @@ class Proxhy(Proxy):
 
         if mode_lines:
             hover_text += "".join(mode_lines)
-        if display_abridged:
-            hover_text += f"\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
-        # ---------------------------------------------------
+        # if display_abridged:
+        #     hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
 
-        # Generate the main text using FormattedPlayer.format_stats
-        main_text = fplayer.format_stats(gamemode, *stats)
-        # Construct the JSON chat payload with hoverEvent.
-        json_payload = {
-            "text": main_text,
-            "hoverEvent": {"action": "show_text", "value": hover_text},
-        }
-        json_message = json.dumps(json_payload)
-        # Build the chat packet manually and send it.
-        packet = String(json_message) + b"\x00"
-        self.client_stream.send_packet(0x02, packet)
-        # Return None so that the default chat routine doesn't resend.
-        return None
+        # Format the hover text and send the chat message.
+        return fplayer.format_stats(gamemode, *stats).hover_text(hover_text)
 
     @command("sc")
     async def statcheck(self, ign=None, mode=None, window=None, *stats):
-        await self._sc_internal(ign, mode, window, *stats)
+        return await self._sc_internal(ign, mode, window, *stats)
 
     @command("scw")
     async def scweekly(self, ign=None, mode=None, *stats):
-        await self._sc_internal(ign, mode, window=7, *stats)
+        return await self._sc_internal(ign, mode, 7, *stats)
 
-    @command("scfull")
-    async def statcheckfull(self, ign=None, mode=None, window=None, *stats):
-        await self._sc_internal(ign, mode, window, display_abridged=False, *stats)
+    # @command("scfull")
+    # async def statcheckfull(self, ign=None, mode=None, window=None, *stats):
+    #     return await self._sc_internal(ign, mode, window, False, *stats)
 
     # sorta debug commands
     @command("game")
     async def _game(self):
-        self.client_stream.chat("§aGame:")
+        game_msg = TextComponent("Game:").color("green")
+        self.client_stream.chat(game_msg)
         for key in self.game.__annotations__:
             if value := getattr(self.game, key):
-                self.client_stream.chat(f"§b{key.capitalize()}: §e{value}")
+                key_value_msg = (
+                    TextComponent(f"{key.capitalize()}: ")
+                    .color("aqua")
+                    .append(TextComponent(str(value)).color("yellow"))
+                )
+                self.client_stream.chat(key_value_msg)
 
     @command("rqgame")
     async def _rqgame(self):
-        self.client_stream.chat("§aRequeue Game:")
+        rq_game_msg = TextComponent("Requeue Game:").color("green")
+        self.client_stream.chat(rq_game_msg)
         for key in self.rq_game.__annotations__:
             if value := getattr(self.rq_game, key):
-                self.client_stream.chat(f"§b{key.capitalize()}: §e{value}")
+                key_value_msg = (
+                    TextComponent(f"{key.capitalize()}: ")
+                    .color("aqua")
+                    .append(TextComponent(str(value)).color("yellow"))
+                )
+                self.client_stream.chat(key_value_msg)
 
     @command("setting")
     async def edit_settings(self, s_name):
@@ -792,9 +750,17 @@ class Proxhy(Proxy):
             old_state_color = setting_obj.states_dict[old_state]
             new_state = setting_obj.next_state()
             new_state_color = setting_obj.states_dict[new_state]
-            self.client_stream.chat(
-                f"Changed §e{setting_obj.display_name}§r from {old_state_color + '§l' + old_state.upper()}§r to {new_state_color + '§l' + new_state.upper()}§r!"
+
+            settings_msg = (
+                TextComponent("Changed ")
+                .append(TextComponent(setting_obj.display_name).color("yellow"))
+                .append(TextComponent(" from "))
+                .append(TextComponent(old_state.upper()).bold().color(old_state_color))
+                .append(TextComponent(" to "))
+                .append(TextComponent(new_state.upper()).bold().color(new_state_color))
+                .append(TextComponent("!"))
             )
+            self.client_stream.chat(settings_msg)
             if s_name == "tablist_fkdr":
                 if new_state.lower() == "on":
                     await self._update_stats()
@@ -834,7 +800,8 @@ class Proxhy(Proxy):
 
         self.hypixel_api_key = key
         self.hypixel_client = hypixel.Client(key)
-        self.client_stream.chat("§aUpdated API Key!")
+        api_key_msg = TextComponent("Updated API Key!").color("green")
+        self.client_stream.chat(api_key_msg)
 
         await self._update_stats()
 
@@ -849,6 +816,7 @@ class Proxhy(Proxy):
             and settings.tablist_fkdr.state == "on"
         ):
             # players are in these teams in pregame
+            # Note: regex matches legacy color codes from server data format
             real_player_teams: list[Team] = [
                 team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
             ]
@@ -884,10 +852,12 @@ class Proxhy(Proxy):
                         continue
                 elif isinstance(player, (InvalidApiKey, RateLimitError, TimeoutError)):
                     err_message = {
-                        InvalidApiKey: "§cInvalid API Key!",
-                        KeyRequired: "§cNo API Key provided!",
-                        RateLimitError: "§cRate limit!",
-                        TimeoutError: f"§cRequest timed out! ({player})",
+                        InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
+                        KeyRequired: TextComponent("No API Key provided!").color("red"),
+                        RateLimitError: TextComponent("Rate limit!").color("red"),
+                        TimeoutError: TextComponent(
+                            f"Request timed out! ({player})"
+                        ).color("red"),
                     }
 
                     if not self.game_error:
@@ -908,7 +878,7 @@ class Proxhy(Proxy):
                                 (
                                     fplayer.bedwars.level,
                                     fplayer.rankname,
-                                    f"§f | {fplayer.bedwars.fkdr}",
+                                    f" | {fplayer.bedwars.fkdr}",
                                 )
                             )
                         elif self.game.gametype == "skywars":
@@ -916,11 +886,11 @@ class Proxhy(Proxy):
                                 (
                                     fplayer.skywars.level,
                                     fplayer.rankname,
-                                    f"§f | {fplayer.skywars.kdr}",
+                                    f" | {fplayer.skywars.kdr}",
                                 )
                             )
                     else:
-                        display_name = f"§5[NICK] {player.name}"
+                        display_name = f"[NICK] {player.name}"
                     self.client_stream.send_packet(
                         0x38,
                         VarInt(3),
