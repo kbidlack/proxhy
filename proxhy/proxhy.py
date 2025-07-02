@@ -45,9 +45,10 @@ from .datatypes import (
 )
 from .errors import CommandException
 from .formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from .mcmodels import Game, Team, Teams
+from .mcmodels import Game, Nick, Team, Teams
 from .net import Stream
 from .proxy import Proxy, State, listen_client, listen_server
+from .settings import settings
 
 
 class Proxhy(Proxy):
@@ -71,7 +72,7 @@ class Proxhy(Proxy):
         super().__init__(*args, **kwargs)
 
         self.client = ""
-        self.hypixel_client = None
+        self.hypixel_client = hypixel.Client()
         self._hypixel_api_key = ""
 
         self.game = Game()
@@ -80,14 +81,12 @@ class Proxhy(Proxy):
         self.players: dict[str, str] = {}
         self.players_getting_stats = []
         self.players_with_stats = {}
-        self.teams: list[Team] = Teams()
+        self.teams: Teams = Teams()
 
         self.waiting_for_locraw = False
         self.game_error = None  # if error has been sent that game
         self.logged_in = False
         self.logging_in = False
-
-        self.client_stream: Stream
 
         # TODO move to config file or something similar
         self.CONNECT_HOST = ("mc.hypixel.net", 25565)
@@ -254,24 +253,26 @@ class Proxhy(Proxy):
             )
         # team removal
         elif mode == b"\x01":
-            del self.teams[name]
+            self.teams.delete(name)
         # team information updation
         elif mode == b"\x02":
-            self.teams[name].display_name = buff.unpack(String)
-            self.teams[name].prefix = buff.unpack(String)
-            self.teams[name].suffix = buff.unpack(String)
-            self.teams[name].friendly_fire = buff.unpack(Byte)[0]
-            self.teams[name].name_tag_visibility = buff.unpack(String)
-            self.teams[name].color = buff.unpack(Byte)[0]
+            team = self.teams.get(name)
+            if team:
+                team.display_name = buff.unpack(String)
+                team.prefix = buff.unpack(String)
+                team.suffix = buff.unpack(String)
+                team.friendly_fire = buff.unpack(Byte)[0]
+                team.name_tag_visibility = buff.unpack(String)
+                team.color = buff.unpack(Byte)[0]
         # add players to team
         elif mode in {b"\x03", b"\x04"}:
             add = True if mode == b"\x03" else False
             player_count = buff.unpack(VarInt)
             players = {buff.unpack(String) for _ in range(player_count)}
             if add:
-                self.teams[name].players |= players
+                self.teams.get(name).players |= players
             else:
-                self.teams[name].players -= players
+                self.teams.get(name).players -= players
 
         for name, (_uuid, display_name) in self.players_with_stats.items():
             prefix, suffix = next(
@@ -373,10 +374,10 @@ class Proxhy(Proxy):
             _uuid = buff.unpack(UUID)
             if action == 0:  # add player
                 name = buff.unpack(String)
-                self.players[_uuid] = name
+                self.players[str(_uuid)] = name
             elif action == 4:  # remove player
                 try:
-                    del self.players[_uuid]
+                    del self.players[str(_uuid)]
                 except KeyError:
                     pass  # some things fail idk
 
@@ -393,12 +394,12 @@ class Proxhy(Proxy):
             access_token, username, uuid = auth.login(email, password)
         except InvalidCredentials:
             raise CommandException("Login failed; invalid credentials!")
+        except NotPremium:
+            raise CommandException("This account is not premium!")
         except MsMcAuthException:
             raise CommandException(
                 "An unknown error occurred while logging in! Try again?"
             )
-        except NotPremium:
-            raise CommandException("This account is not premium!")
 
         if username != self.username:
             raise CommandException(
@@ -791,7 +792,7 @@ class Proxhy(Proxy):
             # await new_client.validate_keys()
         except (InvalidApiKey, KeyRequired, ApiError):
             raise CommandException("Invalid API Key!")
-        finally:
+        else:
             if new_client:
                 await new_client.close()
 
@@ -841,12 +842,13 @@ class Proxhy(Proxy):
 
             for player in player_stats:
                 if isinstance(player, PlayerNotFound):
-                    player.name = player.player
+                    real_player = player.player
+                    player = Nick(real_player)
                     try:
                         player.uuid = next(
                             u
                             for u, p in self.players.items()
-                            if p.casefold() == player.player.casefold()
+                            if p.casefold() == real_player.casefold()
                         )
                     except StopIteration:
                         continue
@@ -870,7 +872,7 @@ class Proxhy(Proxy):
                     continue
 
                 if player.name in self.players.values():
-                    if not isinstance(player, PlayerNotFound):  # nick, probably
+                    if not isinstance(player, (PlayerNotFound, Nick)):
                         fplayer = FormattedPlayer(player)
 
                         if self.game.gametype == "bedwars":
@@ -889,8 +891,11 @@ class Proxhy(Proxy):
                                     f" | {fplayer.skywars.kdr}",
                                 )
                             )
+                        else:
+                            display_name = fplayer.rankname
                     else:
                         display_name = f"[NICK] {player.name}"
+
                     self.client_stream.send_packet(
                         0x38,
                         VarInt(3),

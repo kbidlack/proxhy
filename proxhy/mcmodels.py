@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -14,11 +14,11 @@ class Team:
 
 
 class Teams(list[Team]):
-    def __getitem__(self, key) -> Team:
-        return next((team for team in self if team.name == key), None)
+    def get(self, key) -> Team:
+        return next(team for team in self if team.name == key)
 
-    def __delitem__(self, key):
-        team = self[key]
+    def delete(self, key):
+        team = self.get(key)
         if team:
             self.remove(team)
 
@@ -56,3 +56,9 @@ class Pos:
     x: int = 0
     y: int = 0
     z: int = 0
+
+
+@dataclass
+class Nick:
+    name: str
+    uuid: str = field(init=False)
