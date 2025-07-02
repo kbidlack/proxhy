@@ -72,7 +72,7 @@ class Proxhy(Proxy):
         super().__init__(*args, **kwargs)
 
         self.client = ""
-        self.hypixel_client = hypixel.Client()
+        self.hypixel_client: hypixel.Client
         self._hypixel_api_key = ""
 
         self.game = Game()
@@ -97,10 +97,12 @@ class Proxhy(Proxy):
             return
 
         await super().close()
-
-        if self.hypixel_client:
-            await self.log_bedwars_stats("logout")
-            await self.hypixel_client.close()
+        try:
+            if self.hypixel_client:
+                await self.log_bedwars_stats("logout")
+                await self.hypixel_client.close()
+        except AttributeError:
+            pass
 
     async def login_keep_alive(self):
         while True:

@@ -139,8 +139,10 @@ class Proxy:
             return
 
         self.open = False
-
-        self.server_stream.close()
+        try:
+            self.server_stream.close()
+        except AttributeError:
+            pass
         self.client_stream.close()
 
     @listen_client(0x00, State.STATUS, blocking=True)
