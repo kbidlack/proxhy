@@ -36,7 +36,7 @@ class Setting:
 
 
 class SettingsManager:  # this class is literally a glorified dictionary wrapper
-    def __init__(self, settings_dict, filename="settings.json"):
+    def __init__(self, settings_dict, filename="proxhy_settings.json"):
         # assign directly into __dict__ to avoid triggering __setattr__.
         self.__dict__["settings_dict"] = settings_dict
         self.__dict__["filename"] = filename
