@@ -6,7 +6,7 @@ import struct
 import uuid
 from abc import ABC, abstractmethod
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Protocol
 
 from .mcmodels import Pos
 
@@ -153,10 +153,6 @@ class ByteArray(DataType[bytes, bytes]):
 class TextComponent:
     """
     Represents a Minecraft text component with full formatting support.
-
-    This class provides a comprehensive implementation of the Minecraft text component format
-    as defined in the Minecraft wiki. It supports all content types, formatting options,
-    and interactivity features while maintaining backward compatibility.
     """
 
     COLOR_CODES = {
@@ -296,8 +292,27 @@ class TextComponent:
         return self
 
     # Formatting methods
-    def color(self, color: str) -> "TextComponent":
-        """Set text color (hex #RRGGBB or color name)"""
+    def color(
+        self,
+        color: Literal[
+            "black",
+            "dark_blue",
+            "dark_green",
+            "dark_aqua",
+            "dark_red",
+            "dark_purple",
+            "gold",
+            "gray",
+            "dark_gray",
+            "blue",
+            "green",
+            "aqua",
+            "red",
+            "light_purple",
+            "yellow",
+            "white",
+        ],
+    ) -> "TextComponent":
         self.data["color"] = color
         return self
 
@@ -353,26 +368,6 @@ class TextComponent:
             "action": "show_text",
             "value": self._normalize_component(text),
         }
-        return self
-
-    def hover_item(
-        self, item_id: str, count: int = 1, components=None
-    ) -> "TextComponent":
-        """Set hover tooltip with item"""
-        contents: dict = {"id": item_id}
-        if count != 1:
-            contents["count"] = count  # type: ignore
-        if components:
-            contents["components"] = components
-        self.data["hoverEvent"] = {"action": "show_item", "value": contents}
-        return self
-
-    def hover_entity(self, entity_type: str, entity_id, name=None) -> "TextComponent":
-        """Set hover tooltip with entity"""
-        contents = {"type": entity_type, "id": entity_id}
-        if name:
-            contents["name"] = self._normalize_component(name)
-        self.data["hoverEvent"] = {"action": "show_entity", "value": contents}
         return self
 
     # Child component methods
@@ -667,7 +662,7 @@ class String(DataType[str | TextComponent, str]):
         bvalue = (
             value.encode("utf-8")
             if isinstance(value, str)
-            else value.to_json().encode("utf-8")
+            else str(value).encode("utf-8")
         )
         return VarInt(len(bvalue)) + bvalue
 
