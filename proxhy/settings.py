@@ -81,6 +81,15 @@ default_settings = {
         "default_state": "off",
         "description": "In Bedwars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
     },
+    "display_top_stats": {
+        "display_name": "Preface top players",
+        "states": {"off": "§c",
+                   "fkdr": "§a",
+                   "stars": "§a",
+                   "index": "§a"},
+        "default_state": "index",
+        "description": "In Bedwars, receive a chat message at the start of the game highlighting the best players."
+    }
 }
 
 # open settings file; doesn't save metadata, just the internal name and whether it's on or off. all metadata is stored above
