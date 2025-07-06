@@ -8,7 +8,12 @@ from secrets import token_bytes
 import aiohttp
 
 from .datatypes import Buffer, ByteArray, String, UnsignedShort, VarInt
-from .net import Stream, generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
+from .net import (
+    Client,
+    Server,
+    generate_verification_hash,
+    pkcs1_v15_padded_rsa_encrypt,
+)
 
 client_listeners = {}
 server_listeners = {}
@@ -56,19 +61,20 @@ class Proxy:
         "description": {"text": "No MOTD set!"},
     }
 
-    server_stream: Stream
+    server_stream: Server
 
     def __init__(
         self,
         reader: StreamReader,
         writer: StreamWriter,
+        connect_host: tuple[str, int] = ("mc.hypixel.net", 25565),
     ):
-        self.client_stream = Stream(reader, writer)
+        self.client = Client(reader, writer)
 
         self.state = State.HANDSHAKING
         self.open = True
 
-        self.CONNECT_HOST = ("", 0)
+        self.CONNECT_HOST = connect_host
 
         self.username = ""
 
@@ -78,8 +84,8 @@ class Proxy:
         asyncio.create_task(self.handle_client())
 
     async def handle_client(self):
-        while packet_length := await VarInt.unpack_stream(self.client_stream):
-            if data := await self.client_stream.read(packet_length):
+        while packet_length := await VarInt.unpack_stream(self.client):
+            if data := await self.client.read(packet_length):
                 buff = Buffer(data)
 
                 packet_id = buff.unpack(VarInt)
@@ -96,21 +102,21 @@ class Proxy:
                     else:
                         asyncio.create_task(handler(self, Buffer(packet_data)))
                 else:
-                    self.server_stream.send_packet(packet_id, packet_data)
+                    self.server.send_packet(packet_id, packet_data)
 
         await self.close()
 
     async def handle_server(self):
         data = b""
-        while packet_length := await VarInt.unpack_stream(self.server_stream):
+        while packet_length := await VarInt.unpack_stream(self.server):
             while len(data) < packet_length:
-                newdata = await self.server_stream.read(packet_length - len(data))
+                newdata = await self.server.read(packet_length - len(data))
                 data += newdata
 
             buff = Buffer(data)
-            if self.server_stream.compression:
+            if self.server.compression:
                 data_length = buff.unpack(VarInt)
-                if data_length >= self.server_stream.compression_threshold:
+                if data_length >= self.server.compression_threshold:
                     # print(buff.getvalue())
                     data = zlib.decompress(buff.read())
                     buff = Buffer(data)
@@ -128,7 +134,7 @@ class Proxy:
                 else:
                     asyncio.create_task(handler(self, Buffer(packet_data)))
             else:
-                self.client_stream.send_packet(packet_id, packet_data)
+                self.client.send_packet(packet_id, packet_data)
 
             data = b""
 
@@ -140,18 +146,18 @@ class Proxy:
 
         self.open = False
         try:
-            self.server_stream.close()
+            self.server.close()
         except AttributeError:
             pass
-        self.client_stream.close()
+        self.client.close()
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
-        self.client_stream.send_packet(0x00, String(json.dumps(self.server_list_ping)))
+        self.client.send_packet(0x00, String(json.dumps(self.server_list_ping)))
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self, buff: Buffer):
-        self.client_stream.send_packet(0x01, buff.getvalue())
+        self.client.send_packet(0x01, buff.getvalue())
         # close connection
         await self.close()
 
@@ -170,12 +176,11 @@ class Proxy:
             reader, writer = await asyncio.open_connection(
                 self.CONNECT_HOST[0], self.CONNECT_HOST[1]
             )
-            self.server_stream = Stream(reader, writer)
-            self.server_stream.destination = 1
+            self.server = Server(reader, writer)
 
             asyncio.create_task(self.handle_server())
 
-            self.server_stream.send_packet(
+            self.server.send_packet(
                 0x00,
                 VarInt(47),
                 String(self.CONNECT_HOST[0]),
@@ -185,9 +190,9 @@ class Proxy:
 
     @listen_server(0x03, State.LOGIN, blocking=True)
     async def packet_set_compression(self, buff: Buffer):
-        self.server_stream.compression_threshold = buff.unpack(VarInt)
-        self.server_stream.compression = (
-            False if self.server_stream.compression_threshold == -1 else True
+        self.server.compression_threshold = buff.unpack(VarInt)
+        self.server.compression = (
+            False if self.server.compression_threshold == -1 else True
         )
 
     @listen_server(0x01, State.LOGIN, blocking=True)
@@ -221,17 +226,17 @@ class Proxy:
         encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, secret)
         encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
 
-        self.server_stream.send_packet(
+        self.server.send_packet(
             0x01,
             ByteArray(encrypted_secret),
             ByteArray(encrypted_verify_token),
         )
 
         # enable encryption
-        self.server_stream.key = secret
-        self.server_stream.key = secret
+        self.server.key = secret
+        self.server.key = secret
 
     @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
-        self.client_stream.send_packet(0x02, buff.read())
+        self.client.send_packet(0x02, buff.read())
