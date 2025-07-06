@@ -87,8 +87,12 @@ class Proxhy(Proxy):
         self.teams: Teams = Teams()
         self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
 
+        # EVENTS
         # used so the tab updater can signal functions that stats are logged
         self.received_player_stats = asyncio.Event()
+
+        self.received_locraw = asyncio.Event()
+        self.received_locraw.set()
 
         self.waiting_for_locraw = False
         self.game_error = None  # if error has been sent that game
