@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import signal  # noqa
 import sys
@@ -6,6 +7,45 @@ from asyncio import StreamReader, StreamWriter
 from .proxhy import Proxhy
 
 instances: list[Proxhy] = []
+
+
+def parse_args():
+    """Parse command line arguments."""
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "-rh",
+        "--remote-host",
+        default="mc.hypixel.net",
+        help="Host to bind the server to (default: mc.hypixel.net)",
+    )
+    parser.add_argument(
+        "-rp",
+        "--remote-port",
+        type=int,
+        default=25565,
+        help="Port to bind the server to (default: 25565)",
+    )
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        default=41223,
+        help="Port to bind the server to (default: 41223)",
+    )
+    parser.add_argument(
+        "-d",
+        "--dev",
+        action="store_true",
+        help="Shorthand to bind remote to localhost:25565 for development",
+    )
+    return parser.parse_args()
+
+
+args = parse_args()  # ew
+
+if args.dev:
+    args.remote_host = "localhost"
+    args.remote_port = 25565
 
 
 class ProxhyServer(asyncio.Server):
@@ -24,14 +64,16 @@ class ProxhyServer(asyncio.Server):
 
 
 async def handle_client(reader: StreamReader, writer: StreamWriter):
-    instances.append(Proxhy(reader, writer))
+    instances.append(
+        Proxhy(reader, writer, connect_host=(args.remote_host, args.remote_port))
+    )
 
 
 async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     server = await asyncio.start_server(handle_client, host, port)
     server = ProxhyServer(server)
 
-    print(f"Started proxhy on {host}:{port}")
+    print(f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port}")
 
     return server
 
@@ -67,7 +109,10 @@ async def main():
     # and i'm not going to fix it :D
 
     try:
-        server = await start()
+        server = await start(
+            host="localhost",
+            port=args.port,
+        )
         server.num_cancels = 0
         await server.serve_forever()
     except asyncio.CancelledError:
