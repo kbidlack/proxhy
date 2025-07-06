@@ -67,13 +67,14 @@ class Proxy:
         self,
         reader: StreamReader,
         writer: StreamWriter,
+        connect_host: tuple[str, int] = ("mc.hypixel.net", 25565),
     ):
         self.client = Client(reader, writer)
 
         self.state = State.HANDSHAKING
         self.open = True
 
-        self.CONNECT_HOST = ("", 0)
+        self.CONNECT_HOST = connect_host
 
         self.username = ""
 
