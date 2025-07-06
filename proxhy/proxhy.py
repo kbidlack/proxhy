@@ -99,8 +99,6 @@ class Proxhy(Proxy):
         self.logged_in = False
         self.logging_in = False
 
-        # TODO move to config file or something similar
-        self.CONNECT_HOST = ("mc.hypixel.net", 25565)
         self.log_path = "stat_log.jsonl"
 
     async def close(self):
