@@ -82,6 +82,10 @@ class Proxhy(Proxy):
         self.players_getting_stats = []
         self.players_with_stats = {}
         self.teams: Teams = Teams()
+        self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
+        
+        # used so the tab updater can signal functions that stats are logged
+        self.received_player_stats = asyncio.Event()
 
         self.waiting_for_locraw = False
         self.game_error = None  # if error has been sent that game
@@ -215,6 +219,7 @@ class Proxhy(Proxy):
         self.players.clear()
         self.players_with_stats.clear()
         self.players_getting_stats.clear()
+        self._user_team_prefix = ""  # Reset cached team prefix for new game
 
         self.game_error = None
         self.client_stream.send_packet(0x01, buff.getvalue())
@@ -227,6 +232,7 @@ class Proxhy(Proxy):
     async def packet_teams(self, buff: Buffer):
         name = buff.unpack(String)
         mode = buff.unpack(Byte)
+        
         # team creation
         if mode == b"\x00":
             display_name = buff.unpack(String)
@@ -240,6 +246,13 @@ class Proxhy(Proxy):
             players = set()
             for _ in range(player_count):
                 players.add(buff.unpack(String))
+
+            # Check if this team has "(YOU)" or " YOU" in suffix - this indicates it's the user's team
+            clean_suffix = re.sub(r'§.', '', suffix)
+            if any(marker in suffix or marker in clean_suffix for marker in ["(YOU)", "(You)", " YOU", " You"]):
+                self._user_team_prefix = prefix
+                if hasattr(self, 'client_stream') and self.client_stream:
+                    self.client_stream.chat(f"§a§lTeam detected: §r{prefix}§7Team {name}")
 
             self.teams.append(
                 Team(
@@ -266,11 +279,18 @@ class Proxhy(Proxy):
                 team.friendly_fire = buff.unpack(Byte)[0]
                 team.name_tag_visibility = buff.unpack(String)
                 team.color = buff.unpack(Byte)[0]
+                
+                # Check for YOU marker in updated team
+                clean_suffix = re.sub(r'§.', '', team.suffix)
+                if any(marker in team.suffix or marker in clean_suffix for marker in ["(YOU)", "(You)", " YOU", " You"]):
+                    self._user_team_prefix = team.prefix
+
         # add players to team
         elif mode in {b"\x03", b"\x04"}:
             add = True if mode == b"\x03" else False
             player_count = buff.unpack(VarInt)
             players = {buff.unpack(String) for _ in range(player_count)}
+            
             if add:
                 self.teams.get(name).players |= players
             else:
@@ -301,6 +321,31 @@ class Proxhy(Proxy):
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
         message = buff.unpack(Chat)
+        block_msg = False
+
+        if settings.display_top_stats.state != "off":  # 3 on states so we just check if its not off
+            game_start_msgs = [  # block all the game start messages
+                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+                "                                  Bed Wars",
+                "     Protect your bed and destroy the enemy beds.",
+                "      Upgrade yourself and your team by collecting",
+                "    Iron, Gold, Emerald and Diamond from generators",
+                "                  to access powerful upgrades.",
+                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
+            ]
+
+            if message in game_start_msgs:
+                block_msg = True
+                if message == game_start_msgs[-2]:  # replace them with the statcheck overview
+                    self.client_stream.chat(
+                        TextComponent("Fetching top stats...").color("gold").bold()
+                    )
+                    await asyncio.sleep(3)  # TODO: why do we have to wait 3s?
+                    # idfk its supposed to wait for the flare from the _update_stats function
+                    # and it does, but then for some reason it only fetches one player so idk
+                    # if we wait 3s it works slash shrug
+                    highlights = await self.stat_highlights()
+                    self.client_stream.chat(highlights)
 
         async def _update_game(self: Self, game: dict):
             self.game.update(game)
@@ -323,7 +368,8 @@ class Proxhy(Proxy):
             else:
                 await _update_game(self, json.loads(message))
 
-        self.client_stream.send_packet(0x02, buff.getvalue())
+        if not block_msg:
+            self.client_stream.send_packet(0x02, buff.getvalue())
 
     @listen_client(0x01)
     async def packet_client_chat_message(self, buff: Buffer):
@@ -808,16 +854,120 @@ class Proxhy(Proxy):
 
         await self._update_stats()
 
+    def get_own_team(self):
+        """Get the user's own team prefix. Returns team prefix or empty string if not found."""
+        # First try to use the cached team prefix from the "(YOU)" marker
+        if hasattr(self, '_user_team_prefix') and self._user_team_prefix:
+            return self._user_team_prefix
+        
+        # Fallback: look for team with "(YOU)" in suffix
+        for team in self.teams:
+            clean_suffix = re.sub(r'§.', '', team.suffix)
+            if any(marker in team.suffix or marker in clean_suffix for marker in ["(YOU)", "(You)", " YOU", " You"]):
+                self._user_team_prefix = team.prefix
+                return team.prefix
+        
+        # Last resort: try to find user by username (less reliable when nicked)
+        for team in self.teams:
+            if self.username in team.players:
+                return team.prefix
+        
+        return ""
+
+    async def stat_highlights(self):
+        """Display top 3 enemy players and nicked players."""
+        await self.received_player_stats.wait()
+        
+        if not self.players_with_stats:
+            return "No stats found!"
+        
+        own_team = self.get_own_team()
+        enemy_players = []
+        enemy_nicks = []
+        
+        # Process each player
+        for player_name, (player_uuid, display_name) in self.players_with_stats.items():
+            # Skip the user's own nickname
+            if player_name == self.username:
+                continue
+                
+            # Get player's team
+            player_team = ""
+            for team in self.teams:
+                if player_name in team.players:
+                    player_team = team.prefix
+                    break
+            
+            # Skip teammates
+            if player_team == own_team and own_team != "":
+                continue
+            
+            # Handle nicked players
+            if "[NICK]" in display_name:
+                nick_team_color = display_name.split("[NICK]")[0]
+                enemy_nicks.append(f"{nick_team_color}{player_name}")
+                continue
+            
+            # Handle regular players with stats
+            if hasattr(self, '_cached_players') and player_name in self._cached_players:
+                player = self._cached_players[player_name]
+                fplayer = FormattedPlayer(player)
+                
+                # Calculate ranking value
+                fkdr = int(fplayer.bedwars.raw_fkdr)
+                stars = int(fplayer.bedwars.raw_level)
+                
+                if settings.display_top_stats.state == "fkdr":
+                    rank_value = fkdr
+                elif settings.display_top_stats.state == "stars":
+                    rank_value = stars
+                elif settings.display_top_stats.state == "index":
+                    rank_value = fkdr * stars
+                else:
+                    rank_value = fkdr
+                
+                enemy_players.append({
+                    'name': player_name,
+                    'star_formatted': fplayer.bedwars.level,
+                    'fkdr_formatted': fplayer.bedwars.fkdr,
+                    'rank_value': rank_value,
+                    'team_color': player_team
+                })
+        
+        # Build output
+        result = ""
+        
+        # Add nicks section
+        if enemy_nicks:
+            result += f"§5§lNICKS§r: {', '.join(enemy_nicks)}"
+            if enemy_players:
+                result += "\n\n"
+        
+        # Add top 3 enemy players
+        if enemy_players:
+            top_players = sorted(enemy_players, key=lambda x: x['rank_value'], reverse=True)[:3]
+            for i, player in enumerate(top_players, 1):
+                if i > 1:
+                    result += "\n"
+                result += f"§f§l{i}§r: {player['star_formatted']} {player['team_color']}{player['name']}; FKDR: {player['fkdr_formatted']}"
+        elif not enemy_nicks:
+            result = "No stats found!"
+        
+        return result
+
     async def _update_stats(self):
         if self.waiting_for_locraw:
             return
-
         # update stats in tab in a game, bw supported so far
         if (
             self.game.gametype in {"bedwars"}
             and self.game.mode
             and settings.tablist_fkdr.state == "on"
         ):
+            # Initialize cache if it doesn't exist
+            if not hasattr(self, '_cached_players'):
+                self._cached_players = {}
+                
             # players are in these teams in pregame
             # Note: regex matches legacy color codes from server data format
             real_player_teams: list[Team] = [
@@ -874,6 +1024,10 @@ class Proxhy(Proxy):
                     continue
 
                 if player.name in self.players.values():
+                    # Only cache actual Player objects, not Nick objects
+                    if not isinstance(player, (PlayerNotFound, Nick)):
+                        self._cached_players[player.name] = player
+                    
                     if not isinstance(player, (PlayerNotFound, Nick)):
                         fplayer = FormattedPlayer(player)
 
@@ -896,7 +1050,13 @@ class Proxhy(Proxy):
                         else:
                             display_name = fplayer.rankname
                     else:
-                        display_name = f"[NICK] {player.name}"
+                        # Get team color for nicked player
+                        nick_team_color = ""
+                        for team in self.teams:
+                            if player.name in team.players:
+                                nick_team_color = team.prefix
+                                break
+                        display_name = f"{nick_team_color}[NICK] {player.name}"
 
                     self.client_stream.send_packet(
                         0x38,
@@ -909,6 +1069,8 @@ class Proxhy(Proxy):
                     self.players_with_stats.update(
                         {player.name: (player.uuid, display_name)}
                     )
+        if self.players_with_stats:
+            self.received_player_stats.set()
 
     async def log_bedwars_stats(self, event: str) -> None:
         # chatgpt ahh comments
