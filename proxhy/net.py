@@ -40,9 +40,6 @@ class Stream:
         # this isn't really used but whatever
         self.paused = False
 
-        # more minecraft specific stuff
-        self.destination = 0  # 0 = client, 1 = server
-
     @property
     def key(self):
         return self._key
@@ -102,13 +99,17 @@ class Stream:
 
         self.write(packet_length + packet)
 
+
+class Client(Stream):
     def chat(self, message: str | TextComponent) -> None:
-        if self.destination == 0:
-            self.send_packet(0x02, Chat.pack_msg(message))
-        else:  # self.destination == 1; server
-            # technically messages to the server should only be strings
-            # but I'm allowing TextComponents if they're needed for whatever reason
-            self.send_packet(0x01, String(message))
+        self.send_packet(0x02, Chat.pack_msg(message))
+
+
+class Server(Stream):
+    def chat(self, message: str | TextComponent) -> None:
+        # technically messages to the server should only be strings
+        # but I'm allowing TextComponents if they're needed for whatever reason
+        self.send_packet(0x01, String(message))
 
 
 def pkcs1_v15_padded_rsa_encrypt(der_public_key, decrypted):
