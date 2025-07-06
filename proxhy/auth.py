@@ -1,3 +1,4 @@
+import os
 import time
 
 import jwt
@@ -55,7 +56,7 @@ def safe_set(service: str, user: str, secret: str) -> None:
     Credential Manager's 2 560-byte blob limit.  Raises ValueError
     early instead of letting win32cred.CredWrite explode later.
     """
-    if len(secret) > MAX_SECRET_CHARS:
+    if len(secret) > MAX_SECRET_CHARS and os.name == "nt":
         raise ValueError(
             f"Secret for {service}/{user} is too large "
             f"({len(secret)} > {MAX_SECRET_CHARS} characters)."
