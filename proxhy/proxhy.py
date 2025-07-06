@@ -6,6 +6,7 @@ import os
 import random
 import re
 import uuid
+from collections import namedtuple
 from pathlib import Path
 from typing import Self
 from unittest.mock import Mock
@@ -818,12 +819,27 @@ class Proxhy(Proxy):
         )
         self.client_stream.chat(settings_msg)
 
-        if setting_attrs[-1] == "show_fkdr":
-            if new_state == "ON":
-                await self._update_stats()
-            # TODO: implement reset_tablist() below
-            # elif new_state == "OFF":
-            #     await self.reset_tablist()
+        Callback = namedtuple("Callback", ["setting", "old_state", "new_state", "func"])
+        callbacks = [
+            Callback(
+                setting="bedwars.tablist.show_fkdr",
+                old_state="OFF",
+                new_state="ON",
+                func=self._update_stats,
+            )
+        ]
+        # TODO: implement reset_tablist() for ON -> OFF
+
+        for callback in callbacks:
+            if (
+                setting_name == callback.setting
+                and old_state == callback.old_state
+                and new_state == callback.new_state
+            ):
+                if asyncio.iscoroutinefunction(callback.func):
+                    await callback.func()
+                else:
+                    callback.func()
 
     @property
     def hypixel_api_key(self):
