@@ -1,110 +1,250 @@
 import json
+from pathlib import Path
 
-
-class Setting:
-    def __init__(self, display_name, states, current_state="", description=None):
-        self.display_name = display_name
-        self.states_dict = {"off": "§c", "on": "§a"} if states == "toggle" else states
-        if not isinstance(self.states_dict, dict):
-            raise TypeError(
-                f"Expected 'toggle' or dict for self.states_dict; got {type(states)} instead."
-            )
-        if not any(
-            item.lower() == current_state.lower() for item in self.states_dict
-        ):  # if active states is not in states_dict
-            raise ValueError(
-                f"Given current state {current_state} not present in self.states."
-            )
-        # if the an active state is specified, use that, else select the first one
-        self.state = (
-            current_state if current_state else list(self.states_dict.keys())[0]
-        )
-
-        self.description = description
-
-    def next_state(self):  # cycle to next state; i.e. ON -> OFF
-        keys = list(self.states_dict.keys())  # get all keys in states_dict as a list
-        state_id = keys.index(self.state)  # find the id of the current state (int)
-        self.state = keys[
-            (state_id + 1) % len(keys)
-        ]  # find next state; modulo wraps end around
-        settings.save()  # global var grossssss......
-        return self.state
-
-    def __call__(self):  # calling an instance of the class cycles & returns the state
-        return self.next_state()
-
-
-class SettingsManager:  # this class is literally a glorified dictionary wrapper
-    def __init__(self, settings_dict, filename="settings.json"):
-        # assign directly into __dict__ to avoid triggering __setattr__.
-        self.__dict__["settings_dict"] = settings_dict
-        self.__dict__["filename"] = filename
-
-    def __getattr__(self, name):
-        # only called if the normal attribute lookup fails
-        try:
-            return self.settings_dict[name]
-        except KeyError:
-            raise AttributeError(f"No setting named '{name}'") from None
-
-    def __setattr__(self, name, value):
-        # allow reassigning a setting, e.g. manager.foo = new_setting_obj
-        if name == "settings_dict":
-            # protect our internal storage
-            super().__setattr__(name, value)
-        elif name in self.settings_dict:
-            self.settings_dict[name] = value
-            self.save()  # write to json
-        else:
-            raise AttributeError(f"No setting named '{name}'")
-
-    def save(self):
-        # write current states to json
-        serializable = {k: v.state for k, v in self.settings_dict.items()}
-        with open(self.filename, "w") as f:
-            json.dump(serializable, f, indent=2)
-
-
-# we don't want to put this into a if __name__ == '__main__' because every time settings.py is referenced,
-# it SHOULD be rebuilding the settings container based on the settings.json file which might have been updated
 default_settings = {
-    "tablist_fkdr": {
-        "display_name": "Show Tablist FKDR",
-        "states": "toggle",
-        "default_state": "on",
-        "description": "In bedwars, shows users' FKDR next to their name in the tablist.",
-    },
-    "tablist_fkdr_is_mode_specific": {
-        "display_name": "Mode-Specific Tablist FKDR",
-        "states": "toggle",
-        "default_state": "off",
-        "description": "In Bedwars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
-    },
+    "bedwars": {
+        "description": "Settings related to the BedWars game mode.",
+        "tablist": {
+            "description": "Settings related to the BedWars player list.",
+            "show_fkdr": {
+                "display_name": "Show Tablist FKDR",
+                "description": "In BedWars, shows users' FKDR next to their name in the tablist.",
+                "states": {
+                    "OFF": "red",
+                    "ON": "green",
+                },
+                "state": "OFF",
+            },
+            "is_mode_specific": {
+                "display_name": "Mode-Specific Tablist FKDR",
+                "description": "In BedWars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
+                "states": {
+                    "OFF": "red",
+                    "ON": "green",
+                },
+                "state": "OFF",
+            },
+        },
+        "display_top_stats": {
+            "display_name": "Preface top players",
+            "description": "In BedWars, receive a chat message at the start of the game highlighting the best players.",
+            "states": {
+                "OFF": "red",
+                "FKDR": "green",
+                "STAR": "green",
+                "INDEX": "green",
+            },
+            "state": "INDEX",
+        },
+    }
 }
 
-# open settings file; doesn't save metadata, just the internal name and whether it's on or off. all metadata is stored above
-try:
-    with open("proxhy_settings.json", "r") as t:
+
+class SettingProperty:
+    """A setting property that can be accessed with dot notation and auto-saves."""
+
+    def __init__(self, config_data, parent_settings, key_path):
+        self._config_data = config_data
+        self._parent_settings = parent_settings
+        self._key_path = key_path
+
+        # No need for reverse mapping - state names are now the keys directly
+
+    @property
+    def state(self):
+        """Get the current state name."""
+        current_state_key = self._config_data.get("state", "OFF")
+        # In the new format, the state key is the state name itself
+        return current_state_key
+
+    @state.setter
+    def state(self, value):
+        """Set the state by name (OFF, ON, FKDR, STAR, INDEX)."""
+        if (
+            isinstance(value, str)
+            and "states" in self._config_data
+            and value in self._config_data["states"]
+        ):
+            # State name is valid
+            state_key = value
+        else:
+            valid_states = list(self._config_data.get("states", {}).keys())
+            raise ValueError(f"Invalid state '{value}'. Valid states: {valid_states}")
+
+        self._config_data["state"] = state_key
+        self._parent_settings._save()
+
+    @property
+    def states(self):
+        """Get the mapping of state names to colors."""
+        return self._config_data.get("states", {})
+
+    @property
+    def display_name(self):
+        """Get the display name of the setting."""
+        return self._config_data.get("display_name", "")
+
+    @property
+    def description(self):
+        """Get the description of the setting."""
+        return self._config_data.get("description", "")
+
+    def toggle(self):
+        """Toggle to the next available state in the sequence."""
+        if "states" not in self._config_data:
+            raise ValueError("Cannot toggle: no states defined for this setting")
+
+        # Get all state names in order
+        state_names = list(self._config_data["states"].keys())
+        if not state_names:
+            raise ValueError("Cannot toggle: no states available")
+
+        # Find current state index
+        current_state = self.state
         try:
-            saved_setting_states = json.load(t)
-        except json.JSONDecodeError:
-            saved_setting_states = {}
-except FileNotFoundError:
-    saved_setting_states = {}
+            current_index = state_names.index(current_state)
+        except ValueError:
+            # Current state not found, start from first state
+            current_index = -1
 
-# create a dictionary of Setting objects to represent all settings
-settings_dict = {}
-for s in default_settings:
-    settings_dict[s] = Setting(
-        display_name=default_settings[s]["display_name"],
-        states=default_settings[s]["states"],
-        current_state=saved_setting_states[s]
-        if s in saved_setting_states.keys()
-        else default_settings[s]["default_state"],
-        description=default_settings[s]["description"],
-    )
+        # Move to next state (wrap around to first if at end)
+        next_index = (current_index + 1) % len(state_names)
+        next_state = state_names[next_index]
 
-# put that dictionary into a small manager class so we can use dot notation
-settings = SettingsManager(settings_dict)
-settings.save()
+        # Set the new state
+        self.state = next_state
+        return next_state
+
+    def __str__(self):
+        return f"{self.display_name}: {self.state}"
+
+    def __repr__(self):
+        return (
+            f"SettingProperty(display_name='{self.display_name}', state='{self.state}')"
+        )
+
+
+class SettingGroup:
+    """A group of settings that can be accessed with dot notation."""
+
+    def __init__(self, config_data, parent_settings, key_path):
+        self._config_data = config_data
+        self._parent_settings = parent_settings
+        self._key_path = key_path
+
+        # Create attributes for each setting/group
+        for key, value in config_data.items():
+            if key == "description":
+                continue
+
+            if isinstance(value, dict):
+                if "state" in value:
+                    # This is a setting property
+                    setattr(
+                        self,
+                        key,
+                        SettingProperty(value, parent_settings, key_path + [key]),
+                    )
+                else:
+                    # This is a setting group
+                    setattr(
+                        self,
+                        key,
+                        SettingGroup(value, parent_settings, key_path + [key]),
+                    )
+
+    @property
+    def description(self):
+        """Get the description of the setting group."""
+        return self._config_data.get("description", "")
+
+    def __str__(self):
+        return f"SettingGroup: {self.description}"
+
+    def __repr__(self):
+        return f"SettingGroup(description='{self.description}')"
+
+
+class Settings:
+    """Main settings class with auto-save functionality."""
+
+    def __init__(self, settings_file: str | Path = "proxhy_settings.json"):
+        self._settings_file = Path(settings_file)
+        self._config_data = self._load_settings()
+
+        # Create attributes for each top-level setting group
+        for key, value in self._config_data.items():
+            if isinstance(value, dict):
+                setattr(self, key, SettingGroup(value, self, [key]))
+
+    def _load_settings(self):
+        """Load settings from JSON file or create default settings."""
+        try:
+            if self._settings_file.exists():
+                with open(self._settings_file, "r") as f:
+                    loaded_settings = json.load(f)
+                # Merge with default settings to ensure new settings are included
+                return self._merge_settings(default_settings, loaded_settings)
+            else:
+                # Create file with default settings
+                self._save_settings(default_settings)
+                return default_settings.copy()
+        except (json.JSONDecodeError, IOError) as e:
+            print(f"Error loading settings file: {e}")
+            print("Using default settings...")
+            return default_settings.copy()
+
+    def _merge_settings(self, default, loaded):
+        """Merge loaded settings with default settings."""
+        result = default.copy()
+        for key, value in loaded.items():
+            if (
+                key in result
+                and isinstance(result[key], dict)
+                and isinstance(value, dict)
+            ):
+                result[key] = self._merge_settings(result[key], value)
+            else:
+                result[key] = value
+        return result
+
+    def _save_settings(self, settings_data):
+        """Save settings data to JSON file."""
+        try:
+            with open(self._settings_file, "w") as f:
+                json.dump(settings_data, f, indent=2)
+        except IOError as e:
+            print(f"Error saving settings file: {e}")
+
+    def _save(self):
+        """Save current settings to file."""
+        self._save_settings(self._config_data)
+
+    def reset_to_defaults(self):
+        """Reset all settings to default values."""
+        self._config_data = default_settings.copy()
+        self._save()
+
+        # Recreate attributes
+        for key, value in self._config_data.items():
+            if isinstance(value, dict):
+                setattr(self, key, SettingGroup(value, self, [key]))
+
+    def get_setting_by_path(self, path):
+        """Get a setting by its path (e.g., 'bedwars.tablist.show_fkdr')."""
+        keys = path.split(".")
+        current = self._config_data
+
+        for key in keys:
+            if isinstance(current, dict) and key in current:
+                current = current[key]
+            else:
+                raise KeyError(f"Setting path '{path}' not found")
+
+        return current
+
+    def __str__(self):
+        return f"Settings(file='{self._settings_file}')"
+
+    def __repr__(self):
+        return f"Settings(settings_file='{self._settings_file}')"
