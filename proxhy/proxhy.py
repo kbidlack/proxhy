@@ -48,7 +48,7 @@ from .formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from .mcmodels import Game, Nick, Team, Teams
 from .net import Stream
 from .proxy import Proxy, State, listen_client, listen_server
-from .settings import settings
+from .settings import SettingGroup, SettingProperty, Settings
 
 
 class Proxhy(Proxy):
@@ -67,6 +67,8 @@ class Proxhy(Proxy):
         "description": {"text": "why hello there"},
         "favicon": f"data:image/png;base64,{b64_favicon}",
     }
+
+    settings = Settings()
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -746,32 +748,82 @@ class Proxhy(Proxy):
                 self.client_stream.chat(key_value_msg)
 
     @command("setting")
-    async def edit_settings(self, s_name):
-        try:
-            setting_obj = getattr(settings, s_name)
-            old_state = setting_obj.state
-            old_state_color = setting_obj.states_dict[old_state]
-            new_state = setting_obj.next_state()
-            new_state_color = setting_obj.states_dict[new_state]
+    async def edit_settings(self, setting_name: str, value: str = ""):
+        value = value.upper()
+        setting_attrs = setting_name.split(".")
 
-            settings_msg = (
-                TextComponent("Changed ")
-                .append(TextComponent(setting_obj.display_name).color("yellow"))
-                .append(TextComponent(" from "))
-                .append(TextComponent(old_state.upper()).bold().color(old_state_color))
-                .append(TextComponent(" to "))
-                .append(TextComponent(new_state.upper()).bold().color(new_state_color))
-                .append(TextComponent("!"))
+        if len(setting_attrs) == 1:
+            setting_name = setting_attrs[0]
+            if not hasattr(self.settings, setting_name):
+                raise CommandException(f"Setting '{setting_name}' does not exist!")
+            setting_attrs = [setting_name]
+            parent_obj = self.settings
+        else:
+            prev_sa = "settings"
+            parent_obj = self.settings
+            for sa in setting_attrs[:-1]:
+                if not hasattr(parent_obj, sa):
+                    if isinstance(parent_obj, SettingGroup):
+                        raise CommandException(
+                            f"Setting group '{prev_sa}' does not have a setting named '{sa}'!"
+                        )
+                    elif isinstance(parent_obj, SettingProperty):
+                        raise CommandException(f"'{prev_sa}' is a setting!")
+                    else:
+                        raise CommandException("This should not happen!")
+                prev_sa = sa
+                parent_obj = getattr(parent_obj, sa)
+
+        if not hasattr(parent_obj, setting_attrs[-1]):
+            if isinstance(parent_obj, SettingGroup):
+                raise CommandException(
+                    f"Setting group '{'.'.join(setting_attrs[:-1])}' does not have a setting named '{setting_attrs[-1]}'!"
+                )
+            elif isinstance(parent_obj, SettingProperty):
+                raise CommandException(
+                    f"'{'.'.join(setting_attrs[:-1])}' is a setting!"
+                )
+            else:
+                raise CommandException("This should not happen!")
+
+        setting_obj = getattr(parent_obj, setting_attrs[-1])
+
+        if isinstance(setting_obj, SettingGroup):
+            raise CommandException(f"'{setting_name}' is a setting group!")
+        elif isinstance(setting_obj, SettingProperty):
+            setting_obj: SettingProperty
+        else:
+            raise CommandException("This should not happen!")
+
+        if value and (value not in setting_obj.states):
+            raise CommandException(
+                f"Invalid value '{value}' for setting '{setting_name}'; "
+                f"valid values are: {', '.join(setting_obj.states.keys())}"
             )
-            self.client_stream.chat(settings_msg)
-            if s_name == "tablist_fkdr":
-                if new_state.lower() == "on":
-                    await self._update_stats()
-                # TODO: implement reset_tablist() below
-                # elif new_state.lower() == "off":
-                #     await self.reset_tablist()
-        except AttributeError as e:
-            raise CommandException(e)
+
+        old_state = setting_obj.state
+        old_state_color = setting_obj.states[old_state]
+        new_state = value or setting_obj.toggle()
+        setting_obj.state = new_state
+        new_state_color = setting_obj.states[new_state]
+
+        settings_msg = (
+            TextComponent("Changed ")
+            .append(TextComponent(setting_obj.display_name).color("yellow"))
+            .append(TextComponent(" from "))
+            .append(TextComponent(old_state.upper()).bold().color(old_state_color))
+            .append(TextComponent(" to "))
+            .append(TextComponent(new_state.upper()).bold().color(new_state_color))
+            .append(TextComponent("!"))
+        )
+        self.client_stream.chat(settings_msg)
+
+        if setting_attrs[-1] == "show_fkdr":
+            if new_state == "ON":
+                await self._update_stats()
+            # TODO: implement reset_tablist() below
+            # elif new_state == "OFF":
+            #     await self.reset_tablist()
 
     @property
     def hypixel_api_key(self):
@@ -814,9 +866,9 @@ class Proxhy(Proxy):
 
         # update stats in tab in a game, bw supported so far
         if (
-            self.game.gametype in {"bedwars"}
+            (self.game.gametype in {"bedwars"})
             and self.game.mode
-            and settings.tablist_fkdr.state == "on"
+            and (self.settings.bedwars.tablist.show_fkdr.state == "ON")
         ):
             # players are in these teams in pregame
             # Note: regex matches legacy color codes from server data format
