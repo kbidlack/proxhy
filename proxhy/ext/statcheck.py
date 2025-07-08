@@ -453,8 +453,8 @@ class StatCheck(Proxhy):
             player = await self.hypixel_client.player(self.username)
             # Extract the Bedwars statistics.
             bedwars_stats = player._data.get("stats", {}).get("Bedwars", {})
-        except Exception as e:
-            print(f"Failed to log stats on {event}: {e}")
+        except Exception:
+            # print(f"Failed to log stats on {event}: {e}") # TODO: log this
             return
 
         # Create the new log entry.
@@ -476,15 +476,17 @@ class StatCheck(Proxhy):
                     # If the bedwars stats haven't changed, skip logging.
                     if last_entry.get("bedwars") == bedwars_stats:
                         return
-            except Exception as e:
-                print(f"Error checking last log entry: {e}")
+            except Exception:
+                # print(f"Error checking last log entry: {e}")
+                pass  # TODO: log this
 
         # Append the new log entry as a JSON line.
         try:
             with open(self.log_path, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-        except Exception as e:
-            print(f"Error writing stat log: {e}")
+        except Exception:
+            # print(f"Error writing stat log: {e}")
+            pass  # TODO: log this
 
     @method
     async def stat_highlights(self):

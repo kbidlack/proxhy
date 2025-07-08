@@ -189,10 +189,10 @@ class Settings:
                 # Create file with default settings
                 self._save_settings(default_settings)
                 return default_settings.copy()
-        except (json.JSONDecodeError, IOError) as e:
-            print(f"Error loading settings file: {e}")
-            print("Using default settings...")
-            return default_settings.copy()
+        except (json.JSONDecodeError, IOError):
+            # print(f"Error loading settings file: {e}")
+            # print("Using default settings...")
+            return default_settings.copy()  # TODO: log this
 
     def _merge_settings(self, default, loaded):
         """Merge loaded settings with default settings."""
@@ -213,8 +213,9 @@ class Settings:
         try:
             with open(self._settings_file, "w") as f:
                 json.dump(settings_data, f, indent=2)
-        except IOError as e:
-            print(f"Error saving settings file: {e}")
+        except IOError:
+            # print(f"Error saving settings file: {e}")
+            pass  # TODO: log this
 
     def _save(self):
         """Save current settings to file."""
