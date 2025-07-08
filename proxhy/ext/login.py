@@ -69,7 +69,10 @@ class Login(Proxhy):
             VarInt(State.LOGIN.value),
         )
 
-        self.access_token, self.username, self.uuid = auth.load_auth_info(self.username)
+        if self.CONNECT_HOST[0] not in {"localhost", "127.0.0.1", "::1"}:
+            self.access_token, self.username, self.uuid = auth.load_auth_info(
+                self.username
+            )
         self.server.send_packet(0x00, String(self.username))
 
     @command("login")
