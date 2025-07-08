@@ -104,8 +104,6 @@ class Proxy:
                 packet_id = buff.unpack(VarInt)
                 packet_data = buff.read()
 
-                # print(f"Client: {packet_id=}, {buff.getvalue()=}, {self.state=}")
-
                 # call packet handler
                 results = client_listeners.get((packet_id, self.state))
                 if results:
@@ -130,13 +128,11 @@ class Proxy:
             if self.server.compression:
                 data_length = buff.unpack(VarInt)
                 if data_length >= self.server.compression_threshold:
-                    # print(buff.getvalue())
                     data = zlib.decompress(buff.read())
                     buff = Buffer(data)
 
             packet_id = buff.unpack(VarInt)
             packet_data = buff.read()
-            # print(f"Server: {hex(packet_id)=}, {self.state=}")
 
             # call packet handler
             results = server_listeners.get((packet_id, self.state))
