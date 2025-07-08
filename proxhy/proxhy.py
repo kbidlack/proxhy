@@ -80,7 +80,6 @@ class Proxhy(Proxy):
         self.received_locraw = asyncio.Event()
         self.received_locraw.set()
 
-        self.waiting_for_locraw = False
         self.game_error = None  # if error has been sent that game
         self.logged_in = False
         self.logging_in = False
@@ -137,7 +136,7 @@ class Proxhy(Proxy):
         self.client.send_packet(0x01, buff.getvalue())
 
         if not self.client_type == "lunar":
-            self.waiting_for_locraw = True
+            self.received_locraw.clear()
             self.server.send_packet(0x01, String("/locraw"))
 
     @listen_server(0x3E, blocking=True)
@@ -277,7 +276,7 @@ class Proxhy(Proxy):
                 return
 
         if re.match(r"^\{.*\}$", message):  # locraw
-            if self.waiting_for_locraw:
+            if not self.received_locraw.is_set():
                 if "limbo" in message:  # sometimes returns limbo right when you join
                     if not self.teams:  # probably in limbo
                         return
@@ -285,7 +284,7 @@ class Proxhy(Proxy):
                         await asyncio.sleep(0.1)
                         return self.server.send_packet(0x01, String("/locraw"))
                 else:
-                    self.waiting_for_locraw = False
+                    self.received_locraw.set()
                     await _update_game(self, json.loads(message))
             else:
                 await _update_game(self, json.loads(message))

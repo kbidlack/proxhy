@@ -323,8 +323,7 @@ class StatCheck(Proxhy):
 
     @method
     async def _update_stats(self):
-        if self.waiting_for_locraw:
-            return
+        await self.received_locraw.wait()
         # update stats in tab in a game, bw supported so far
         if (
             (self.game.gametype in {"bedwars"})
