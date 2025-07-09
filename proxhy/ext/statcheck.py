@@ -403,17 +403,17 @@ class StatCheck(Proxhy):
                                 (
                                     fplayer.bedwars.level,
                                     fplayer.rankname,
-                                    f" | {fplayer.bedwars.fkdr}",
+                                    f" §7| {fplayer.bedwars.fkdr}",
                                 )
                             )
-                        elif self.game.gametype == "skywars":
-                            display_name = " ".join(
-                                (
-                                    fplayer.skywars.level,
-                                    fplayer.rankname,
-                                    f" | {fplayer.skywars.kdr}",
-                                )
-                            )
+                        # elif self.game.gametype == "skywars":
+                        #     display_name = " ".join(
+                        #         (
+                        #             fplayer.skywars.level,
+                        #             fplayer.rankname,
+                        #             f" | {fplayer.skywars.kdr}",
+                        #         )
+                        #     )
                         else:
                             display_name = fplayer.rankname
                     else:
