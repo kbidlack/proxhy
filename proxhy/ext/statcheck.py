@@ -26,6 +26,7 @@ from ._methods import method
 
 class StatCheck(Proxhy):
     _cached_players: dict
+    nick_team_colors: dict[str, str]  # Nicked player team colors
 
     @method
     async def _sc_internal(
@@ -417,12 +418,12 @@ class StatCheck(Proxhy):
                             display_name = fplayer.rankname
                     else:
                         # Get team color for nicked player
-                        nick_team_color = ""
                         for team in self.teams:
                             if player.name in team.players:
-                                nick_team_color = team.prefix
+                                self.nick_team_colors.update({player.name: team.prefix})
                                 break
-                        display_name = f"{nick_team_color}[NICK] {player.name}"
+
+                        display_name = f"§5[NICK] {player.name}"
 
                     self.client.send_packet(
                         0x38,
@@ -518,8 +519,8 @@ class StatCheck(Proxhy):
 
             # Handle nicked players
             if "[NICK]" in display_name:
-                nick_team_color = display_name.split("[NICK]")[0]
-                enemy_nicks.append(f"{nick_team_color}{player_name}")
+                nick_team_color = self.nick_team_colors.get(player_name, "")
+                enemy_nicks.append(f"{nick_team_color}{player_name}§f")
                 continue
 
             # Handle regular players with stats
