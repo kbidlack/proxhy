@@ -42,13 +42,19 @@ class Commands(Proxhy):
 
     @command("setting")
     async def edit_settings(self, setting_name: str, value: str = ""):
+        value_oc = value
         value = value.upper()
         setting_attrs = setting_name.split(".")
 
         if len(setting_attrs) == 1:
             setting_name = setting_attrs[0]
             if not hasattr(self.settings, setting_name):
-                raise CommandException(f"Setting '{setting_name}' does not exist!")
+                msg = (
+                    TextComponent("Setting")
+                    .appends(TextComponent(f"'{setting_name}'").color("gold"))
+                    .appends(TextComponent("does not exist!"))
+                )
+                raise CommandException(msg)
             setting_attrs = [setting_name]
             parent_obj = self.settings
         else:
@@ -57,11 +63,21 @@ class Commands(Proxhy):
             for sa in setting_attrs[:-1]:
                 if not hasattr(parent_obj, sa):
                     if isinstance(parent_obj, SettingGroup):
-                        raise CommandException(
-                            f"Setting group '{prev_sa}' does not have a setting named '{sa}'!"
+                        msg = (
+                            TextComponent("Setting group")
+                            .appends(TextComponent(f"'{prev_sa}'").color("gold"))
+                            .appends("does not have a setting named")
+                            .appends(TextComponent(f"'{sa}'").color("gold"))
+                            .append("!")
                         )
+                        raise CommandException(msg)
                     elif isinstance(parent_obj, SettingProperty):
-                        raise CommandException(f"'{prev_sa}' is a setting!")
+                        msg = (
+                            TextComponent(f"'{prev_sa}'")
+                            .color("gold")
+                            .appends("is a setting!")
+                        )
+                        raise CommandException(msg)
                     else:
                         raise CommandException("This should not happen!")
                 prev_sa = sa
@@ -69,30 +85,61 @@ class Commands(Proxhy):
 
         if not hasattr(parent_obj, setting_attrs[-1]):
             if isinstance(parent_obj, SettingGroup):
-                raise CommandException(
-                    f"Setting group '{'.'.join(setting_attrs[:-1])}' does not have a setting named '{setting_attrs[-1]}'!"
+                msg = (
+                    TextComponent("Setting group")
+                    .appends(
+                        TextComponent(f"'{'.'.join(setting_attrs[:-1])}'").color("gold")
+                    )
+                    .appends("does not have a setting named")
+                    .appends(TextComponent(f"'{setting_attrs[-1]}'").color("gold"))
+                    .append("!")
                 )
+                raise CommandException(msg)
             elif isinstance(parent_obj, SettingProperty):
-                raise CommandException(
-                    f"'{'.'.join(setting_attrs[:-1])}' is a setting!"
+                msg = (
+                    TextComponent(f"'{'.'.join(setting_attrs[:-1])}'")
+                    .color("gold")
+                    .appends("is a setting!")
                 )
+                raise CommandException(msg)
             else:
                 raise CommandException("This should not happen!")
 
         setting_obj = getattr(parent_obj, setting_attrs[-1])
 
         if isinstance(setting_obj, SettingGroup):
-            raise CommandException(f"'{setting_name}' is a setting group!")
+            msg = (
+                TextComponent(f"'{setting_name}'")
+                .color("gold")
+                .appends("is a setting group!")
+            )
+            raise CommandException(msg)
         elif isinstance(setting_obj, SettingProperty):
             setting_obj: SettingProperty
         else:
             raise CommandException("This should not happen!")
 
         if value and (value not in setting_obj.states):
-            raise CommandException(
-                f"Invalid value '{value}' for setting '{setting_name}'; "
-                f"valid values are: {', '.join(setting_obj.states.keys())}"
+            msg = TextComponent("Invalid value").appends(
+                TextComponent(f"'{value_oc}'")
+                .color("gold")
+                .appends("for setting")
+                .appends(TextComponent(f"'{setting_name}'"))
+                .append(";")
+                .appends("valid values are: ")
             )
+            for i, tc in enumerate(
+                map(
+                    lambda t: TextComponent(t).color("green"),
+                    setting_obj.states.keys(),
+                )
+            ):
+                if not i == len(setting_obj.states.keys()) - 1:
+                    msg.append(tc).append(TextComponent(","))
+                else:
+                    msg.append(tc)
+
+            raise CommandException(msg)
 
         old_state = setting_obj.state
         old_state_color = setting_obj.states[old_state]
@@ -101,12 +148,12 @@ class Commands(Proxhy):
         new_state_color = setting_obj.states[new_state]
 
         settings_msg = (
-            TextComponent("Changed ")
-            .append(TextComponent(setting_obj.display_name).color("yellow"))
-            .append(TextComponent(" from "))
-            .append(TextComponent(old_state.upper()).bold().color(old_state_color))
-            .append(TextComponent(" to "))
-            .append(TextComponent(new_state.upper()).bold().color(new_state_color))
+            TextComponent("Changed")
+            .appends(TextComponent(setting_obj.display_name).color("yellow"))
+            .appends(TextComponent("from"))
+            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))
+            .appends(TextComponent("to"))
+            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))
             .append(TextComponent("!"))
         )
         self.client.chat(settings_msg)
