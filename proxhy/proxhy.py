@@ -306,11 +306,19 @@ class Proxhy(Proxy):
                 try:
                     output: str | TextComponent = await command(self, message)
                 except CommandException as err:
+                    if isinstance(err.message, TextComponent):
+                        err.message.flatten()
+
+                        for i, child in enumerate(err.message.get_children()):
+                            if not child.data.get("color"):
+                                err.message.replace_child(i, child.color("dark_red"))
+
+                    err.message = TextComponent(err.message)
+                    if not err.message.data.get("color"):
+                        err.message.color("dark_red")
+
                     error_msg = (
-                        TextComponent("∎ ")
-                        .color("blue")
-                        .bold()
-                        .append(TextComponent(err.message).color("dark_red"))
+                        TextComponent("∎ ").color("blue").bold().append(err.message)
                     )
                     self.client.chat(error_msg)
                 else:
