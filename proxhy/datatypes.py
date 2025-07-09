@@ -378,6 +378,17 @@ class TextComponent:
         self.data["extra"].append(self._normalize_component(component))
         return self
 
+    def appends(self, component, separator=" ") -> TextComponent:
+        "Add a child component with a separator (defaults to space)"
+        component = TextComponent(self._normalize_component(component))
+        if not component.data.get("text"):
+            component.set_text(separator)
+        else:
+            component.data["text"] = f"{separator}{component.data.get('text', '')}"
+
+        self.append(component)
+        return self
+
     def extend(self, components) -> "TextComponent":
         """Add multiple child components"""
         for component in components:
