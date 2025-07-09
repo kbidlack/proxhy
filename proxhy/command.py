@@ -58,27 +58,25 @@ class Command:
         segments = message.split()
         args = segments[1:]
         if not self.parameters and args:
-            raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> takes no arguments!"
-            )
+            raise CommandException(f"Command <{segments[0]}> takes no arguments!")
         elif (len(args) > len(self.parameters)) and not any(
             p.infinite for p in self.parameters
         ):
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> takes at most "
+                f"Command <{segments[0]}> takes at most "
                 f"{len(self.parameters)} argument(s)!"
             )
         elif len(args) < len(self.required_parameters):
             names = ", ".join([param.name for param in self.required_parameters])
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> needs at least "
+                f"Command <{segments[0]}> needs at least "
                 f"{len(self.required_parameters)} argument(s)! ({names})"
             )
         else:
             for index, param in self.restricted_parameters:
                 if param.options and args[index].lower() not in param.options:
                     raise CommandException(
-                        f"§9§l∎ §4Invalid option '{args[index]}'. "
+                        f"Invalid option '{args[index]}'. "
                         f"Please choose a correct argument! ({', '.join(param.options)})"
                     )
 
