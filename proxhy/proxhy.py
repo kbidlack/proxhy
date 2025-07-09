@@ -313,14 +313,17 @@ class Proxhy(Proxy):
                         for i, child in enumerate(err.message.get_children()):
                             if not child.data.get("color"):
                                 err.message.replace_child(i, child.color("dark_red"))
+                            if not child.data.get("bold"):
+                                err.message.replace_child(i, child.bold(False))
 
                     err.message = TextComponent(err.message)
                     if not err.message.data.get("color"):
                         err.message.color("dark_red")
 
                     error_msg = (
-                        TextComponent("∎ ").color("blue").bold().append(err.message)
+                        TextComponent("∎ ").bold().color("blue").append(err.message)
                     )
+                    print(error_msg.to_json())
                     self.client.chat(error_msg)
                 else:
                     if output:
