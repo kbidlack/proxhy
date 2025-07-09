@@ -72,6 +72,7 @@ class Proxhy(Proxy):
         self.players_with_stats = {}
         self.teams: Teams = Teams()
         self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
+        self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
 
         # EVENTS
         # used so the tab updater can signal functions that stats are logged
