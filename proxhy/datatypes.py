@@ -196,6 +196,8 @@ class TextComponent:
                 data = first
             else:
                 data = {}
+        elif isinstance(data, TextComponent):
+            data = data.data.copy()  # Use the internal data dict
         self.data: dict = data.copy() if isinstance(data, dict) else {}
 
         # Validate and auto-detect content type
@@ -222,14 +224,14 @@ class TextComponent:
                     self.data["type"] = "text"
 
     # Content type methods
-    def set_text(self, text: str) -> "TextComponent":
+    def set_text(self, text: str) -> TextComponent:
         """Set plain text content"""
         self.data["text"] = text
         self.data["type"] = "text"
         self._remove_content_fields(except_field="text")
         return self
 
-    def set_translate(self, key: str, with_args=None, fallback=None) -> "TextComponent":
+    def set_translate(self, key: str, with_args=None, fallback=None) -> TextComponent:
         """Set translatable text content"""
         self.data["translate"] = key
         self.data["type"] = "translatable"
@@ -240,14 +242,14 @@ class TextComponent:
         self._remove_content_fields(except_field="translate")
         return self
 
-    def set_score(self, name: str, objective: str) -> "TextComponent":
+    def set_score(self, name: str, objective: str) -> TextComponent:
         """Set scoreboard value content"""
         self.data["score"] = {"name": name, "objective": objective}
         self.data["type"] = "score"
         self._remove_content_fields(except_field="score")
         return self
 
-    def set_selector(self, selector: str, separator=None) -> "TextComponent":
+    def set_selector(self, selector: str, separator=None) -> TextComponent:
         """Set entity selector content"""
         self.data["selector"] = selector
         self.data["type"] = "selector"
@@ -256,7 +258,7 @@ class TextComponent:
         self._remove_content_fields(except_field="selector")
         return self
 
-    def set_keybind(self, keybind: str) -> "TextComponent":
+    def set_keybind(self, keybind: str) -> TextComponent:
         """Set keybind content"""
         self.data["keybind"] = keybind
         self.data["type"] = "keybind"
@@ -272,7 +274,7 @@ class TextComponent:
         storage: str | None = None,
         interpret: bool = False,
         separator=None,
-    ) -> "TextComponent":
+    ) -> TextComponent:
         """Set NBT content"""
         self.data["nbt"] = nbt_path
         self.data["type"] = "nbt"
@@ -312,57 +314,57 @@ class TextComponent:
             "yellow",
             "white",
         ],
-    ) -> "TextComponent":
+    ) -> TextComponent:
         self.data["color"] = color
         return self
 
-    def font(self, font: str) -> "TextComponent":
+    def font(self, font: str) -> TextComponent:
         """Set font resource location"""
         self.data["font"] = font
         return self
 
-    def bold(self, bold: bool = True) -> "TextComponent":
+    def bold(self, bold: bool = True) -> TextComponent:
         """Set bold formatting"""
         self.data["bold"] = bold
         return self
 
-    def italic(self, italic: bool = True) -> "TextComponent":
+    def italic(self, italic: bool = True) -> TextComponent:
         """Set italic formatting"""
         self.data["italic"] = italic
         return self
 
-    def underlined(self, underlined: bool = True) -> "TextComponent":
+    def underlined(self, underlined: bool = True) -> TextComponent:
         """Set underlined formatting"""
         self.data["underlined"] = underlined
         return self
 
-    def strikethrough(self, strikethrough: bool = True) -> "TextComponent":
+    def strikethrough(self, strikethrough: bool = True) -> TextComponent:
         """Set strikethrough formatting"""
         self.data["strikethrough"] = strikethrough
         return self
 
-    def obfuscated(self, obfuscated: bool = True) -> "TextComponent":
+    def obfuscated(self, obfuscated: bool = True) -> TextComponent:
         """Set obfuscated formatting"""
         self.data["obfuscated"] = obfuscated
         return self
 
-    def shadow_color(self, color) -> "TextComponent":
+    def shadow_color(self, color) -> TextComponent:
         """Set shadow color (int or [a,r,g,b] list)"""
         self.data["shadow_color"] = color
         return self
 
     # Interactivity methods
-    def insertion(self, text: str) -> "TextComponent":
+    def insertion(self, text: str) -> TextComponent:
         """Set shift-click insertion text"""
         self.data["insertion"] = text
         return self
 
-    def click_event(self, action: str, value: str) -> "TextComponent":
+    def click_event(self, action: str, value: str) -> TextComponent:
         """Set click event (open_url, run_command, suggest_command, etc.)"""
         self.data["clickEvent"] = {"action": action, "value": value}
         return self
 
-    def hover_text(self, text) -> "TextComponent":
+    def hover_text(self, text) -> TextComponent:
         """Set hover tooltip with text"""
         self.data["hoverEvent"] = {
             "action": "show_text",
@@ -371,11 +373,22 @@ class TextComponent:
         return self
 
     # Child component methods
-    def append(self, component) -> "TextComponent":
+    def append(self, component) -> TextComponent:
         """Add a child component"""
         if "extra" not in self.data:
             self.data["extra"] = []
         self.data["extra"].append(self._normalize_component(component))
+        return self
+
+    def appends(self, component, separator=" ") -> TextComponent:
+        "Add a child component with a separator (defaults to space)"
+        component = TextComponent(self._normalize_component(component))
+        if not component.data.get("text"):
+            component.set_text(separator)
+        else:
+            component.data["text"] = f"{separator}{component.data.get('text', '')}"
+
+        self.append(component)
         return self
 
     def extend(self, components) -> "TextComponent":
@@ -384,14 +397,14 @@ class TextComponent:
             self.append(component)
         return self
 
-    def prepend(self, component) -> "TextComponent":
+    def prepend(self, component) -> TextComponent:
         """Add a child component at the beginning"""
         if "extra" not in self.data:
             self.data["extra"] = []
         self.data["extra"].insert(0, self._normalize_component(component))
         return self
 
-    def remove_child(self, index: int) -> "TextComponent":
+    def remove_child(self, index: int) -> TextComponent:
         """Remove a child component by index"""
         if "extra" in self.data and 0 <= index < len(self.data["extra"]):
             del self.data["extra"][index]
@@ -399,20 +412,20 @@ class TextComponent:
                 del self.data["extra"]
         return self
 
-    def replace_child(self, index: int, component) -> "TextComponent":
+    def replace_child(self, index: int, component) -> TextComponent:
         """Replace a child component"""
         if "extra" in self.data and 0 <= index < len(self.data["extra"]):
             self.data["extra"][index] = self._normalize_component(component)
         return self
 
-    def clear_children(self) -> "TextComponent":
+    def clear_children(self) -> TextComponent:
         """Remove all child components"""
         if "extra" in self.data:
             del self.data["extra"]
         return self
 
     # Utility methods
-    def copy(self) -> "TextComponent":
+    def copy(self) -> TextComponent:
         """Create a deep copy of this component"""
         return TextComponent(json.loads(json.dumps(self.data)))
 
@@ -429,9 +442,40 @@ class TextComponent:
         content_fields = {"text", "translate", "score", "selector", "keybind", "nbt"}
         return not any(field in self.data for field in content_fields)
 
-    def get_children(self) -> list:
+    def get_children(self) -> list[TextComponent]:
         """Get list of child components"""
         return [TextComponent(child) for child in self.data.get("extra", [])]
+
+    def flatten(self) -> TextComponent:
+        """Flatten extras"""
+        # Create a copy of this component without the extra field
+        flattened_data = {k: v for k, v in self.data.items() if k != "extra"}
+        flattened = TextComponent(flattened_data)
+
+        # Recursively collect all child components
+        def collect_children(component_data):
+            children = []
+            if "extra" in component_data:
+                for child in component_data["extra"]:
+                    # Add the child itself
+                    child_component = TextComponent(child)
+                    # Remove extra from the child for this level
+                    child_data = {
+                        k: v for k, v in child_component.data.items() if k != "extra"
+                    }
+                    children.append(child_data)
+
+                    # Recursively collect grandchildren
+                    children.extend(collect_children(child))
+            return children
+
+        # Collect all children and add them to the flattened component
+        all_children = collect_children(self.data)
+        if all_children:
+            flattened.data["extra"] = all_children
+
+        self.data = flattened.data.copy()
+        return self
 
     def _normalize_component(self, component):
         """Convert various component formats to dict"""
@@ -516,7 +560,7 @@ class TextComponent:
         return re.sub("\u00a7.", "", text)
 
     @classmethod
-    def from_legacy(cls, text: str) -> "TextComponent":
+    def from_legacy(cls, text: str) -> TextComponent:
         """
         Convert a string with Minecraft color codes (§) to a TextComponent.
         Supports color and formatting codes. Resets formatting on §r.
