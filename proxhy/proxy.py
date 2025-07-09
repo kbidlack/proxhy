@@ -2,6 +2,7 @@ import asyncio
 import json
 import zlib
 from asyncio import StreamReader, StreamWriter
+from collections import defaultdict
 from enum import Enum
 from secrets import token_bytes
 
@@ -15,8 +16,8 @@ from .net import (
     pkcs1_v15_padded_rsa_encrypt,
 )
 
-client_listeners = {}
-server_listeners = {}
+client_listeners = defaultdict(set)
+server_listeners = defaultdict(set)
 
 
 class State(Enum):
@@ -26,9 +27,15 @@ class State(Enum):
     PLAY = 3
 
 
-def listen_client(packet_id: int, state: State = State.PLAY, blocking=False):
+def listen_client(
+    packet_id: int, state: State = State.PLAY, blocking=False, override=False
+):
     def wrapper(func):
-        client_listeners.update({(packet_id, state): (func, blocking)})
+        if override:
+            # Remove existing listeners for this packet_id and state
+            client_listeners[(packet_id, state)] = set()
+
+        client_listeners[(packet_id, state)].add((func, blocking))
 
         async def inner(*args, **kwargs):
             return await func(*args, **kwargs)
@@ -38,9 +45,15 @@ def listen_client(packet_id: int, state: State = State.PLAY, blocking=False):
     return wrapper
 
 
-def listen_server(packet_id: int, state: State = State.PLAY, blocking=False):
+def listen_server(
+    packet_id: int, state: State = State.PLAY, blocking=False, override=False
+):
     def wrapper(func):
-        server_listeners.update({(packet_id, state): (func, blocking)})
+        if override:
+            # Remove existing listeners for this packet_id and state
+            server_listeners[(packet_id, state)] = set()
+
+        server_listeners[(packet_id, state)].add((func, blocking))
 
         async def inner(*args, **kwargs):
             return await func(*args, **kwargs)
@@ -91,16 +104,14 @@ class Proxy:
                 packet_id = buff.unpack(VarInt)
                 packet_data = buff.read()
 
-                # print(f"Client: {packet_id=}, {buff.getvalue()=}, {self.state=}")
-
                 # call packet handler
-                result = client_listeners.get((packet_id, self.state))
-                if result:
-                    handler, blocking = result
-                    if blocking:
-                        await handler(self, Buffer(packet_data))
-                    else:
-                        asyncio.create_task(handler(self, Buffer(packet_data)))
+                results = client_listeners.get((packet_id, self.state))
+                if results:
+                    for handler, blocking in results:
+                        if blocking:
+                            await handler(self, Buffer(packet_data))
+                        else:
+                            asyncio.create_task(handler(self, Buffer(packet_data)))
                 else:
                     self.server.send_packet(packet_id, packet_data)
 
@@ -117,22 +128,20 @@ class Proxy:
             if self.server.compression:
                 data_length = buff.unpack(VarInt)
                 if data_length >= self.server.compression_threshold:
-                    # print(buff.getvalue())
                     data = zlib.decompress(buff.read())
                     buff = Buffer(data)
 
             packet_id = buff.unpack(VarInt)
             packet_data = buff.read()
-            # print(f"Server: {hex(packet_id)=}, {self.state=}")
 
             # call packet handler
-            result = server_listeners.get((packet_id, self.state))
-            if result:
-                handler, blocking = result
-                if blocking:
-                    await handler(self, Buffer(packet_data))
-                else:
-                    asyncio.create_task(handler(self, Buffer(packet_data)))
+            results = server_listeners.get((packet_id, self.state))
+            if results:
+                for handler, blocking in results:
+                    if blocking:
+                        await handler(self, Buffer(packet_data))
+                    else:
+                        asyncio.create_task(handler(self, Buffer(packet_data)))
             else:
                 self.client.send_packet(packet_id, packet_data)
 
