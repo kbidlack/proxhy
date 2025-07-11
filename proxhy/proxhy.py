@@ -139,9 +139,11 @@ class Proxhy(Proxy):
         self.game_error = None
         self.client.send_packet(0x01, buff.getvalue())
 
+        self.received_who.clear()
+        self.received_player_stats.clear()
+
         if not self.client_type == "lunar":
             self.received_locraw.clear()
-            self.received_who.clear()
             self.server.send_packet(0x01, String("/locraw"))
 
     @listen_server(0x3E, blocking=True)
@@ -337,7 +339,6 @@ class Proxhy(Proxy):
                     error_msg = (
                         TextComponent("∎ ").bold().color("blue").append(err.message)
                     )
-                    print(error_msg.to_json())
                     self.client.chat(error_msg)
                 else:
                     if output:
