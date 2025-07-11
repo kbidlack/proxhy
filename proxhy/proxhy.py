@@ -68,15 +68,19 @@ class Proxhy(Proxy):
         self.rq_game = Game()
 
         self.players: dict[str, str] = {}
-        self.players_getting_stats = []
         self.players_with_stats = {}
         self.teams: Teams = Teams()
         self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
+        self.players_without_stats: list[str] = []  # players from /who
 
         # EVENTS
         # used so the tab updater can signal functions that stats are logged
         self.received_player_stats = asyncio.Event()
+        self.received_who = asyncio.Event()
+
+        # LOCKS
+        self.player_stats_lock = asyncio.Lock()
 
         self.received_locraw = asyncio.Event()
         self.received_locraw.set()
@@ -130,7 +134,6 @@ class Proxhy(Proxy):
         # flush player lists
         self.players.clear()
         self.players_with_stats.clear()
-        self.players_getting_stats.clear()
         self._user_team_prefix = ""  # Reset cached team prefix for new game
 
         self.game_error = None
@@ -138,6 +141,7 @@ class Proxhy(Proxy):
 
         if not self.client_type == "lunar":
             self.received_locraw.clear()
+            self.received_who.clear()
             self.server.send_packet(0x01, String("/locraw"))
 
     @listen_server(0x3E, blocking=True)
@@ -233,13 +237,19 @@ class Proxhy(Proxy):
             )
         self.client.send_packet(0x3E, buff.getvalue())
 
-        if mode in {b"\x03", b"\x04"}:
-            asyncio.create_task(self._update_stats())
-
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
         message = buff.unpack(Chat)
         block_msg = False
+
+        if message.startswith("ONLINE: "):  # /who
+            if self.received_player_stats.is_set():
+                return self.client.send_packet(0x02, buff.getvalue())
+            else:
+                self.players_without_stats.extend(
+                    message.removeprefix("ONLINE: ").split(", ")
+                )
+                return self.received_who.set()
 
         if (
             self.settings.bedwars.display_top_stats.state != "OFF"
@@ -256,18 +266,22 @@ class Proxhy(Proxy):
 
             if message in game_start_msgs:
                 block_msg = True
-                if (
-                    message == game_start_msgs[-2]
-                ):  # replace them with the statcheck overview
+                if message == game_start_msgs[-2]:
+                    # replace them with the statcheck overview
                     self.client.chat(
                         TextComponent("Fetching top stats...").color("gold").bold()
                     )
-                    await asyncio.sleep(3)  # TODO: why do we have to wait 3s?
-                    # idfk its supposed to wait for the flare from the _update_stats function
-                    # and it does, but then for some reason it only fetches one player so idk
-                    # if we wait 3s it works slash shrug
+                    self.server.send_packet(0x01, String("/who"))
+                    await self._update_stats()
                     highlights = await self.stat_highlights()
-                    self.client.chat(highlights)
+                    self.client.chat(
+                        TextComponent("\nTop stats:\n\n")
+                        .color("gold")
+                        .bold()
+                        .append(highlights)
+                        .append("\n")
+                    )
+                    # self.client.chat(highlights)
 
         async def _update_game(self: Self, game: dict):
             self.game.update(game)
