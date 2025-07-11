@@ -19,7 +19,7 @@ from ..command import command
 from ..datatypes import UUID, Boolean, Chat, TextComponent, VarInt
 from ..errors import CommandException
 from ..formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from ..mcmodels import Nick, Team
+from ..mcmodels import Nick
 from ..proxhy import Proxhy
 from ._methods import method
 
@@ -324,119 +324,118 @@ class StatCheck(Proxhy):
 
     @method
     async def _update_stats(self):
-        await self.received_locraw.wait()
-        # update stats in tab in a game, bw supported so far
-        if (
-            (self.game.gametype in {"bedwars"})
-            and self.game.mode
-            and (self.settings.bedwars.tablist.show_fkdr.state == "ON")
-        ):
-            # Initialize cache if it doesn't exist
-            if not hasattr(self, "_cached_players"):
-                self._cached_players = {}
+        async with self.player_stats_lock:
+            await self.received_locraw.wait()
+            await self.received_who.wait()
 
-            # players are in these teams in pregame
-            # Note: regex matches legacy color codes from server data format
-            real_player_teams: list[Team] = [
-                team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
-            ]
-            real_players = [
-                player
-                for team in real_player_teams
-                for player in team.players
-                if player.isascii()
-                and player not in self.players_with_stats.keys()
-                and player not in self.players_getting_stats
-            ]
-            self.players_getting_stats.extend(real_players)
+            if not self.players_without_stats:
+                # No players to update stats for
+                return
 
-            player_stats = await asyncio.gather(
-                *[self.hypixel_client.player(player) for player in real_players],
-                return_exceptions=True,
-            )
+            # update stats in tab in a game, bw supported so far
+            if (
+                (self.game.gametype in {"bedwars"})
+                and self.game.mode
+                and (self.settings.bedwars.tablist.show_fkdr.state == "ON")
+            ):
+                # Initialize cache if it doesn't exist
+                if not hasattr(self, "_cached_players"):
+                    self._cached_players = {}
 
-            for player in real_players:
-                if player in self.players_getting_stats:
-                    self.players_getting_stats.remove(player)
+                player_stats = await asyncio.gather(
+                    *[
+                        self.hypixel_client.player(player)
+                        for player in self.players_without_stats
+                    ],
+                    return_exceptions=True,
+                )
 
-            for player in player_stats:
-                if isinstance(player, PlayerNotFound):
-                    real_player = player.player
-                    player = Nick(real_player)
-                    try:
-                        player.uuid = next(
-                            u
-                            for u, p in self.players.items()
-                            if p.casefold() == real_player.casefold()
-                        )
-                    except StopIteration:
-                        continue
-                elif isinstance(player, (InvalidApiKey, RateLimitError, TimeoutError)):
-                    err_message = {
-                        InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
-                        KeyRequired: TextComponent("No API Key provided!").color("red"),
-                        RateLimitError: TextComponent("Rate limit!").color("red"),
-                        TimeoutError: TextComponent(
-                            f"Request timed out! ({player})"
-                        ).color("red"),
-                    }
-
-                    if not self.game_error:
-                        self.game_error = player
-                        self.client.chat(err_message[type(player)])
-                    continue
-                elif not isinstance(player, Player):
-                    # TODO log this
-                    # Session is closed probably, this is pointless
-                    continue
-
-                if player.name in self.players.values():
-                    # Only cache actual Player objects, not Nick objects
-                    if not isinstance(player, (PlayerNotFound, Nick)):
-                        self._cached_players[player.name] = player
-
-                    if not isinstance(player, (PlayerNotFound, Nick)):
-                        fplayer = FormattedPlayer(player)
-
-                        if self.game.gametype == "bedwars":
-                            display_name = " ".join(
-                                (
-                                    fplayer.bedwars.level,
-                                    fplayer.rankname,
-                                    f" §7| {fplayer.bedwars.fkdr}",
-                                )
+                for player in player_stats:
+                    if isinstance(player, PlayerNotFound):
+                        real_player = player.player
+                        player = Nick(real_player)
+                        try:
+                            player.uuid = next(
+                                u
+                                for u, p in self.players.items()
+                                if p.casefold() == real_player.casefold()
                             )
-                        # elif self.game.gametype == "skywars":
-                        #     display_name = " ".join(
-                        #         (
-                        #             fplayer.skywars.level,
-                        #             fplayer.rankname,
-                        #             f" | {fplayer.skywars.kdr}",
-                        #         )
-                        #     )
+                        except StopIteration:
+                            continue
+                    elif isinstance(
+                        player, (InvalidApiKey, RateLimitError, TimeoutError)
+                    ):
+                        err_message = {
+                            InvalidApiKey: TextComponent("Invalid API Key!").color(
+                                "red"
+                            ),
+                            KeyRequired: TextComponent("No API Key provided!").color(
+                                "red"
+                            ),
+                            RateLimitError: TextComponent("Rate limit!").color("red"),
+                            TimeoutError: TextComponent(
+                                f"Request timed out! ({player})"
+                            ).color("red"),
+                        }
+
+                        if not self.game_error:
+                            self.game_error = player
+                            self.client.chat(err_message[type(player)])
+                        continue
+                    elif not isinstance(player, Player):
+                        # TODO log this
+                        # Session is closed probably, this is pointless
+                        continue
+
+                    if player.name in self.players.values():
+                        # Only cache actual Player objects, not Nick objects
+                        if not isinstance(player, (PlayerNotFound, Nick)):
+                            self._cached_players[player.name] = player
+
+                        if not isinstance(player, (PlayerNotFound, Nick)):
+                            fplayer = FormattedPlayer(player)
+
+                            if self.game.gametype == "bedwars":
+                                display_name = " ".join(
+                                    (
+                                        fplayer.bedwars.level,
+                                        fplayer.rankname,
+                                        f" §7| {fplayer.bedwars.fkdr}",
+                                    )
+                                )
+                            # elif self.game.gametype == "skywars":
+                            #     display_name = " ".join(
+                            #         (
+                            #             fplayer.skywars.level,
+                            #             fplayer.rankname,
+                            #             f" | {fplayer.skywars.kdr}",
+                            #         )
+                            #     )
+                            else:
+                                display_name = fplayer.rankname
                         else:
-                            display_name = fplayer.rankname
-                    else:
-                        # Get team color for nicked player
-                        for team in self.teams:
-                            if player.name in team.players:
-                                self.nick_team_colors.update({player.name: team.prefix})
-                                break
+                            # Get team color for nicked player
+                            for team in self.teams:
+                                if player.name in team.players:
+                                    self.nick_team_colors.update(
+                                        {player.name: team.prefix}
+                                    )
+                                    break
 
-                        display_name = f"§5[NICK] {player.name}"
+                            display_name = f"§5[NICK] {player.name}"
 
-                    self.client.send_packet(
-                        0x38,
-                        VarInt(3),
-                        VarInt(1),
-                        UUID(uuid.UUID(str(player.uuid))),
-                        Boolean(True),
-                        Chat(display_name),
-                    )
-                    self.players_with_stats.update(
-                        {player.name: (player.uuid, display_name)}
-                    )
-        if self.players_with_stats:
+                        self.client.send_packet(
+                            0x38,
+                            VarInt(3),
+                            VarInt(1),
+                            UUID(uuid.UUID(str(player.uuid))),
+                            Boolean(True),
+                            Chat(display_name),
+                        )
+                        self.players_with_stats.update(
+                            {player.name: (player.uuid, display_name)}
+                        )
+
             self.received_player_stats.set()
 
     @method
