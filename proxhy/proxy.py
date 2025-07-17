@@ -80,7 +80,12 @@ class Proxy:
         self,
         reader: StreamReader,
         writer: StreamWriter,
-        connect_host: tuple[str, int] = ("mc.hypixel.net", 25565),
+        connect_host: tuple[str, int, str, int] = (
+            "mc.hypixel.net",
+            25565,
+            "mc.hypixel.net",
+            25565,
+        ),
     ):
         self.client = Client(reader, writer)
 
@@ -192,7 +197,7 @@ class Proxy:
             self.server.send_packet(
                 0x00,
                 VarInt(47),
-                String(self.CONNECT_HOST[0]),
+                String(self.CONNECT_HOST[2]),
                 UnsignedShort(self.CONNECT_HOST[1]),
                 VarInt(State.LOGIN.value),
             )

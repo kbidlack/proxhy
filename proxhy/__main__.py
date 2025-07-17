@@ -52,6 +52,19 @@ def parse_args():
         action="store_true",
         help="Shorthand to bind remote to localhost:25565 for development",
     )
+    parser.add_argument(
+        "-fh",
+        "--fake-host",
+        default="",
+        help="Host to send to the server as what the client is connecting to (default: remote_host)",
+    )
+    parser.add_argument(
+        "-fp",
+        "--fake-port",
+        type=int,
+        default=-1,
+        help="Port to send to the server as what the client is connecting to (default: remote_port)",
+    )
     return parser.parse_args()
 
 
@@ -60,6 +73,12 @@ args = parse_args()  # ew
 if args.dev:
     args.remote_host = "localhost"
     args.remote_port = 25565
+
+if not args.fake_host:
+    args.fake_host = args.remote_host
+
+if args.fake_port == -1:
+    args.fake_port = args.remote_port
 
 
 class ProxhyServer(asyncio.Server):
@@ -79,7 +98,16 @@ class ProxhyServer(asyncio.Server):
 
 async def handle_client(reader: StreamReader, writer: StreamWriter):
     instances.append(
-        Proxhy(reader, writer, connect_host=(args.remote_host, args.remote_port))
+        Proxhy(
+            reader,
+            writer,
+            connect_host=(
+                args.remote_host,
+                args.remote_port,
+                args.fake_host,
+                args.fake_port,
+            ),
+        )
     )
 
 
@@ -87,7 +115,9 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     server = await asyncio.start_server(handle_client, host, port)
     server = ProxhyServer(server)
 
-    print(f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port}")
+    print(
+        f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
+    )
 
     return server
 
