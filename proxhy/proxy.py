@@ -198,7 +198,7 @@ class Proxy:
                 0x00,
                 VarInt(47),
                 String(self.CONNECT_HOST[2]),
-                UnsignedShort(self.CONNECT_HOST[1]),
+                UnsignedShort(self.CONNECT_HOST[3]),
                 VarInt(State.LOGIN.value),
             )
 
