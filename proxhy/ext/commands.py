@@ -7,9 +7,10 @@ from hypixel import ApiError, InvalidApiKey, KeyRequired
 
 from ..command import CommandException, command
 from ..datatypes import Item, SlotData, String, TextComponent
-from ..mcmodels import Window
+from ..nbt import dumps, from_dict
 from ..proxhy import Proxhy
 from ..settings import SettingGroup, SettingProperty
+from .window import Window, get_trigger
 
 
 class Commands(Proxhy):
@@ -44,25 +45,60 @@ class Commands(Proxhy):
     @command("setting")
     async def edit_settings(self, setting_name: str = "", value: str = ""):
         if not setting_name:
+
+            async def grass_callback(
+                window: Window,
+                slot: int,
+                button: int,
+                action_num: int,
+                mode: int,
+                clicked_item: SlotData,
+            ):
+                if clicked_item.item is not None:
+                    self.client.chat(
+                        TextComponent("You clicked")
+                        .color("green")
+                        .appends(
+                            TextComponent(f"{clicked_item.item.display_name}").color(
+                                "blue"
+                            )
+                        )
+                        .appends(TextComponent("in slot").color("green"))
+                        .appends(TextComponent(f"{slot}").color("yellow"))
+                        .appends(TextComponent("with action #").color("green"))
+                        .append(TextComponent(f"{action_num}").color("yellow"))
+                        .appends(TextComponent("with trigger").color("green"))
+                        .appends(
+                            TextComponent(f" {get_trigger(mode, button, slot)}").color(
+                                "yellow"
+                            )
+                        )
+                    )
+
+                lambda: window  # do something with window
+
             # example window usage
             self.settings_window = Window(self, "Settings", num_slots=18)
-            self.settings_window.open()
 
             self.settings_window.set_slot(
                 3, SlotData(Item.from_name("minecraft:stone"))
             )
 
-            await asyncio.sleep(3)
+            self.settings_window.open()
 
             self.settings_window.set_slot(
-                4, SlotData(Item.from_name("minecraft:grass"))
+                4,
+                SlotData(
+                    Item.from_name("minecraft:grass"),
+                    nbt=dumps(from_dict({"display": {"Name": "§aFribidi Skigma"}})),
+                ),
+                callback=grass_callback,
             )
-
-            await asyncio.sleep(1)
-            self.settings_window.close()
-
-            await asyncio.sleep(1)
-            self.settings_window.open()
+            self.settings_window.set_slot(
+                5,
+                SlotData(Item.from_name("minecraft:grass")),
+                callback=grass_callback,
+            )
 
             return
 
