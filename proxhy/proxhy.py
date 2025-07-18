@@ -21,14 +21,17 @@ from .datatypes import (
     Int,
     String,
     TextComponent,
-    UnsignedByte,
     UnsignedShort,
     VarInt,
 )
 from .errors import CommandException
-from .mcmodels import Game, Team, Teams, Window
+from .mcmodels import Game, Team, Teams
 from .proxy import Proxy, State, listen_client, listen_server
 from .settings import Settings
+
+if TYPE_CHECKING:
+    from .ext.statcheck import StatCheck
+    from .ext.window import Window
 
 
 class Proxhy(Proxy):
@@ -52,8 +55,6 @@ class Proxhy(Proxy):
 
     # TYPE HINTS
     if TYPE_CHECKING:
-        from .ext.statcheck import StatCheck
-
         stat_highlights: Callable = StatCheck.stat_highlights
         log_bedwars_stats: Callable = StatCheck.log_bedwars_stats
         _update_stats: Callable = StatCheck._update_stats
@@ -129,14 +130,6 @@ class Proxhy(Proxy):
                 self.client_type = "lunar"
             elif b"vanilla" in data:
                 self.client_type = "vanilla"
-
-    @listen_client(0x0D)
-    async def packet_close_window(self, buff: Buffer):
-        window_id = buff.unpack(UnsignedByte)
-        if window_id in self.windows:
-            self.windows[window_id].close()
-        else:
-            self.server.send_packet(0x0D, buff.getvalue())
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, buff: Buffer):
