@@ -6,7 +6,8 @@ import hypixel
 from hypixel import ApiError, InvalidApiKey, KeyRequired
 
 from ..command import CommandException, command
-from ..datatypes import String, TextComponent
+from ..datatypes import Item, SlotData, String, TextComponent
+from ..mcmodels import Window
 from ..proxhy import Proxhy
 from ..settings import SettingGroup, SettingProperty
 
@@ -41,7 +42,30 @@ class Commands(Proxhy):
         await self._update_stats()
 
     @command("setting")
-    async def edit_settings(self, setting_name: str, value: str = ""):
+    async def edit_settings(self, setting_name: str = "", value: str = ""):
+        if not setting_name:
+            # example window usage
+            self.settings_window = Window(self, "Settings", num_slots=18)
+            self.settings_window.open()
+
+            self.settings_window.set_slot(
+                3, SlotData(Item.from_name("minecraft:stone"))
+            )
+
+            await asyncio.sleep(3)
+
+            self.settings_window.set_slot(
+                4, SlotData(Item.from_name("minecraft:grass"))
+            )
+
+            await asyncio.sleep(1)
+            self.settings_window.close()
+
+            await asyncio.sleep(1)
+            self.settings_window.open()
+
+            return
+
         value_oc = value
         value = value.upper()
         setting_attrs = setting_name.split(".")

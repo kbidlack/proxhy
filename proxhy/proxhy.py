@@ -21,11 +21,12 @@ from .datatypes import (
     Int,
     String,
     TextComponent,
+    UnsignedByte,
     UnsignedShort,
     VarInt,
 )
 from .errors import CommandException
-from .mcmodels import Game, Team, Teams
+from .mcmodels import Game, Team, Teams, Window
 from .proxy import Proxy, State, listen_client, listen_server
 from .settings import Settings
 
@@ -82,6 +83,8 @@ class Proxhy(Proxy):
         # LOCKS
         self.player_stats_lock = asyncio.Lock()
 
+        self.windows: dict[int, Window] = {}
+
         self.received_locraw = asyncio.Event()
         self.received_locraw.set()
 
@@ -127,6 +130,14 @@ class Proxhy(Proxy):
             elif b"vanilla" in data:
                 self.client_type = "vanilla"
 
+    @listen_client(0x0D)
+    async def packet_close_window(self, buff: Buffer):
+        window_id = buff.unpack(UnsignedByte)
+        if window_id in self.windows:
+            self.windows[window_id].close()
+        else:
+            self.server.send_packet(0x0D, buff.getvalue())
+
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, buff: Buffer):
         self.entity_id = buff.unpack(Int)
@@ -156,9 +167,9 @@ class Proxhy(Proxy):
             display_name = buff.unpack(String)
             prefix = buff.unpack(String)
             suffix = buff.unpack(String)
-            friendly_fire = buff.unpack(Byte)[0]
+            friendly_fire = buff.unpack(Byte)
             name_tag_visibility = buff.unpack(String)
-            color = buff.unpack(Byte)[0]
+            color = buff.unpack(Byte)
 
             player_count = buff.unpack(VarInt)
             players = set()
@@ -197,9 +208,9 @@ class Proxhy(Proxy):
                 team.display_name = buff.unpack(String)
                 team.prefix = buff.unpack(String)
                 team.suffix = buff.unpack(String)
-                team.friendly_fire = buff.unpack(Byte)[0]
+                team.friendly_fire = buff.unpack(Byte)
                 team.name_tag_visibility = buff.unpack(String)
-                team.color = buff.unpack(Byte)[0]
+                team.color = buff.unpack(Byte)
 
                 # Check for YOU marker in updated team
                 clean_suffix = re.sub(r"§.", "", team.suffix)

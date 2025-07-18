@@ -5,15 +5,66 @@ import re
 import struct
 import uuid
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, Literal, Protocol
-
-from .mcmodels import Pos
+from pathlib import Path
+from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
 
 if TYPE_CHECKING:
 
     class AsyncReader[T](Protocol):
         async def read(self, n: int = -1) -> T: ...
+
+
+@dataclass
+class Pos:
+    """integer block position"""
+
+    x: int = 0
+    y: int = 0
+    z: int = 0
+
+
+with open(Path(__file__).parent / "assets" / "item_mappings.json") as file:
+    item_mapping = json.load(file)
+
+
+@dataclass
+class Item:
+    id: int
+    name: str
+    display_name: str
+    data: int
+
+    @classmethod
+    def from_name(cls, name: str):
+        if not name.startswith("minecraft:"):
+            name = f"minecraft:{name}"
+
+        item = next((item for item in item_mapping if item.get("name") == name), None)
+        return cls(**item) if item else None
+
+    @classmethod
+    def from_display_name(cls, display_name: str):
+        item = next(
+            (item for item in item_mapping if item.get("display_name") == display_name),
+            None,
+        )
+        return cls(**item) if item else None
+
+    @classmethod
+    def from_id(cls, id: int):
+        item = next((item for item in item_mapping if item.get("id") == id), None)
+        return cls(**item) if item else None
+
+
+# TODO does not support enchantments yet
+@dataclass
+class SlotData:
+    item: Optional[Item] = None
+    count: int = 1
+    damage: int = 0
+    nbt: bytes = b""
 
 
 class Buffer(BytesIO):
@@ -113,8 +164,7 @@ class Long(DataType[int, int]):
         return struct.unpack(">q", buff.read(8))[0]
 
 
-class Byte(DataType[bytes, bytes]):
-    # could unpack >b (to int)
+class Byte(DataType[bytes | int | float, int]):
     @staticmethod
     def pack(value: bytes | int | float) -> bytes:
         if isinstance(value, (int, float)):
@@ -122,8 +172,8 @@ class Byte(DataType[bytes, bytes]):
         return value
 
     @staticmethod
-    def unpack(buff) -> bytes:
-        return buff.read(1)
+    def unpack(buff) -> int:
+        return struct.unpack(">b", buff.read(1))[0]
 
 
 class UnsignedByte(DataType[int, int]):
@@ -804,3 +854,30 @@ class Angle(DataType[float, float]):
     def unpack(buff: Buffer) -> float:
         return 360 * buff.unpack(UnsignedByte) / 256
         return (struct.unpack(">B", buff.read(1))[0] * 360) / 256
+
+
+class Slot(DataType[SlotData, SlotData]):
+    @staticmethod
+    def pack(value: SlotData) -> bytes:
+        if value.item is None:
+            return Short.pack(-1)
+
+        return (
+            Short.pack(value.item.id)
+            + Byte.pack(value.count)
+            + Short.pack(value.damage)
+            + Byte.pack(0)
+        )
+
+    @staticmethod
+    def unpack(buff: Buffer) -> SlotData:
+        if item_id := buff.unpack(Short) == -1:
+            return SlotData()
+
+        count = buff.unpack(Byte)
+        damage = buff.unpack(Short)
+
+        rest_of_data = buff.read()
+        nbt = b"" if not rest_of_data[0] else rest_of_data
+
+        return SlotData(Item.from_id(item_id), count, damage, nbt)
