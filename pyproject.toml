@@ -1,0 +1,20 @@
+[project]
+name = "proxhy"
+version = "1.0.0"
+description = "A Hypixel proxy with various different features"
+license = "MIT"
+authors = [
+    {name = "Kavi Bidlack"},
+    {name = "Manu Jhawar"}
+]
+requires-python = ">=3.13"
+dependencies = [
+    "hypixel.py>=0.4",
+    "msmcauth==0.0.4",
+    "cryptography>=45.0",
+    "keyring>=25.6",
+    "pyjwt>=2.10"
+]
+
+[project.scripts]
+proxhy = "proxhy.__main__:main"

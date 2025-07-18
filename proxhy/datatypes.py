@@ -58,7 +58,6 @@ class Item:
         return cls(**item) if item else None
 
 
-# TODO does not support enchantments yet
 @dataclass
 class SlotData:
     item: Optional[Item] = None
@@ -862,16 +861,25 @@ class Slot(DataType[SlotData, SlotData]):
         if value.item is None:
             return Short.pack(-1)
 
-        return (
-            Short.pack(value.item.id)
-            + Byte.pack(value.count)
-            + Short.pack(value.damage)
-            + Byte.pack(0)
-        )
+        if not value.nbt:
+            return (
+                Short.pack(value.item.id)
+                + Byte.pack(value.count)
+                + Short.pack(value.damage)
+                + Byte.pack(0)
+            )
+        else:
+            return (
+                Short.pack(value.item.id)
+                + Byte.pack(value.count)
+                + Short.pack(value.damage)
+                + value.nbt
+            )
 
     @staticmethod
     def unpack(buff: Buffer) -> SlotData:
-        if item_id := buff.unpack(Short) == -1:
+        item_id = buff.unpack(Short)
+        if item_id == -1:
             return SlotData()
 
         count = buff.unpack(Byte)
