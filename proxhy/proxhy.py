@@ -80,6 +80,7 @@ class Proxhy(Proxy):
         # used so the tab updater can signal functions that stats are logged
         self.received_player_stats = asyncio.Event()
         self.received_who = asyncio.Event()
+        self.received_who.set()
 
         # LOCKS
         self.player_stats_lock = asyncio.Lock()
@@ -143,20 +144,19 @@ class Proxhy(Proxy):
         self.game_error = None
         self.client.send_packet(0x01, buff.getvalue())
 
-        self.received_who.clear()
         self.received_player_stats.clear()
 
         if not self.client_type == "lunar":
             self.received_locraw.clear()
             self.server.send_packet(0x01, String("/locraw"))
 
-    @listen_server(0x3E, blocking=True)
+    @listen_server(0x3E)
     async def packet_teams(self, buff: Buffer):
         name = buff.unpack(String)
         mode = buff.unpack(Byte)
 
         # team creation
-        if mode == b"\x00":
+        if mode == 0:
             display_name = buff.unpack(String)
             prefix = buff.unpack(String)
             suffix = buff.unpack(String)
@@ -192,10 +192,10 @@ class Proxhy(Proxy):
                 )
             )
         # team removal
-        elif mode == b"\x01":
+        elif mode == 1:
             self.teams.delete(name)
         # team information updation
-        elif mode == b"\x02":
+        elif mode == 2:
             team = self.teams.get(name)
             if team:
                 team.display_name = buff.unpack(String)
@@ -214,8 +214,8 @@ class Proxhy(Proxy):
                     self._user_team_prefix = team.prefix
 
         # add players to team
-        elif mode in {b"\x03", b"\x04"}:
-            add = True if mode == b"\x03" else False
+        elif mode in {3, 4}:
+            add = True if mode == 3 else False
             player_count = buff.unpack(VarInt)
             players = {buff.unpack(String) for _ in range(player_count)}
 
@@ -224,23 +224,6 @@ class Proxhy(Proxy):
             else:
                 self.teams.get(name).players -= players
 
-        for name, (_uuid, display_name) in self.players_with_stats.items():
-            prefix, suffix = next(
-                (
-                    (team.prefix, team.suffix)
-                    for team in self.teams
-                    if name in team.players
-                ),
-                ("", ""),
-            )
-            self.client.send_packet(
-                0x38,
-                VarInt(3),
-                VarInt(1),
-                UUID(uuid.UUID(str(_uuid))),
-                Boolean(True),
-                Chat(prefix + display_name + suffix),
-            )
         self.client.send_packet(0x3E, buff.getvalue())
 
     @listen_server(0x02)
@@ -255,7 +238,8 @@ class Proxhy(Proxy):
                 self.players_without_stats.extend(
                     message.removeprefix("ONLINE: ").split(", ")
                 )
-                return self.received_who.set()
+                self.received_who.set()
+                await self._update_stats()
 
         if (
             self.settings.bedwars.display_top_stats.state != "OFF"
@@ -277,8 +261,8 @@ class Proxhy(Proxy):
                     self.client.chat(
                         TextComponent("Fetching top stats...").color("gold").bold()
                     )
+                    self.received_who.clear()
                     self.server.send_packet(0x01, String("/who"))
-                    await self._update_stats()
                     highlights = await self.stat_highlights()
                     self.client.chat(
                         TextComponent("\nTop stats:\n\n")

@@ -424,19 +424,29 @@ class StatCheck(Proxhy):
 
                             display_name = f"§5[NICK] {player.name}"
 
-                        self.client.send_packet(
-                            0x38,
-                            VarInt(3),
-                            VarInt(1),
-                            UUID(uuid.UUID(str(player.uuid))),
-                            Boolean(True),
-                            Chat(display_name),
-                        )
                         self.players_with_stats.update(
                             {player.name: (player.uuid, display_name)}
                         )
 
-            self.received_player_stats.set()
+        for name, (_uuid, display_name) in self.players_with_stats.items():
+            prefix, suffix = next(
+                (
+                    (team.prefix, team.suffix)
+                    for team in self.teams
+                    if name in team.players
+                ),
+                ("", ""),
+            )
+            self.client.send_packet(
+                0x38,
+                VarInt(3),
+                VarInt(1),
+                UUID(uuid.UUID(str(_uuid))),
+                Boolean(True),
+                Chat(prefix + display_name + suffix),
+            )
+
+        self.received_player_stats.set()
 
     @method
     async def log_bedwars_stats(self, event: str) -> None:
