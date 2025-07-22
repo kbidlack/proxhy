@@ -2,7 +2,6 @@ import asyncio
 import base64
 import json
 import re
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Self
 
@@ -13,7 +12,6 @@ from . import auth
 from .command import commands
 from .datatypes import (
     UUID,
-    Boolean,
     Buffer,
     Byte,
     ByteArray,
