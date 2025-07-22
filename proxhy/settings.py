@@ -1,43 +1,15 @@
 import json
+from importlib.resources import files
 from pathlib import Path
 
-default_settings = {
-    "bedwars": {
-        "description": "Settings related to the BedWars game mode.",
-        "tablist": {
-            "description": "Settings related to the BedWars player list.",
-            "show_fkdr": {
-                "display_name": "Show Tablist FKDR",
-                "description": "In BedWars, shows users' FKDR next to their name in the tablist.",
-                "states": {
-                    "OFF": "red",
-                    "ON": "green",
-                },
-                "state": "OFF",
-            },
-            "is_mode_specific": {
-                "display_name": "Mode-Specific Tablist FKDR",
-                "description": "In BedWars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
-                "states": {
-                    "OFF": "red",
-                    "ON": "green",
-                },
-                "state": "OFF",
-            },
-        },
-        "display_top_stats": {
-            "display_name": "Preface top players",
-            "description": "In BedWars, receive a chat message at the start of the game highlighting the best players.",
-            "states": {
-                "OFF": "red",
-                "FKDR": "green",
-                "STAR": "green",
-                "INDEX": "green",
-            },
-            "state": "INDEX",
-        },
-    }
-}
+from platformdirs import user_config_dir
+
+config_dir = Path(user_config_dir("proxhy", ensure_exists=True))
+config_dir.mkdir(parents=True, exist_ok=True)
+
+default_settings_path = files("proxhy.assets").joinpath("default_settings.json")
+with default_settings_path.open("r") as file:
+    default_settings = json.load(file)
 
 
 class SettingProperty:
@@ -168,8 +140,8 @@ class SettingGroup:
 class Settings:
     """Main settings class with auto-save functionality."""
 
-    def __init__(self, settings_file: str | Path = "proxhy_settings.json"):
-        self._settings_file = Path(settings_file)
+    def __init__(self, settings_file: str | Path = "settings.json"):
+        self._settings_file = Path(config_dir / settings_file)
         self._config_data = self._load_settings()
 
         # Create attributes for each top-level setting group
