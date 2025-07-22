@@ -143,7 +143,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
 
 # Main entry point
-async def main():
+async def _main():
     # loop = asyncio.get_running_loop()
     # loop.add_signal_handler(
     #     signal.SIGINT,
@@ -163,8 +163,12 @@ async def main():
         pass  # hehe
 
 
-if __name__ == "__main__":
+def main():
     try:
-        asyncio.run(main())
+        asyncio.run(_main())
     except RuntimeError:  # forced shutdown
         sys.exit()
+
+
+if __name__ == "__main__":
+    main()

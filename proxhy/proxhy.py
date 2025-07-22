@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Callable, Self
 
 import hypixel
 import keyring
+from platformdirs import user_cache_dir
 
 from . import auth
 from .command import commands
@@ -92,7 +93,9 @@ class Proxhy(Proxy):
         self.logged_in = False
         self.logging_in = False
 
-        self.log_path = "stat_log.jsonl"
+        self.log_path = (
+            Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
+        )
 
     async def close(self):
         if not self.open:
