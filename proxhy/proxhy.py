@@ -61,38 +61,52 @@ class Proxhy(Proxy):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.client_type = ""
+        # HYPIXEL API
         self.hypixel_client: hypixel.Client
         self._hypixel_api_key = ""
 
+        # CLIENT INFO
+        self.client_type = ""
+
+        # GAME STATE
+        self.logged_in = False
+        self.logging_in = False
+
+        ## PROXHY
+        self.windows: dict[int, Window] = {}
+        self.game_error = None  # if error has been sent that game
+
+        # players from packet_player_list_item
+        self.players: dict[str, str] = {}
+
+        self.teams: Teams = Teams()
+
+        # server info
         self.game = Game()
         self.rq_game = Game()
 
-        self.players: dict[str, str] = {}
-        self.players_with_stats = {}
-        self.teams: Teams = Teams()
         self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
+
+        # STATCHECK STATE
+        self.players_with_stats = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: list[str] = []  # players from /who
 
         # EVENTS
-        # used so the tab updater can signal functions that stats are logged
+        # statcheck
         self.received_player_stats = asyncio.Event()
         self.received_who = asyncio.Event()
         self.received_who.set()
 
-        # LOCKS
-        self.player_stats_lock = asyncio.Lock()
-
-        self.windows: dict[int, Window] = {}
-
+        # server info
         self.received_locraw = asyncio.Event()
         self.received_locraw.set()
 
-        self.game_error = None  # if error has been sent that game
-        self.logged_in = False
-        self.logging_in = False
+        # LOCKS
+        # statcheck
+        self.player_stats_lock = asyncio.Lock()
 
+        # MISC
         self.log_path = (
             Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
         )
