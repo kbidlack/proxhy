@@ -4,6 +4,7 @@ import json
 import os
 import re
 import uuid
+from typing import Literal, Optional
 
 from hypixel import (
     InvalidApiKey,
@@ -19,7 +20,7 @@ from ..command import command
 from ..datatypes import UUID, Boolean, Chat, TextComponent, VarInt
 from ..errors import CommandException
 from ..formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from ..mcmodels import Nick
+from ..mcmodels import Nick, Team
 from ..proxhy import Proxhy
 from ._methods import method
 
@@ -528,7 +529,8 @@ class StatCheck(Proxhy):
         if not self.players_with_stats:
             return "No stats found!"
 
-        own_team = self.get_own_team()
+        own_team = self.get_team(self.username)
+
         enemy_players = []
         enemy_nicks = []
 
@@ -539,14 +541,10 @@ class StatCheck(Proxhy):
                 continue
 
             # Get player's team
-            player_team = ""
-            for team in self.teams:
-                if player_name in team.players:
-                    player_team = team.prefix
-                    break
+            player_team = self.get_team(player_name)
 
             # Skip teammates
-            if player_team == own_team and own_team != "":
+            if player_team == own_team and own_team is not None:
                 continue
 
             # Handle nicked players
@@ -613,25 +611,41 @@ class StatCheck(Proxhy):
         )
 
     @method
-    def get_own_team(self):
-        """Get the user's own team prefix. Returns team prefix or empty string if not found."""
-        # First try to use the cached team prefix from the "(YOU)" marker
-        if hasattr(self, "_user_team_prefix") and self._user_team_prefix:
-            return self._user_team_prefix
+    def get_team(
+        self, user: str
+    ) -> Optional[
+        Literal["Red", "Blue", "Green", "Yellow", "Aqua", "White", "Pink", "Gray"]
+    ]:
+        """
+        Get user's team. Returns team name or empty string if not found.
+        Currently only supports bedwars in-game.
+        """
 
-        # Fallback: look for team with "(YOU)" in suffix
-        for team in self.teams:
-            clean_suffix = re.sub(r"§.", "", team.suffix)
-            if any(
-                marker in team.suffix or marker in clean_suffix
-                for marker in ["(YOU)", "(You)", " YOU", " You"]
-            ):
-                self._user_team_prefix = team.prefix
-                return team.prefix
-
-        # Last resort: try to find user by username (less reliable when nicked)
-        for team in self.teams:
-            if self.username in team.players:
-                return team.prefix
-
-        return ""
+        real_player_teams: list[Team] = [
+            team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
+        ]
+        team = next(
+            (
+                team
+                for team in real_player_teams
+                if user.casefold() in map(lambda s: s.casefold(), team.players)
+            ),
+            None,
+        )
+        if team is not None:
+            # teams in bedwars are like
+            # Pink8, Blue7, Green3
+            team = re.sub(r"\d", "", team.name)
+            if team not in {
+                "Red",
+                "Blue",
+                "Green",
+                "Yellow",
+                "Aqua",
+                "White",
+                "Pink",
+                "Gray",
+            }:
+                return None
+        else:
+            return team
