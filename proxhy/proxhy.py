@@ -2,6 +2,7 @@ import asyncio
 import base64
 import json
 import re
+import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Self
 
@@ -13,6 +14,7 @@ from . import auth
 from .command import commands
 from .datatypes import (
     UUID,
+    Boolean,
     Buffer,
     Byte,
     ByteArray,
@@ -76,6 +78,9 @@ class Proxhy(Proxy):
         self.windows: dict[int, Window] = {}
         self.game_error = None  # if error has been sent that game
 
+        # cached player stats for stat highlights to pull from
+        self._cached_players = {}
+
         # players from packet_player_list_item
         self.players: dict[str, str] = {}
 
@@ -90,17 +95,18 @@ class Proxhy(Proxy):
         # STATCHECK STATE
         self.players_with_stats = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
-        self.players_without_stats: list[str] = []  # players from /who
+        self.players_without_stats: set[str] = set()  # players from /who
 
         # EVENTS
         # statcheck
         self.received_player_stats = asyncio.Event()
-        self.received_who = asyncio.Event()
-        self.received_who.set()
 
         # server info
         self.received_locraw = asyncio.Event()
         self.received_locraw.set()
+
+        self.received_who = asyncio.Event()
+        self.received_who.set()
 
         # LOCKS
         # statcheck
@@ -155,6 +161,7 @@ class Proxhy(Proxy):
         self.players.clear()
         self.players_with_stats.clear()
         self._user_team_prefix = ""  # Reset cached team prefix for new game
+        self._cached_players.clear()
 
         self.game_error = None
         self.client.send_packet(0x01, buff.getvalue())
@@ -184,16 +191,6 @@ class Proxhy(Proxy):
             for _ in range(player_count):
                 players.add(buff.unpack(String))
 
-            # Check if this team has "(YOU)" or " YOU" in suffix - this indicates it's the user's team
-            clean_suffix = re.sub(r"§.", "", suffix)
-            if any(
-                marker in suffix or marker in clean_suffix
-                for marker in ["(YOU)", "(You)", " YOU", " You"]
-            ):
-                self._user_team_prefix = prefix
-                if hasattr(self, "client_stream") and self.client:
-                    self.client.chat(f"§a§lTeam detected: §r{prefix}§7Team {name}")
-
             self.teams.append(
                 Team(
                     name,
@@ -220,15 +217,7 @@ class Proxhy(Proxy):
                 team.name_tag_visibility = buff.unpack(String)
                 team.color = buff.unpack(Byte)
 
-                # Check for YOU marker in updated team
-                clean_suffix = re.sub(r"§.", "", team.suffix)
-                if any(
-                    marker in team.suffix or marker in clean_suffix
-                    for marker in ["(YOU)", "(You)", " YOU", " You"]
-                ):
-                    self._user_team_prefix = team.prefix
-
-        # add players to team
+        # add/remove players to team
         elif mode in {3, 4}:
             add = True if mode == 3 else False
             player_count = buff.unpack(VarInt)
@@ -239,7 +228,13 @@ class Proxhy(Proxy):
             else:
                 self.teams.get(name).players -= players
 
+            self._user_team_prefix = next(
+                (team.prefix for team in self.teams if self.username in team.players),
+                "",
+            )
+
         self.client.send_packet(0x3E, buff.getvalue())
+        asyncio.create_task(self.keep_player_stats_updated())
 
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
@@ -247,14 +242,25 @@ class Proxhy(Proxy):
         block_msg = False
 
         if message.startswith("ONLINE: "):  # /who
-            if self.received_player_stats.is_set():
-                return self.client.send_packet(0x02, buff.getvalue())
-            else:
-                self.players_without_stats.extend(
-                    message.removeprefix("ONLINE: ").split(", ")
-                )
+            if not self.received_who.is_set():
                 self.received_who.set()
-                await self._update_stats()
+            else:
+                self.client.send_packet(0x02, buff.getvalue())
+
+            self.players_without_stats.update(
+                message.removeprefix("ONLINE: ").split(", ")
+            )
+            self.players_without_stats.difference_update(
+                set(self.players_with_stats.keys())
+            )
+            return await self._update_stats()
+
+        # if user rejoins a game
+        if ("You will respawn in 10 seconds!" in message) or (
+            "Your bed was destroyed so you are a spectator!" in message
+        ):
+            self.server.send_packet(0x01, String("/who"))
+            self.received_who.clear()
 
         if (
             self.settings.bedwars.display_top_stats.state != "OFF"
@@ -276,17 +282,8 @@ class Proxhy(Proxy):
                     self.client.chat(
                         TextComponent("Fetching top stats...").color("gold").bold()
                     )
-                    self.received_who.clear()
                     self.server.send_packet(0x01, String("/who"))
-                    highlights = await self.stat_highlights()
-                    self.client.chat(
-                        TextComponent("\nTop stats:\n\n")
-                        .color("gold")
-                        .bold()
-                        .append(highlights)
-                        .append("\n")
-                    )
-                    # self.client.chat(highlights)
+                    self.received_who.clear()
 
         async def _update_game(self: Self, game: dict):
             self.game.update(game)
@@ -381,6 +378,21 @@ class Proxhy(Proxy):
                     pass  # some things fail idk
 
         self.client.send_packet(0x38, buff.getvalue())
+        asyncio.create_task(self.keep_player_stats_updated())
+
+    async def keep_player_stats_updated(self):
+        # make sure player stats stays updated
+        # hypixel resets sometimes
+        n_players = len(self.players_with_stats.values())
+        self.client.send_packet(
+            0x38,
+            VarInt(3),
+            VarInt(n_players),
+            *(
+                UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
+                for uuid_, display_name in self.players_with_stats.values()
+            ),
+        )
 
     @property
     def hypixel_api_key(self):
