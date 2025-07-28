@@ -90,8 +90,6 @@ class Proxhy(Proxy):
         self.game = Game()
         self.rq_game = Game()
 
-        self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
-
         # STATCHECK STATE
         self.players_with_stats = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
@@ -160,7 +158,6 @@ class Proxhy(Proxy):
         # flush player lists
         self.players.clear()
         self.players_with_stats.clear()
-        self._user_team_prefix = ""  # Reset cached team prefix for new game
         self._cached_players.clear()
 
         self.game_error = None
@@ -227,11 +224,6 @@ class Proxhy(Proxy):
                 self.teams.get(name).players |= players
             else:
                 self.teams.get(name).players -= players
-
-            self._user_team_prefix = next(
-                (team.prefix for team in self.teams if self.username in team.players),
-                "",
-            )
 
         self.client.send_packet(0x3E, buff.getvalue())
         asyncio.create_task(self.keep_player_stats_updated())
