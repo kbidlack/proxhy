@@ -328,6 +328,8 @@ class Proxhy(Proxy):
                     if not err.message.data.get("color"):
                         err.message.color("dark_red")
 
+                    err.message = err.message.bold(False)
+
                     error_msg = (
                         TextComponent("∎ ").bold().color("blue").append(err.message)
                     )
