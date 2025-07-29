@@ -1,6 +1,7 @@
 import inspect
 from typing import Awaitable, Callable, Literal, get_args, get_origin
 
+from .datatypes import TextComponent
 from .errors import CommandException
 from .proxy import Proxy
 
@@ -58,26 +59,47 @@ class Command:
         segments = message.split()
         args = segments[1:]
         if not self.parameters and args:
-            raise CommandException(f"Command <{segments[0]}> takes no arguments!")
+            raise CommandException(
+                TextComponent("Command")
+                .appends(TextComponent(f"{segments[0]}").color("gold"))
+                .appends("takes no arguments!")
+            )
         elif (len(args) > len(self.parameters)) and not any(
             p.infinite for p in self.parameters
         ):
             raise CommandException(
-                f"Command <{segments[0]}> takes at most "
-                f"{len(self.parameters)} argument(s)!"
+                TextComponent("Command")
+                .appends(TextComponent(segments[0]).color("gold"))
+                .appends("takes at most")
+                .appends(TextComponent(f"{len(self.parameters)}").color("dark_aqua"))
+                .appends("argument(s)!")
             )
         elif len(args) < len(self.required_parameters):
             names = ", ".join([param.name for param in self.required_parameters])
             raise CommandException(
-                f"Command <{segments[0]}> needs at least "
-                f"{len(self.required_parameters)} argument(s)! ({names})"
+                TextComponent("Command")
+                .appends(TextComponent(segments[0]).color("gold"))
+                .appends("needs at least")
+                .appends(
+                    TextComponent(f"{len(self.required_parameters)}").color("dark_aqua")
+                )
+                .appends("argument(s)! (")
+                .append(TextComponent(f"{names}").color("dark_aqua"))
+                .append(")")
             )
         else:
             for index, param in self.restricted_parameters:
                 if param.options and args[index].lower() not in param.options:
                     raise CommandException(
-                        f"Invalid option '{args[index]}'. "
-                        f"Please choose a correct argument! ({', '.join(param.options)})"
+                        TextComponent("Invalid option '")
+                        .append(TextComponent(f"{args[index]}").color("gold"))
+                        .append("'. Please choose a correct argument! (")
+                        .append(
+                            TextComponent(f"{', '.join(param.options)}").color(
+                                "dark_aqua"
+                            )
+                        )
+                        .append(")")
                     )
 
             return await self.function(proxy, *args)
