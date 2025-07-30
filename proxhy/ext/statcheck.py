@@ -4,7 +4,7 @@ import json
 import os
 import re
 import uuid
-from typing import Literal, Optional
+from typing import Optional
 
 from hypixel import (
     InvalidApiKey,
@@ -543,9 +543,17 @@ class StatCheck(Proxhy):
             # Get player's team
             player_team = self.get_team(player_name)
 
-            # Skip teammates
-            if player_team == own_team and own_team is not None:
+            if not player_team:
                 continue
+
+            # Skip teammates
+            if own_team is not None:
+                # own_team could be None if we are in spec, for example
+                # TODO: this does not work if we relog in spec
+                # but then teammate is still alive
+                # check with "YOU" in sidebar ?
+                if player_team == own_team:
+                    continue
 
             # Handle nicked players
             if "[NICK]" in display_name:
@@ -577,7 +585,7 @@ class StatCheck(Proxhy):
                         "star_formatted": fplayer.bedwars.level,
                         "fkdr_formatted": fplayer.bedwars.fkdr,
                         "rank_value": rank_value,
-                        "team_color": player_team,
+                        "team_color": player_team.prefix,
                     }
                 )
 
@@ -611,11 +619,7 @@ class StatCheck(Proxhy):
         )
 
     @method
-    def get_team(
-        self, user: str
-    ) -> Optional[
-        Literal["Red", "Blue", "Green", "Yellow", "Aqua", "White", "Pink", "Gray"]
-    ]:
+    def get_team(self, user: str) -> Optional[Team]:
         """
         Get user's team. Returns team name or empty string if not found.
         Currently only supports bedwars in-game.
@@ -624,28 +628,7 @@ class StatCheck(Proxhy):
         real_player_teams: list[Team] = [
             team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
         ]
-        team = next(
-            (
-                team
-                for team in real_player_teams
-                if user.casefold() in map(lambda s: s.casefold(), team.players)
-            ),
+        return next(
+            (team for team in real_player_teams if user in team.players),
             None,
         )
-        if team is not None:
-            # teams in bedwars are like
-            # Pink8, Blue7, Green3
-            team = re.sub(r"\d", "", team.name)
-            if team not in {
-                "Red",
-                "Blue",
-                "Green",
-                "Yellow",
-                "Aqua",
-                "White",
-                "Pink",
-                "Gray",
-            }:
-                return None
-        else:
-            return team
