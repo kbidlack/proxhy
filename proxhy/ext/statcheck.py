@@ -531,6 +531,30 @@ class StatCheck(Proxhy):
 
         own_team = self.get_team(self.username)
 
+        # find team color as str (e.g. Pink, Blue, etc.)
+        # TODO: move to method?
+        if own_team is not None:
+            # teams in bedwars are like:
+            # Pink8, Blue7, Green3, etc. per player
+            # so pink team might have two players in teams Pink8 and Pink9
+            own_team_color = re.sub(r"\d", "", own_team.name)
+        else:
+            # fall back team in sidebar
+            # this might happen, for example, if player is in spec
+            # since the above player teams do not apply in spec mode
+            # so we look for "YOU" in sidebar
+            sidebar_own_team = next(
+                (team for team in self.teams if "YOU" in team.suffix), None
+            )
+            if sidebar_own_team is None:
+                own_team_color = ""  # this shouldn't happen
+            else:
+                match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
+                if match_:
+                    own_team_color = match_.group(1)
+                else:
+                    own_team_color = ""  # this also shouldn't happen
+
         enemy_players = []
         enemy_nicks = []
 
@@ -547,13 +571,8 @@ class StatCheck(Proxhy):
                 continue
 
             # Skip teammates
-            if own_team is not None:
-                # own_team could be None if we are in spec, for example
-                # TODO: this does not work if we relog in spec
-                # but then teammate is still alive
-                # check with "YOU" in sidebar ?
-                if player_team == own_team:
-                    continue
+            if own_team_color == re.sub(r"\d", "", player_team.name):
+                continue
 
             # Handle nicked players
             if "[NICK]" in display_name:
@@ -621,7 +640,8 @@ class StatCheck(Proxhy):
     @method
     def get_team(self, user: str) -> Optional[Team]:
         """
-        Get user's team. Returns team name or empty string if not found.
+        Get user's team. Returns team name or None if not found.
+        Specifically, only looks for user's team in Bedwars games
         Currently only supports bedwars in-game.
         """
 
