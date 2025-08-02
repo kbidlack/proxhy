@@ -72,6 +72,9 @@ class Buffer(BytesIO):
     def unpack[T](self, kind: type[DataType[Any, T]]) -> T:
         return kind.unpack(self)
 
+    def clone(self):
+        return Buffer(self.getvalue())
+
 
 class DataType[PT, UT](ABC):  # UT: unpack type, PT: pack type
     value: PT | UT
