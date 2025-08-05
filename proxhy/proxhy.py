@@ -2,7 +2,6 @@ import asyncio
 import base64
 import json
 import re
-import uuid
 from pathlib import Path
 from typing import TYPE_CHECKING, Callable, Self
 
@@ -14,9 +13,7 @@ from . import auth
 from .command import commands
 from .datatypes import (
     UUID,
-    Boolean,
     Buffer,
-    Byte,
     ByteArray,
     Chat,
     Int,
@@ -26,11 +23,12 @@ from .datatypes import (
     VarInt,
 )
 from .errors import CommandException
-from .mcmodels import Game, Team, Teams
+from .mcmodels import Game, Teams
 from .proxy import Proxy, State, listen_client, listen_server
 from .settings import Settings
 
 if TYPE_CHECKING:
+    from .ext.gamestate import GameState
     from .ext.statcheck import StatCheck
     from .ext.window import Window
 
@@ -59,6 +57,8 @@ class Proxhy(Proxy):
         stat_highlights: Callable = StatCheck.stat_highlights
         log_bedwars_stats: Callable = StatCheck.log_bedwars_stats
         _update_stats: Callable = StatCheck._update_stats
+        keep_player_stats_updated: Callable = StatCheck.keep_player_stats_updated
+        _update_teams: Callable = GameState._update_teams
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -171,62 +171,13 @@ class Proxhy(Proxy):
 
     @listen_server(0x3E)
     async def packet_teams(self, buff: Buffer):
-        name = buff.unpack(String)
-        mode = buff.unpack(Byte)
-
-        # team creation
-        if mode == 0:
-            display_name = buff.unpack(String)
-            prefix = buff.unpack(String)
-            suffix = buff.unpack(String)
-            friendly_fire = buff.unpack(Byte)
-            name_tag_visibility = buff.unpack(String)
-            color = buff.unpack(Byte)
-
-            player_count = buff.unpack(VarInt)
-            players = set()
-            for _ in range(player_count):
-                players.add(buff.unpack(String))
-
-            self.teams.append(
-                Team(
-                    name,
-                    display_name,
-                    prefix,
-                    suffix,
-                    friendly_fire,
-                    name_tag_visibility,
-                    color,
-                    players,
-                )
-            )
-        # team removal
-        elif mode == 1:
-            self.teams.delete(name)
-        # team information updation
-        elif mode == 2:
-            team = self.teams.get(name)
-            if team:
-                team.display_name = buff.unpack(String)
-                team.prefix = buff.unpack(String)
-                team.suffix = buff.unpack(String)
-                team.friendly_fire = buff.unpack(Byte)
-                team.name_tag_visibility = buff.unpack(String)
-                team.color = buff.unpack(Byte)
-
-        # add/remove players to team
-        elif mode in {3, 4}:
-            add = True if mode == 3 else False
-            player_count = buff.unpack(VarInt)
-            players = {buff.unpack(String) for _ in range(player_count)}
-
-            if add:
-                self.teams.get(name).players |= players
-            else:
-                self.teams.get(name).players -= players
+        # game state
+        self._update_teams(buff.clone())
 
         self.client.send_packet(0x3E, buff.getvalue())
-        asyncio.create_task(self.keep_player_stats_updated())
+
+        # statcheck
+        self.keep_player_stats_updated()
 
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
@@ -372,21 +323,7 @@ class Proxhy(Proxy):
                     pass  # some things fail idk
 
         self.client.send_packet(0x38, buff.getvalue())
-        asyncio.create_task(self.keep_player_stats_updated())
-
-    async def keep_player_stats_updated(self):
-        # make sure player stats stays updated
-        # hypixel resets sometimes
-        n_players = len(self.players_with_stats.values())
-        self.client.send_packet(
-            0x38,
-            VarInt(3),
-            VarInt(n_players),
-            *(
-                UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
-                for uuid_, display_name in self.players_with_stats.values()
-            ),
-        )
+        self.keep_player_stats_updated()
 
     @property
     def hypixel_api_key(self):
