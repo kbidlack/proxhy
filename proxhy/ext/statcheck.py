@@ -652,3 +652,18 @@ class StatCheck(Proxhy):
             (team for team in real_player_teams if user in team.players),
             None,
         )
+
+    @method
+    def keep_player_stats_updated(self):
+        # make sure player stats stays updated
+        # hypixel resets sometimes
+        n_players = len(self.players_with_stats.values())
+        self.client.send_packet(
+            0x38,
+            VarInt(3),
+            VarInt(n_players),
+            *(
+                UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
+                for uuid_, display_name in self.players_with_stats.values()
+            ),
+        )
