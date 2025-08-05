@@ -1,16 +1,15 @@
+from __future__ import annotations
+
 import asyncio
 import base64
-import json
-import re
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Self
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, TypeVar
 
 import hypixel
 import keyring
 from platformdirs import user_cache_dir
 
 from . import auth
-from .command import commands
 from .datatypes import (
     UUID,
     Buffer,
@@ -18,11 +17,9 @@ from .datatypes import (
     Chat,
     Int,
     String,
-    TextComponent,
     UnsignedShort,
     VarInt,
 )
-from .errors import CommandException
 from .mcmodels import Game, Teams
 from .proxy import Proxy, State, listen_client, listen_server
 from .settings import Settings
@@ -31,6 +28,37 @@ if TYPE_CHECKING:
     from .ext.gamestate import GameState
     from .ext.statcheck import StatCheck
     from .ext.window import Window
+
+
+T = TypeVar("T", bound="Proxhy")
+func_T = Callable[[T, str, Buffer], Any | Awaitable[Any]]
+
+type chat_listener = set[
+    tuple[
+        Callable[[str], bool],
+        func_T,
+        bool,
+    ]
+]
+
+server_chat_listeners: chat_listener = set()
+client_chat_listeners: chat_listener = set()
+
+
+def on_chat(
+    validator: Callable[[str], bool],
+    source: Literal["server", "client"],
+    block=False,
+):
+    def wrapper(func: func_T):
+        if source == "client":
+            client_chat_listeners.add((validator, func, block))
+        elif source == "server":
+            server_chat_listeners.add((validator, func, block))
+
+        return func
+
+    return wrapper
 
 
 class Proxhy(Proxy):
@@ -182,121 +210,34 @@ class Proxhy(Proxy):
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
         message = buff.unpack(Chat)
-        block_msg = False
 
-        if message.startswith("ONLINE: "):  # /who
-            if not self.received_who.is_set():
-                self.received_who.set()
-            else:
-                self.client.send_packet(0x02, buff.getvalue())
+        for validator, callback, block in server_chat_listeners:
+            if validator(message):
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(self, message, buff.clone())
+                elif isinstance(callback, Callable):
+                    callback(self, message, buff.clone())
 
-            self.players_without_stats.update(
-                message.removeprefix("ONLINE: ").split(", ")
-            )
-            self.players_without_stats.difference_update(
-                set(self.players_with_stats.keys())
-            )
-            return await self._update_stats()
+                if block:
+                    return
 
-        # if user rejoins a game
-        if ("You will respawn in 10 seconds!" in message) or (
-            "Your bed was destroyed so you are a spectator!" in message
-        ):
-            self.server.send_packet(0x01, String("/who"))
-            self.received_who.clear()
-
-        if (
-            self.settings.bedwars.display_top_stats.state != "OFF"
-        ):  # 3 on states so we just check if its not off
-            game_start_msgs = [  # block all the game start messages
-                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-                "                                  Bed Wars",
-                "     Protect your bed and destroy the enemy beds.",
-                "      Upgrade yourself and your team by collecting",
-                "    Iron, Gold, Emerald and Diamond from generators",
-                "                  to access powerful upgrades.",
-                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-            ]
-
-            if message in game_start_msgs:
-                block_msg = True
-                if message == game_start_msgs[-2]:
-                    # replace them with the statcheck overview
-                    self.client.chat(
-                        TextComponent("Fetching top stats...").color("gold").bold()
-                    )
-                    self.server.send_packet(0x01, String("/who"))
-                    self.received_who.clear()
-
-        async def _update_game(self: Self, game: dict):
-            self.game.update(game)
-            if game.get("mode"):
-                return self.rq_game.update(game)
-            else:
-                return
-
-        if re.match(r"^\{.*\}$", message):  # locraw
-            if not self.received_locraw.is_set():
-                if "limbo" in message:  # sometimes returns limbo right when you join
-                    if not self.teams:  # probably in limbo
-                        return
-                    elif self.client_type != "lunar":
-                        await asyncio.sleep(0.1)
-                        return self.server.send_packet(0x01, String("/locraw"))
-                else:
-                    self.received_locraw.set()
-                    await _update_game(self, json.loads(message))
-            else:
-                await _update_game(self, json.loads(message))
-
-        if not block_msg:
-            self.client.send_packet(0x02, buff.getvalue())
+        return self.client.send_packet(0x02, buff.getvalue())
 
     @listen_client(0x01)
     async def packet_client_chat_message(self, buff: Buffer):
         message = buff.unpack(String)
 
-        # run command
-        if message.startswith("/"):
-            segments = message.split()
-            command = commands.get(
-                segments[0].removeprefix("/").casefold()
-            ) or commands.get(segments[0].removeprefix("//").casefold())
-            if command:
-                try:
-                    output: str | TextComponent = await command(self, message)
-                except CommandException as err:
-                    if isinstance(err.message, TextComponent):
-                        err.message.flatten()
+        for validator, callback, block in client_chat_listeners:
+            if validator(message):
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(self, message, buff.clone())
+                elif isinstance(callback, Callable):
+                    callback(self, message, buff.clone())
 
-                        for i, child in enumerate(err.message.get_children()):
-                            if not child.data.get("color"):
-                                err.message.replace_child(i, child.color("dark_red"))
-                            if not child.data.get("bold"):
-                                err.message.replace_child(i, child.bold(False))
+                if block:
+                    return
 
-                    err.message = TextComponent(err.message)
-                    if not err.message.data.get("color"):
-                        err.message.color("dark_red")
-
-                    err.message = err.message.bold(False)
-
-                    error_msg = (
-                        TextComponent("∎ ").bold().color("blue").append(err.message)
-                    )
-                    self.client.chat(error_msg)
-                else:
-                    if output:
-                        if segments[0].startswith("//"):  # send output of command
-                            # remove chat formatting
-                            output = re.sub(r"§.", "", str(output))
-                            self.server.chat(output)
-                        else:
-                            self.client.chat(output)
-            else:
-                self.server.send_packet(0x01, buff.getvalue())
-        else:
-            self.server.send_packet(0x01, buff.getvalue())
+        return self.server.send_packet(0x01, buff.getvalue())
 
     @listen_client(0x14)
     async def packet_tab_complete(self, buff: Buffer):

@@ -1,9 +1,13 @@
 # YIPPEEE
 # this is going to be sooooooo fun
 
+import asyncio
+import json
+import re
+
 from ..datatypes import Buffer, Byte, String, VarInt
 from ..mcmodels import Team
-from ..proxhy import Proxhy
+from ..proxhy import Proxhy, on_chat
 from ._methods import method
 
 
@@ -63,3 +67,26 @@ class GameState(Proxhy):
                 self.teams.get(name).players |= players
             else:
                 self.teams.get(name).players -= players
+
+    @method
+    def _update_game(self, game: dict):
+        self.game.update(game)
+        if game.get("mode"):
+            return self.rq_game.update(game)
+        else:
+            return
+
+    @on_chat(lambda s: bool(re.match(r"^\{.*\}$", s)), "server", True)
+    async def on_chat_locraw(self, message: str, buff: Buffer):
+        if not self.received_locraw.is_set():
+            if "limbo" in message:  # sometimes returns limbo right when you join
+                if not self.teams:  # probably in limbo
+                    return
+                elif self.client_type != "lunar":
+                    await asyncio.sleep(0.1)
+                    return self.server.send_packet(0x01, String("/locraw"))
+            else:
+                self.received_locraw.set()
+                self._update_game(json.loads(message))
+        else:
+            self._update_game(json.loads(message))
