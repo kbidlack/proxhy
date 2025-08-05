@@ -17,12 +17,22 @@ from hypixel import (
 
 from ..aliases import Gamemode
 from ..command import command
-from ..datatypes import UUID, Boolean, Chat, TextComponent, VarInt
+from ..datatypes import UUID, Boolean, Buffer, Chat, String, TextComponent, VarInt
 from ..errors import CommandException
 from ..formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from ..mcmodels import Nick, Team
-from ..proxhy import Proxhy
+from ..proxhy import Proxhy, on_chat
 from ._methods import method
+
+game_start_msgs = [  # block all the game start messages
+    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    "                                  Bed Wars",
+    "     Protect your bed and destroy the enemy beds.",
+    "      Upgrade yourself and your team by collecting",
+    "    Iron, Gold, Emerald and Diamond from generators",
+    "                  to access powerful upgrades.",
+    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+]
 
 
 class StatCheck(Proxhy):
@@ -667,3 +677,43 @@ class StatCheck(Proxhy):
                 for uuid_, display_name in self.players_with_stats.values()
             ),
         )
+
+    @on_chat(lambda s: s.startswith("ONLINE: "), "server", True)  # /who
+    async def on_chat_who(self, message: str, buff: Buffer):
+        if not self.received_who.is_set():
+            self.received_who.set()
+        else:
+            self.client.send_packet(0x02, buff.getvalue())
+
+        self.players_without_stats.update(message.removeprefix("ONLINE: ").split(", "))
+        self.players_without_stats.difference_update(
+            set(self.players_with_stats.keys())
+        )
+        return await self._update_stats()
+
+    @on_chat(
+        # user rejoins a game
+        lambda s: ("You will respawn in 10 seconds!" in s)
+        or ("Your bed was destroyed so you are a spectator!" in s),
+        "server",
+        False,
+    )
+    def on_chat_user_rejoin(self, message: str, buff: Buffer):
+        self.server.send_packet(0x01, String("/who"))
+        self.received_who.clear()
+
+    @on_chat(
+        lambda s: (StatCheck.settings.bedwars.display_top_stats.state != "OFF")
+        # 3 on states so we just check if its not off
+        and (s in game_start_msgs),
+        "server",
+        block=True,
+    )
+    def on_chat_game_start(self, message: str, buff: Buffer):
+        if message == game_start_msgs[-2]:
+            # replace them with the statcheck overview
+            self.client.chat(
+                TextComponent("Fetching top stats...").color("gold").bold()
+            )
+            self.server.send_packet(0x01, String("/who"))
+            self.received_who.clear()
