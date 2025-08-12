@@ -52,6 +52,7 @@ class Proxhy(Proxy):
     }
 
     settings = Settings()
+    
 
     # TYPE HINTS
     if TYPE_CHECKING:
@@ -94,6 +95,7 @@ class Proxhy(Proxy):
         self.logging_in = False
 
         self.log_path = "stat_log.jsonl"
+
 
     async def close(self):
         if not self.open:

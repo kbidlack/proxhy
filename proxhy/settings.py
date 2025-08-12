@@ -3,12 +3,16 @@ from pathlib import Path
 
 default_settings = {
     "bedwars": {
-        "description": "Settings related to the BedWars game mode.",
+        "item": "minecraft:bed",
+        "description": "Bedwars settings.",
         "tablist": {
+            "item": "minecraft:sign",
+            "display_name": "Tablist",
             "description": "Settings related to the BedWars player list.",
             "show_fkdr": {
                 "display_name": "Show Tablist FKDR",
                 "description": "In BedWars, shows users' FKDR next to their name in the tablist.",
+                "item": "minecraft:iron_sword",
                 "states": {
                     "OFF": "red",
                     "ON": "green",
@@ -18,16 +22,18 @@ default_settings = {
             "is_mode_specific": {
                 "display_name": "Mode-Specific Tablist FKDR",
                 "description": "In BedWars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
+                "item": "minecraft:writable_book",
                 "states": {
                     "OFF": "red",
                     "ON": "green",
                 },
-                "state": "OFF",
+                "state": "OFF"
             },
         },
         "display_top_stats": {
             "display_name": "Preface top players",
             "description": "In BedWars, receive a chat message at the start of the game highlighting the best players.",
+            "item": "minecraft:golden_sword",
             "states": {
                 "OFF": "red",
                 "FKDR": "green",
@@ -110,10 +116,11 @@ class SettingProperty:
         # Move to next state (wrap around to first if at end)
         next_index = (current_index + 1) % len(state_names)
         next_state = state_names[next_index]
+        prev_state = self.state
 
         # Set the new state
         self.state = next_state
-        return next_state
+        return prev_state, next_state
 
     def __str__(self):
         return f"{self.display_name}: {self.state}"
@@ -231,10 +238,10 @@ class Settings:
             if isinstance(value, dict):
                 setattr(self, key, SettingGroup(value, self, [key]))
 
-    def get_setting_by_path(self, path):
+    def get_setting_by_path(self, path) -> dict:
         """Get a setting by its path (e.g., 'bedwars.tablist.show_fkdr')."""
         keys = path.split(".")
-        current = self._config_data
+        current: dict = self._config_data
 
         for key in keys:
             if isinstance(current, dict) and key in current:
@@ -243,9 +250,24 @@ class Settings:
                 raise KeyError(f"Setting path '{path}' not found")
 
         return current
+    
+    def toggle_setting_by_path(self, path: str):
+        """Toggle a setting by its path (e.g., 'bedwars.tablist.show_fkdr')."""
+        # Get the setting data
+        setting_data = self.get_setting_by_path(path)
+        
+        # Ensure it's a setting property (has 'state' key)
+        if not isinstance(setting_data, dict) or "state" not in setting_data:
+            raise ValueError(f"Path '{path}' does not point to a toggleable setting")
+        
+        # Create a temporary SettingProperty and toggle it
+        keys = path.split(".")
+        setting_property = SettingProperty(setting_data, self, keys)
+        return setting_property.toggle()
 
     def __str__(self):
         return f"Settings(file='{self._settings_file}')"
 
     def __repr__(self):
         return f"Settings(settings_file='{self._settings_file}')"
+
