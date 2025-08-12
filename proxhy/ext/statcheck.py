@@ -4,6 +4,7 @@ import json
 import os
 import re
 import uuid
+from typing import Optional
 
 from hypixel import (
     InvalidApiKey,
@@ -16,12 +17,22 @@ from hypixel import (
 
 from ..aliases import Gamemode
 from ..command import command
-from ..datatypes import UUID, Boolean, Chat, TextComponent, VarInt
+from ..datatypes import UUID, Boolean, Buffer, Chat, String, TextComponent, VarInt
 from ..errors import CommandException
 from ..formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from ..mcmodels import Nick
-from ..proxhy import Proxhy
+from ..mcmodels import Nick, Team
+from ..proxhy import Proxhy, on_chat
 from ._methods import method
+
+game_start_msgs = [  # block all the game start messages
+    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    "                                  Bed Wars",
+    "     Protect your bed and destroy the enemy beds.",
+    "      Upgrade yourself and your team by collecting",
+    "    Iron, Gold, Emerald and Diamond from generators",
+    "                  to access powerful upgrades.",
+    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+]
 
 
 class StatCheck(Proxhy):
@@ -324,119 +335,154 @@ class StatCheck(Proxhy):
 
     @method
     async def _update_stats(self):
+        """
+        Update stats in tab list.
+        Calls stat highlights function once all players from /who have stats
+        """
         async with self.player_stats_lock:
             await self.received_locraw.wait()
-            await self.received_who.wait()
+
+            # CHECKS
 
             if not self.players_without_stats:
                 # No players to update stats for
                 return
 
             # update stats in tab in a game, bw supported so far
-            if (
-                (self.game.gametype in {"bedwars"})
-                and self.game.mode
-                and (self.settings.bedwars.tablist.show_fkdr.state == "ON")
-            ):
-                # Initialize cache if it doesn't exist
-                if not hasattr(self, "_cached_players"):
-                    self._cached_players = {}
+            if self.game.gametype not in {"bedwars"}:
+                return
 
-                player_stats = await asyncio.gather(
-                    *[
-                        self.hypixel_client.player(player)
-                        for player in self.players_without_stats
-                    ],
-                    return_exceptions=True,
-                )
+            # not in an updatable stats mode
+            if not self.game.mode:
+                return
 
-                for player in player_stats:
-                    if isinstance(player, PlayerNotFound):
-                        real_player = player.player
-                        player = Nick(real_player)
-                        try:
-                            player.uuid = next(
-                                u
-                                for u, p in self.players.items()
-                                if p.casefold() == real_player.casefold()
-                            )
-                        except StopIteration:
-                            continue
-                    elif isinstance(
-                        player, (InvalidApiKey, RateLimitError, TimeoutError)
-                    ):
-                        err_message = {
-                            InvalidApiKey: TextComponent("Invalid API Key!").color(
-                                "red"
-                            ),
-                            KeyRequired: TextComponent("No API Key provided!").color(
-                                "red"
-                            ),
-                            RateLimitError: TextComponent("Rate limit!").color("red"),
-                            TimeoutError: TextComponent(
-                                f"Request timed out! ({player})"
-                            ).color("red"),
-                        }
+            # setting for tablist fkdr is off
+            if not self.settings.bedwars.tablist.show_fkdr.state == "ON":
+                return
 
-                        if not self.game_error:
-                            self.game_error = player
-                            self.client.chat(err_message[type(player)])
+            player_stats = await asyncio.gather(
+                *[
+                    self.hypixel_client.player(player)
+                    for player in self.players_without_stats
+                ],
+                return_exceptions=True,
+            )
+
+            # the first 3 if cases here just run some checks on the players
+            # TODO: could move out into like a _check_player function
+            # ^ to improve readability
+            # -----------
+            # the rest of this for loop gets player display names
+            for player in player_stats:
+                if isinstance(player, PlayerNotFound):  # assume nick
+                    # I don't actually know if we can assume this is a string
+                    # but I want the type checker to be friendly to me
+                    # later when I casefold it
+                    nick_username: str = player.player
+                    player = Nick(nick_username)
+                    try:
+                        player.uuid = next(
+                            u
+                            for u, p in self.players.items()
+                            # casefold shouldn't technically be necessary here?
+                            # but just in case...
+                            if p.casefold() == nick_username.casefold()
+                        )
+                    except StopIteration:
+                        # idk why this would happen tbh
+                        # I think when I wrote this code initially I had a reason
                         continue
-                    elif not isinstance(player, Player):
-                        # TODO log this
-                        # Session is closed probably, this is pointless
-                        continue
+                elif isinstance(player, (InvalidApiKey, RateLimitError, TimeoutError)):
+                    err_message = {
+                        InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
+                        KeyRequired: TextComponent("No API Key provided!").color("red"),
+                        RateLimitError: TextComponent("Rate limit!").color("red"),
+                        TimeoutError: TextComponent(
+                            f"Request timed out! ({player})"
+                        ).color("red"),
+                    }
 
-                    if player.name in self.players.values():
-                        # Only cache actual Player objects, not Nick objects
-                        if not isinstance(player, (PlayerNotFound, Nick)):
-                            self._cached_players[player.name] = player
+                    # if an error message hasn't already been sent in this game
+                    # game being hypixel sub-server, clears on packet_join_game
+                    if not self.game_error:
+                        self.game_error = player
+                        self.client.chat(err_message[type(player)])
 
-                        if not isinstance(player, (PlayerNotFound, Nick)):
-                            fplayer = FormattedPlayer(player)
+                    continue
+                elif not isinstance(player, Player):
+                    # TODO log this -- also why does this occur?
+                    # supposedly session is closed (?)
+                    continue
 
-                            if self.game.gametype == "bedwars":
-                                display_name = " ".join(
-                                    (
-                                        fplayer.bedwars.level,
-                                        fplayer.rankname,
-                                        f" §7| {fplayer.bedwars.fkdr}",
-                                    )
+                if player.name in self.players.values():
+                    # Only cache actual Player objects, not Nick objects
+                    if not isinstance(player, (PlayerNotFound, Nick)):
+                        self._cached_players[player.name] = player
+
+                        fplayer = FormattedPlayer(player)
+
+                        # technically we don't need this since only bedwars
+                        # is currently supported. but... futureproofing !!!
+                        if self.game.gametype == "bedwars":
+                            display_name = " ".join(
+                                (
+                                    fplayer.bedwars.level,
+                                    fplayer.rankname,
+                                    f" §7| {fplayer.bedwars.fkdr}",
                                 )
-                            # elif self.game.gametype == "skywars":
-                            #     display_name = " ".join(
-                            #         (
-                            #             fplayer.skywars.level,
-                            #             fplayer.rankname,
-                            #             f" | {fplayer.skywars.kdr}",
-                            #         )
-                            #     )
-                            else:
-                                display_name = fplayer.rankname
-                        else:
-                            # Get team color for nicked player
-                            for team in self.teams:
-                                if player.name in team.players:
-                                    self.nick_team_colors.update(
-                                        {player.name: team.prefix}
-                                    )
-                                    break
+                            )
+                        # elif self.game.gametype == "skywars":
+                        #     display_name = " ".join(
+                        #         (
+                        #             fplayer.skywars.level,
+                        #             fplayer.rankname,
+                        #             f" | {fplayer.skywars.kdr}",
+                        #         )
+                        #     )
+                        else:  # also this shouldn't run because we already
+                            # early return on self.game.gametype not being "bedwars"
+                            display_name = fplayer.rankname
+                    else:  # if is a nicked player
+                        # get team color for nicked player
+                        for team in self.teams:
+                            if player.name in team.players:
+                                self.nick_team_colors.update({player.name: team.prefix})
+                                break
 
-                            display_name = f"§5[NICK] {player.name}"
+                        display_name = f"§5[NICK] {player.name}"
 
-                        self.client.send_packet(
-                            0x38,
-                            VarInt(3),
-                            VarInt(1),
-                            UUID(uuid.UUID(str(player.uuid))),
-                            Boolean(True),
-                            Chat(display_name),
-                        )
-                        self.players_with_stats.update(
-                            {player.name: (player.uuid, display_name)}
-                        )
+                    # this is where we actually update player stats in tab
+                    prefix, suffix = next(
+                        (
+                            (team.prefix, team.suffix)
+                            for team in self.teams
+                            if player.name in team.players
+                        ),
+                        # if cannot find prefix/suffix
+                        # just return empty strings by default
+                        ("", ""),
+                    )
 
-            self.received_player_stats.set()
+                    self.players_with_stats.update(
+                        {
+                            player.name: (
+                                player.uuid,
+                                prefix + display_name + suffix,
+                            )
+                        }
+                    )
+
+                    self.client.send_packet(
+                        0x38,
+                        VarInt(3),
+                        VarInt(1),
+                        UUID(uuid.UUID(str(player.uuid))),
+                        Boolean(True),
+                        Chat(display_name),
+                    )
+
+        # if we've gotten everyone from /who, stat highlights can be called
+        await self.stat_highlights()
 
     @method
     async def log_bedwars_stats(self, event: str) -> None:
@@ -490,30 +536,52 @@ class StatCheck(Proxhy):
     @method
     async def stat_highlights(self):
         """Display top 3 enemy players and nicked players."""
-        await self.received_player_stats.wait()
-
         if not self.players_with_stats:
             return "No stats found!"
 
-        own_team = self.get_own_team()
+        own_team = self.get_team(self.username)
+
+        # find team color as str (e.g. Pink, Blue, etc.)
+        # TODO: move to method?
+        if own_team is not None:
+            # teams in bedwars are like:
+            # Pink8, Blue7, Green3, etc. per player
+            # so pink team might have two players in teams Pink8 and Pink9
+            own_team_color = re.sub(r"\d", "", own_team.name)
+        else:
+            # fall back team in sidebar
+            # this might happen, for example, if player is in spec
+            # since the above player teams do not apply in spec mode
+            # so we look for "YOU" in sidebar
+            sidebar_own_team = next(
+                (team for team in self.teams if "YOU" in team.suffix), None
+            )
+            if sidebar_own_team is None:
+                own_team_color = ""  # this shouldn't happen
+            else:
+                match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
+                if match_:
+                    own_team_color = match_.group(1)
+                else:
+                    own_team_color = ""  # this also shouldn't happen
+
         enemy_players = []
         enemy_nicks = []
 
         # Process each player
-        for player_name, (player_uuid, display_name) in self.players_with_stats.items():
+        for player_name, (_, display_name) in self.players_with_stats.items():
             # Skip the user's own nickname
             if player_name == self.username:
                 continue
 
             # Get player's team
-            player_team = ""
-            for team in self.teams:
-                if player_name in team.players:
-                    player_team = team.prefix
-                    break
+            player_team = self.get_team(player_name)
+
+            if not player_team:
+                continue
 
             # Skip teammates
-            if player_team == own_team and own_team != "":
+            if own_team_color == re.sub(r"\d", "", player_team.name):
                 continue
 
             # Handle nicked players
@@ -523,7 +591,7 @@ class StatCheck(Proxhy):
                 continue
 
             # Handle regular players with stats
-            if hasattr(self, "_cached_players") and player_name in self._cached_players:
+            if player_name in self._cached_players:
                 player = self._cached_players[player_name]
                 fplayer = FormattedPlayer(player)
 
@@ -546,7 +614,7 @@ class StatCheck(Proxhy):
                         "star_formatted": fplayer.bedwars.level,
                         "fkdr_formatted": fplayer.bedwars.fkdr,
                         "rank_value": rank_value,
-                        "team_color": player_team,
+                        "team_color": player_team.prefix,
                     }
                 )
 
@@ -571,28 +639,81 @@ class StatCheck(Proxhy):
         elif not enemy_nicks:
             result = "No stats found!"
 
-        return result
+        self.client.chat(
+            TextComponent("\nTop stats:\n\n")
+            .color("gold")
+            .bold()
+            .append(result)
+            .append("\n")
+        )
 
     @method
-    def get_own_team(self):
-        """Get the user's own team prefix. Returns team prefix or empty string if not found."""
-        # First try to use the cached team prefix from the "(YOU)" marker
-        if hasattr(self, "_user_team_prefix") and self._user_team_prefix:
-            return self._user_team_prefix
+    def get_team(self, user: str) -> Optional[Team]:
+        """
+        Get user's team. Returns team name or None if not found.
+        Specifically, only looks for user's team in Bedwars games
+        Currently only supports bedwars in-game.
+        """
 
-        # Fallback: look for team with "(YOU)" in suffix
-        for team in self.teams:
-            clean_suffix = re.sub(r"§.", "", team.suffix)
-            if any(
-                marker in team.suffix or marker in clean_suffix
-                for marker in ["(YOU)", "(You)", " YOU", " You"]
-            ):
-                self._user_team_prefix = team.prefix
-                return team.prefix
+        real_player_teams: list[Team] = [
+            team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
+        ]
+        return next(
+            (team for team in real_player_teams if user in team.players),
+            None,
+        )
 
-        # Last resort: try to find user by username (less reliable when nicked)
-        for team in self.teams:
-            if self.username in team.players:
-                return team.prefix
+    @method
+    def keep_player_stats_updated(self):
+        # make sure player stats stays updated
+        # hypixel resets sometimes
+        n_players = len(self.players_with_stats.values())
+        self.client.send_packet(
+            0x38,
+            VarInt(3),
+            VarInt(n_players),
+            *(
+                UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
+                for uuid_, display_name in self.players_with_stats.values()
+            ),
+        )
 
-        return ""
+    @on_chat(lambda s: s.startswith("ONLINE: "), "server", True)  # /who
+    async def on_chat_who(self, message: str, buff: Buffer):
+        if not self.received_who.is_set():
+            self.received_who.set()
+        else:
+            self.client.send_packet(0x02, buff.getvalue())
+
+        self.players_without_stats.update(message.removeprefix("ONLINE: ").split(", "))
+        self.players_without_stats.difference_update(
+            set(self.players_with_stats.keys())
+        )
+        return await self._update_stats()
+
+    @on_chat(
+        # user rejoins a game
+        lambda s: ("You will respawn in 10 seconds!" in s)
+        or ("Your bed was destroyed so you are a spectator!" in s),
+        "server",
+        False,
+    )
+    def on_chat_user_rejoin(self, message: str, buff: Buffer):
+        self.server.send_packet(0x01, String("/who"))
+        self.received_who.clear()
+
+    @on_chat(
+        lambda s: (StatCheck.settings.bedwars.display_top_stats.state != "OFF")
+        # 3 on states so we just check if its not off
+        and (s in game_start_msgs),
+        "server",
+        block=True,
+    )
+    def on_chat_game_start(self, message: str, buff: Buffer):
+        if message == game_start_msgs[-2]:
+            # replace them with the statcheck overview
+            self.client.chat(
+                TextComponent("Fetching top stats...").color("gold").bold()
+            )
+            self.server.send_packet(0x01, String("/who"))
+            self.received_who.clear()

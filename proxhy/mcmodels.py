@@ -14,6 +14,12 @@ class Team:
     color: int
     players: set[str]
 
+    def __eq__(self, other: object):
+        if not isinstance(other, Team):
+            raise TypeError("Comparisons must be between two Team objects")
+
+        return self.name == other.name
+
 
 class Teams(list[Team]):
     def get(self, key) -> Team:

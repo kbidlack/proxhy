@@ -53,6 +53,7 @@ class SlotData:
 
 class Buffer(BytesIO):
     def unpack[T](self, kind: type[DataType[Any, T]]) -> T: ...
+    def clone(self) -> Buffer: ...
 
 class DataType[PT, UT](ABC, metaclass=abc.ABCMeta):
     value: PT | UT

@@ -1,0 +1,37 @@
+{
+    "bedwars": {
+        "description": "Settings related to the BedWars game mode.",
+        "tablist": {
+            "description": "Settings related to the BedWars player list.",
+            "show_fkdr": {
+                "display_name": "Show Tablist FKDR",
+                "description": "In BedWars, shows users' FKDR next to their name in the tablist.",
+                "states": {
+                    "OFF": "red",
+                    "ON": "green"
+                },
+                "state": "OFF"
+            },
+            "is_mode_specific": {
+                "display_name": "Mode-Specific Tablist FKDR",
+                "description": "In BedWars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
+                "states": {
+                    "OFF": "red",
+                    "ON": "green"
+                },
+                "state": "OFF"
+            }
+        },
+        "display_top_stats": {
+            "display_name": "Preface top players",
+            "description": "In BedWars, receive a chat message at the start of the game highlighting the best players.",
+            "states": {
+                "OFF": "red",
+                "FKDR": "green",
+                "STAR": "green",
+                "INDEX": "green"
+            },
+            "state": "INDEX"
+        }
+    }
+}
