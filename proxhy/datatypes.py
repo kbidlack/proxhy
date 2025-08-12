@@ -6,8 +6,8 @@ import struct
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from importlib.resources import files
 from io import BytesIO
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
 
 if TYPE_CHECKING:
@@ -25,7 +25,9 @@ class Pos:
     z: int = 0
 
 
-with open(Path(__file__).parent / "assets" / "item_mappings.json") as file:
+im_path = files("proxhy.assets").joinpath("item_mappings.json")
+
+with im_path.open("r") as file:
     item_mapping = json.load(file)
 
 
@@ -69,6 +71,9 @@ class SlotData:
 class Buffer(BytesIO):
     def unpack[T](self, kind: type[DataType[Any, T]]) -> T:
         return kind.unpack(self)
+
+    def clone(self) -> Buffer:
+        return Buffer(self.getvalue())
 
 
 class DataType[PT, UT](ABC):  # UT: unpack type, PT: pack type

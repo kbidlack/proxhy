@@ -42,13 +42,16 @@ class Login(Proxhy):
         self.state = State.PLAY
         self.logged_in = True
 
-        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
-
-        await self.log_bedwars_stats("login")
-
         self.client.send_packet(0x02, buff.read())
 
-    @listen_client(0x00, State.LOGIN)
+        asyncio.create_task(self._login_success_helper())
+
+    @method
+    async def _login_success_helper(self):
+        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
+        await self.log_bedwars_stats("login")
+
+    @listen_client(0x00, State.LOGIN, blocking=True, override=True)
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
 

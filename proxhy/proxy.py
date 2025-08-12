@@ -37,10 +37,10 @@ def listen_client(
 
         client_listeners[(packet_id, state)].add((func, blocking))
 
-        async def inner(*args, **kwargs):
-            return await func(*args, **kwargs)
+        # async def inner(*args, **kwargs):
+        #     return await func(*args, **kwargs)
 
-        return inner
+        return func
 
     return wrapper
 
@@ -55,10 +55,10 @@ def listen_server(
 
         server_listeners[(packet_id, state)].add((func, blocking))
 
-        async def inner(*args, **kwargs):
-            return await func(*args, **kwargs)
+        # async def inner(*args, **kwargs):
+        #     return await func(*args, **kwargs)
 
-        return inner
+        return func
 
     return wrapper
 

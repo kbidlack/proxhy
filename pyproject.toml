@@ -1,6 +1,6 @@
 [project]
 name = "proxhy"
-version = "1.0.0"
+version = "0.1.0"
 description = "A Hypixel proxy with various different features"
 license = "MIT"
 authors = [
@@ -13,8 +13,15 @@ dependencies = [
     "msmcauth==0.0.4",
     "cryptography>=45.0",
     "keyring>=25.6",
-    "pyjwt>=2.10"
+    "pyjwt>=2.10",
+    "platformdirs>=4.3"
 ]
 
 [project.scripts]
 proxhy = "proxhy.__main__:main"
+
+[tool.setuptools]
+packages = ["proxhy"]
+
+[tool.setuptools.package-data]
+"proxhy" = ["assets/*"]
