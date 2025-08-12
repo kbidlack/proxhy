@@ -11,7 +11,7 @@ from ..datatypes import Buffer, Item, SlotData, String, TextComponent
 from ..nbt import dumps, from_dict
 from ..proxhy import Proxhy, on_chat
 from ..settings import SettingGroup, SettingProperty
-from .window import Window, get_trigger, SettingsMenu
+from .window import SettingsMenu, Window, get_trigger
 
 
 class Commands(Proxhy):
@@ -46,7 +46,7 @@ class Commands(Proxhy):
     @command("settingtest")
     async def setting_test(self):
         self.settings_window = SettingsMenu(self)
-        
+
         self.settings_window.open()
 
     @command("setting")
@@ -210,7 +210,7 @@ class Commands(Proxhy):
 
         old_state = setting_obj.state
         old_state_color = setting_obj.states[old_state]
-        new_state = value or setting_obj.toggle()
+        new_state = value or setting_obj.toggle()[1]
         setting_obj.state = new_state
         new_state_color = setting_obj.states[new_state]
 
