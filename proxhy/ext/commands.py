@@ -11,7 +11,7 @@ from ..datatypes import Buffer, Item, SlotData, String, TextComponent
 from ..nbt import dumps, from_dict
 from ..proxhy import Proxhy, on_chat
 from ..settings import SettingGroup, SettingProperty
-from .window import Window, get_trigger
+from .window import Window, get_trigger, SettingsMenu
 
 
 class Commands(Proxhy):
@@ -42,6 +42,12 @@ class Commands(Proxhy):
         self.client.chat(api_key_msg)
 
         await self._update_stats()
+
+    @command("settingtest")
+    async def setting_test(self):
+        self.settings_window = SettingsMenu(self)
+        
+        self.settings_window.open()
 
     @command("setting")
     async def edit_settings(self, setting_name: str = "", value: str = ""):
