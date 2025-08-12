@@ -79,6 +79,7 @@ class Proxhy(Proxy):
     }
 
     settings = Settings()
+    
 
     # TYPE HINTS
     if TYPE_CHECKING:
@@ -142,6 +143,7 @@ class Proxhy(Proxy):
         self.log_path = (
             Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
         )
+
 
     async def close(self):
         if not self.open:
