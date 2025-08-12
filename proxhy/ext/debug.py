@@ -30,3 +30,10 @@ class Commands(Proxhy):
                     .append(TextComponent(str(value)).color("yellow"))
                 )
                 self.client.chat(key_value_msg)
+
+    @command("teams")
+    async def _teams(self):
+        print("\n")
+        for team in self.teams:
+            print(f"Team: {team}")
+        print("\n")

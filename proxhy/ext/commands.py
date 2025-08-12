@@ -1,14 +1,15 @@
 import asyncio
+import re
 from collections import namedtuple
 from typing import TYPE_CHECKING, Callable
 
 import hypixel
 from hypixel import ApiError, InvalidApiKey, KeyRequired
 
-from ..command import CommandException, command
-from ..datatypes import Item, SlotData, String, TextComponent
+from ..command import CommandException, command, commands
+from ..datatypes import Buffer, Item, SlotData, String, TextComponent
 from ..nbt import dumps, from_dict
-from ..proxhy import Proxhy
+from ..proxhy import Proxhy, on_chat
 from ..settings import SettingGroup, SettingProperty
 from .window import Window, get_trigger, SettingsMenu
 
@@ -256,3 +257,41 @@ class Commands(Proxhy):
     @command()  # Mmm, garlic bread.
     async def garlicbread(self):  # Mmm, garlic bread.
         return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
+
+    @on_chat(lambda s: s.startswith("/"), "client", block=True)
+    async def on_client_chat_command(self, message: str, buff: Buffer):
+        segments = message.split()
+        command = commands.get(
+            segments[0].removeprefix("/").casefold()
+        ) or commands.get(segments[0].removeprefix("//").casefold())
+        if command:
+            try:
+                output: str | TextComponent = await command(self, message)
+            except CommandException as err:
+                if isinstance(err.message, TextComponent):
+                    err.message.flatten()
+
+                    for i, child in enumerate(err.message.get_children()):
+                        if not child.data.get("color"):
+                            err.message.replace_child(i, child.color("dark_red"))
+                        if not child.data.get("bold"):
+                            err.message.replace_child(i, child.bold(False))
+
+                err.message = TextComponent(err.message)
+                if not err.message.data.get("color"):
+                    err.message.color("dark_red")
+
+                err.message = err.message.bold(False)
+
+                error_msg = TextComponent("∎ ").bold().color("blue").append(err.message)
+                self.client.chat(error_msg)
+            else:
+                if output:
+                    if segments[0].startswith("//"):  # send output of command
+                        # remove chat formatting
+                        output = re.sub(r"§.", "", str(output))
+                        self.server.chat(output)
+                    else:
+                        self.client.chat(output)
+        else:
+            self.server.send_packet(0x01, buff.getvalue())

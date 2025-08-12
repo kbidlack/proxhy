@@ -1,37 +1,64 @@
+from __future__ import annotations
+
 import asyncio
 import base64
-import json
-import re
-import uuid
 from pathlib import Path
-from typing import TYPE_CHECKING, Callable, Self
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, TypeVar
 
 import hypixel
 import keyring
+from platformdirs import user_cache_dir
 
 from . import auth
-from .command import commands
 from .datatypes import (
     UUID,
-    Boolean,
     Buffer,
-    Byte,
     ByteArray,
     Chat,
     Int,
     String,
-    TextComponent,
     UnsignedShort,
     VarInt,
 )
-from .errors import CommandException
-from .mcmodels import Game, Team, Teams
+from .mcmodels import Game, Teams
 from .proxy import Proxy, State, listen_client, listen_server
 from .settings import Settings
 
 if TYPE_CHECKING:
+    from .ext.gamestate import GameState
     from .ext.statcheck import StatCheck
     from .ext.window import Window
+
+
+T = TypeVar("T", bound="Proxhy")
+func_T = Callable[[T, str, Buffer], Any | Awaitable[Any]]
+
+type chat_listener = set[
+    tuple[
+        Callable[[str], bool],
+        func_T,
+        bool,
+    ]
+]
+
+server_chat_listeners: chat_listener = set()
+client_chat_listeners: chat_listener = set()
+
+
+def on_chat(
+    validator: Callable[[str], bool],
+    source: Literal["server", "client"],
+    block=False,
+):
+    def wrapper(func: func_T):
+        if source == "client":
+            client_chat_listeners.add((validator, func, block))
+        elif source == "server":
+            server_chat_listeners.add((validator, func, block))
+
+        return func
+
+    return wrapper
 
 
 class Proxhy(Proxy):
@@ -59,42 +86,63 @@ class Proxhy(Proxy):
         stat_highlights: Callable = StatCheck.stat_highlights
         log_bedwars_stats: Callable = StatCheck.log_bedwars_stats
         _update_stats: Callable = StatCheck._update_stats
+        keep_player_stats_updated: Callable = StatCheck.keep_player_stats_updated
+        _update_teams: Callable = GameState._update_teams
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
 
-        self.client_type = ""
+        # HYPIXEL API
         self.hypixel_client: hypixel.Client
         self._hypixel_api_key = ""
 
-        self.game = Game()
-        self.rq_game = Game()
+        # CLIENT INFO
+        self.client_type = ""
 
-        self.players: dict[str, str] = {}
-        self.players_with_stats = {}
-        self.teams: Teams = Teams()
-        self._user_team_prefix = ""  # Cached team prefix from "(YOU)" marker
-        self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
-        self.players_without_stats: list[str] = []  # players from /who
-
-        # EVENTS
-        # used so the tab updater can signal functions that stats are logged
-        self.received_player_stats = asyncio.Event()
-        self.received_who = asyncio.Event()
-
-        # LOCKS
-        self.player_stats_lock = asyncio.Lock()
-
-        self.windows: dict[int, Window] = {}
-
-        self.received_locraw = asyncio.Event()
-        self.received_locraw.set()
-
-        self.game_error = None  # if error has been sent that game
+        # GAME STATE
         self.logged_in = False
         self.logging_in = False
 
-        self.log_path = "stat_log.jsonl"
+        ## PROXHY
+        self.windows: dict[int, Window] = {}
+        self.game_error = None  # if error has been sent that game
+
+        # cached player stats for stat highlights to pull from
+        self._cached_players = {}
+
+        # players from packet_player_list_item
+        self.players: dict[str, str] = {}
+
+        self.teams: Teams = Teams()
+
+        # server info
+        self.game = Game()
+        self.rq_game = Game()
+
+        # STATCHECK STATE
+        self.players_with_stats = {}
+        self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
+        self.players_without_stats: set[str] = set()  # players from /who
+
+        # EVENTS
+        # statcheck
+        self.received_player_stats = asyncio.Event()
+
+        # server info
+        self.received_locraw = asyncio.Event()
+        self.received_locraw.set()
+
+        self.received_who = asyncio.Event()
+        self.received_who.set()
+
+        # LOCKS
+        # statcheck
+        self.player_stats_lock = asyncio.Lock()
+
+        # MISC
+        self.log_path = (
+            Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
+        )
 
 
     async def close(self):
@@ -140,224 +188,58 @@ class Proxhy(Proxy):
         # flush player lists
         self.players.clear()
         self.players_with_stats.clear()
-        self._user_team_prefix = ""  # Reset cached team prefix for new game
+        self._cached_players.clear()
 
         self.game_error = None
         self.client.send_packet(0x01, buff.getvalue())
 
-        self.received_who.clear()
         self.received_player_stats.clear()
 
         if not self.client_type == "lunar":
             self.received_locraw.clear()
             self.server.send_packet(0x01, String("/locraw"))
 
-    @listen_server(0x3E, blocking=True)
+    @listen_server(0x3E)
     async def packet_teams(self, buff: Buffer):
-        name = buff.unpack(String)
-        mode = buff.unpack(Byte)
+        # game state
+        self._update_teams(buff.clone())
 
-        # team creation
-        if mode == b"\x00":
-            display_name = buff.unpack(String)
-            prefix = buff.unpack(String)
-            suffix = buff.unpack(String)
-            friendly_fire = buff.unpack(Byte)
-            name_tag_visibility = buff.unpack(String)
-            color = buff.unpack(Byte)
-
-            player_count = buff.unpack(VarInt)
-            players = set()
-            for _ in range(player_count):
-                players.add(buff.unpack(String))
-
-            # Check if this team has "(YOU)" or " YOU" in suffix - this indicates it's the user's team
-            clean_suffix = re.sub(r"§.", "", suffix)
-            if any(
-                marker in suffix or marker in clean_suffix
-                for marker in ["(YOU)", "(You)", " YOU", " You"]
-            ):
-                self._user_team_prefix = prefix
-                if hasattr(self, "client_stream") and self.client:
-                    self.client.chat(f"§a§lTeam detected: §r{prefix}§7Team {name}")
-
-            self.teams.append(
-                Team(
-                    name,
-                    display_name,
-                    prefix,
-                    suffix,
-                    friendly_fire,
-                    name_tag_visibility,
-                    color,
-                    players,
-                )
-            )
-        # team removal
-        elif mode == b"\x01":
-            self.teams.delete(name)
-        # team information updation
-        elif mode == b"\x02":
-            team = self.teams.get(name)
-            if team:
-                team.display_name = buff.unpack(String)
-                team.prefix = buff.unpack(String)
-                team.suffix = buff.unpack(String)
-                team.friendly_fire = buff.unpack(Byte)
-                team.name_tag_visibility = buff.unpack(String)
-                team.color = buff.unpack(Byte)
-
-                # Check for YOU marker in updated team
-                clean_suffix = re.sub(r"§.", "", team.suffix)
-                if any(
-                    marker in team.suffix or marker in clean_suffix
-                    for marker in ["(YOU)", "(You)", " YOU", " You"]
-                ):
-                    self._user_team_prefix = team.prefix
-
-        # add players to team
-        elif mode in {b"\x03", b"\x04"}:
-            add = True if mode == b"\x03" else False
-            player_count = buff.unpack(VarInt)
-            players = {buff.unpack(String) for _ in range(player_count)}
-
-            if add:
-                self.teams.get(name).players |= players
-            else:
-                self.teams.get(name).players -= players
-
-        for name, (_uuid, display_name) in self.players_with_stats.items():
-            prefix, suffix = next(
-                (
-                    (team.prefix, team.suffix)
-                    for team in self.teams
-                    if name in team.players
-                ),
-                ("", ""),
-            )
-            self.client.send_packet(
-                0x38,
-                VarInt(3),
-                VarInt(1),
-                UUID(uuid.UUID(str(_uuid))),
-                Boolean(True),
-                Chat(prefix + display_name + suffix),
-            )
         self.client.send_packet(0x3E, buff.getvalue())
+
+        # statcheck
+        self.keep_player_stats_updated()
 
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
         message = buff.unpack(Chat)
-        block_msg = False
 
-        if message.startswith("ONLINE: "):  # /who
-            if self.received_player_stats.is_set():
-                return self.client.send_packet(0x02, buff.getvalue())
-            else:
-                self.players_without_stats.extend(
-                    message.removeprefix("ONLINE: ").split(", ")
-                )
-                return self.received_who.set()
+        for validator, callback, block in server_chat_listeners:
+            if validator(message):
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(self, message, buff.clone())
+                elif isinstance(callback, Callable):
+                    callback(self, message, buff.clone())
 
-        if (
-            self.settings.bedwars.display_top_stats.state != "OFF"
-        ):  # 3 on states so we just check if its not off
-            game_start_msgs = [  # block all the game start messages
-                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-                "                                  Bed Wars",
-                "     Protect your bed and destroy the enemy beds.",
-                "      Upgrade yourself and your team by collecting",
-                "    Iron, Gold, Emerald and Diamond from generators",
-                "                  to access powerful upgrades.",
-                "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-            ]
+                if block:
+                    return
 
-            if message in game_start_msgs:
-                block_msg = True
-                if message == game_start_msgs[-2]:
-                    # replace them with the statcheck overview
-                    self.client.chat(
-                        TextComponent("Fetching top stats...").color("gold").bold()
-                    )
-                    self.server.send_packet(0x01, String("/who"))
-                    await self._update_stats()
-                    highlights = await self.stat_highlights()
-                    self.client.chat(
-                        TextComponent("\nTop stats:\n\n")
-                        .color("gold")
-                        .bold()
-                        .append(highlights)
-                        .append("\n")
-                    )
-                    # self.client.chat(highlights)
-
-        async def _update_game(self: Self, game: dict):
-            self.game.update(game)
-            if game.get("mode"):
-                return self.rq_game.update(game)
-            else:
-                return
-
-        if re.match(r"^\{.*\}$", message):  # locraw
-            if not self.received_locraw.is_set():
-                if "limbo" in message:  # sometimes returns limbo right when you join
-                    if not self.teams:  # probably in limbo
-                        return
-                    elif self.client_type != "lunar":
-                        await asyncio.sleep(0.1)
-                        return self.server.send_packet(0x01, String("/locraw"))
-                else:
-                    self.received_locraw.set()
-                    await _update_game(self, json.loads(message))
-            else:
-                await _update_game(self, json.loads(message))
-
-        if not block_msg:
-            self.client.send_packet(0x02, buff.getvalue())
+        return self.client.send_packet(0x02, buff.getvalue())
 
     @listen_client(0x01)
     async def packet_client_chat_message(self, buff: Buffer):
         message = buff.unpack(String)
 
-        # run command
-        if message.startswith("/"):
-            segments = message.split()
-            command = commands.get(
-                segments[0].removeprefix("/").casefold()
-            ) or commands.get(segments[0].removeprefix("//").casefold())
-            if command:
-                try:
-                    output: str | TextComponent = await command(self, message)
-                except CommandException as err:
-                    if isinstance(err.message, TextComponent):
-                        err.message.flatten()
+        for validator, callback, block in client_chat_listeners:
+            if validator(message):
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(self, message, buff.clone())
+                elif isinstance(callback, Callable):
+                    callback(self, message, buff.clone())
 
-                        for i, child in enumerate(err.message.get_children()):
-                            if not child.data.get("color"):
-                                err.message.replace_child(i, child.color("dark_red"))
-                            if not child.data.get("bold"):
-                                err.message.replace_child(i, child.bold(False))
+                if block:
+                    return
 
-                    err.message = TextComponent(err.message)
-                    if not err.message.data.get("color"):
-                        err.message.color("dark_red")
-
-                    error_msg = (
-                        TextComponent("∎ ").bold().color("blue").append(err.message)
-                    )
-                    self.client.chat(error_msg)
-                else:
-                    if output:
-                        if segments[0].startswith("//"):  # send output of command
-                            # remove chat formatting
-                            output = re.sub(r"§.", "", str(output))
-                            self.server.chat(output)
-                        else:
-                            self.client.chat(output)
-            else:
-                self.server.send_packet(0x01, buff.getvalue())
-        else:
-            self.server.send_packet(0x01, buff.getvalue())
+        return self.server.send_packet(0x01, buff.getvalue())
 
     @listen_client(0x14)
     async def packet_tab_complete(self, buff: Buffer):
@@ -384,6 +266,7 @@ class Proxhy(Proxy):
                     pass  # some things fail idk
 
         self.client.send_packet(0x38, buff.getvalue())
+        self.keep_player_stats_updated()
 
     @property
     def hypixel_api_key(self):
