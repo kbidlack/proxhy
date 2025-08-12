@@ -61,7 +61,7 @@ class SettingProperty:
         """Get the description of the setting."""
         return self._config_data.get("description", "")
 
-    def toggle(self):
+    def toggle(self) -> tuple:
         """Toggle to the next available state in the sequence."""
         if "states" not in self._config_data:
             raise ValueError("Cannot toggle: no states defined for this setting")
@@ -216,16 +216,16 @@ class Settings:
                 raise KeyError(f"Setting path '{path}' not found")
 
         return current
-    
+
     def toggle_setting_by_path(self, path: str):
         """Toggle a setting by its path (e.g., 'bedwars.tablist.show_fkdr')."""
         # Get the setting data
         setting_data = self.get_setting_by_path(path)
-        
+
         # Ensure it's a setting property (has 'state' key)
         if not isinstance(setting_data, dict) or "state" not in setting_data:
             raise ValueError(f"Path '{path}' does not point to a toggleable setting")
-        
+
         # Create a temporary SettingProperty and toggle it
         keys = path.split(".")
         setting_property = SettingProperty(setting_data, self, keys)
@@ -236,4 +236,3 @@ class Settings:
 
     def __repr__(self):
         return f"Settings(settings_file='{self._settings_file}')"
-
