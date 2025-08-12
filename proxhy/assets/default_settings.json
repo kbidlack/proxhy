@@ -1,11 +1,15 @@
 {
     "bedwars": {
-        "description": "Settings related to the BedWars game mode.",
+        "item": "minecraft:bed",
+        "description": "Bedwars settings.",
         "tablist": {
+            "item": "minecraft:sign",
+            "display_name": "Tablist",
             "description": "Settings related to the BedWars player list.",
             "show_fkdr": {
                 "display_name": "Show Tablist FKDR",
                 "description": "In BedWars, shows users' FKDR next to their name in the tablist.",
+                "item": "minecraft:iron_sword",
                 "states": {
                     "OFF": "red",
                     "ON": "green"
@@ -15,6 +19,7 @@
             "is_mode_specific": {
                 "display_name": "Mode-Specific Tablist FKDR",
                 "description": "In BedWars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
+                "item": "minecraft:writable_book",
                 "states": {
                     "OFF": "red",
                     "ON": "green"
@@ -25,6 +30,7 @@
         "display_top_stats": {
             "display_name": "Preface top players",
             "description": "In BedWars, receive a chat message at the start of the game highlighting the best players.",
+            "item": "minecraft:golden_sword",
             "states": {
                 "OFF": "red",
                 "FKDR": "green",
