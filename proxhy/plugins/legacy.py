@@ -2,9 +2,9 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+
 from ..core import PluginBase, State, listen_client, listen_server
-from ..core.proxy import Buffer
-from ..utils.datatypes import VarInt, String, UnsignedShort
+from ..core.datatypes import Buffer, VarInt, String, UnsignedShort
 
 if TYPE_CHECKING:
     from ..core import ProxhyFramework
