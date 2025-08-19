@@ -1,7 +1,4 @@
-import asyncio
 import re
-from collections import namedtuple
-from typing import Callable
 
 from core.events import listen_client, subscribe
 from core.plugin import Plugin
@@ -21,7 +18,6 @@ from .window import SettingsMenu, Window, get_trigger
 class CommandsPlugin(Plugin):
     rq_game: Game
     settings: Settings
-    _update_stats: Callable
 
     @command("settingtest")
     async def setting_test(self):
@@ -205,27 +201,7 @@ class CommandsPlugin(Plugin):
         )
         self.client.chat(settings_msg)
 
-        Callback = namedtuple("Callback", ["setting", "old_state", "new_state", "func"])
-        callbacks = [
-            Callback(
-                setting="bedwars.tablist.show_fkdr",
-                old_state="OFF",
-                new_state="ON",
-                func=self._update_stats,
-            )
-        ]
-        # TODO: implement reset_tablist() for ON -> OFF
-
-        for callback in callbacks:
-            if (
-                setting_name == callback.setting
-                and old_state == callback.old_state
-                and new_state == callback.new_state
-            ):
-                if asyncio.iscoroutinefunction(callback.func):
-                    await callback.func()
-                else:
-                    callback.func()
+        await self.emit("setting:bedwars.tablist.show_fkdr", [old_state, new_state])
 
     @command("rq")
     async def requeue(self):
