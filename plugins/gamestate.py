@@ -3,16 +3,40 @@
 
 import asyncio
 import json
-import re
 
-from ..datatypes import Buffer, Byte, String, VarInt
-from ..mcmodels import Team
-from ..proxhy import Proxhy, on_chat
-from ._methods import method
+from core.events import listen_client, listen_server, subscribe
+from core.plugin import Plugin
+from protocol.datatypes import Buffer, Byte, ByteArray, Chat, Int, String, VarInt
+from proxhy.mcmodels import Game, Team, Teams
 
 
-class GameState(Proxhy):
-    @method
+class GameStatePlugin(Plugin):
+    game: Game
+
+    def _init_gamestate(self):
+        self.teams: Teams = Teams()
+
+        self.client_type = ""
+
+        self.game = Game()
+        self.rq_game = Game()
+
+        self.received_locraw = asyncio.Event()
+        self.received_locraw.set()
+
+        self.received_who = asyncio.Event()
+        self.received_who.set()
+
+    @listen_server(0x01, blocking=True)
+    async def packet_join_game(self, buff: Buffer):
+        self.entity_id = buff.unpack(Int)
+        self.received_locraw.clear()
+
+        if not self.client_type == "lunar":
+            self.server.send_packet(0x01, String("/locraw"))
+
+        self.client.send_packet(0x01, buff.getvalue())
+
     def _update_teams(self, buff: Buffer):
         name = buff.unpack(String)
         mode = buff.unpack(Byte)
@@ -68,7 +92,6 @@ class GameState(Proxhy):
             else:
                 self.teams.get(name).players -= players
 
-    @method
     def _update_game(self, game: dict):
         self.game.update(game)
         if game.get("mode"):
@@ -76,8 +99,10 @@ class GameState(Proxhy):
         else:
             return
 
-    @on_chat(lambda s: bool(re.match(r"^\{.*\}$", s)), "server", True)
-    async def on_chat_locraw(self, message: str, buff: Buffer):
+    @subscribe(r"chat:server:\{.*\}$")
+    async def on_chat_locraw(self, buff: Buffer):
+        message = buff.unpack(Chat)
+
         if not self.received_locraw.is_set():
             if "limbo" in message:  # sometimes returns limbo right when you join
                 if not self.teams:  # probably in limbo
@@ -89,4 +114,25 @@ class GameState(Proxhy):
                 self.received_locraw.set()
                 self._update_game(json.loads(message))
         else:
+            self.client.send_packet(0x02, buff.getvalue())
             self._update_game(json.loads(message))
+
+    @listen_server(0x3E)
+    async def packet_teams(self, buff: Buffer):
+        # game state
+        self._update_teams(buff.clone())
+
+        self.client.send_packet(0x3E, buff.getvalue())
+        await self.emit("update_teams")
+
+    @listen_client(0x17)
+    async def packet_plugin_channel(self, buff: Buffer):
+        self.server.send_packet(0x17, buff.getvalue())
+
+        channel = buff.unpack(String)
+        data = buff.unpack(ByteArray)
+        if channel == "MC|Brand":
+            if b"lunarclient" in data:
+                self.client_type = "lunar"
+            elif b"vanilla" in data:
+                self.client_type = "vanilla"

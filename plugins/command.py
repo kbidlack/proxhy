@@ -1,11 +1,12 @@
 import inspect
 from typing import Awaitable, Callable, Literal, get_args, get_origin
 
-from .datatypes import TextComponent
-from .errors import CommandException
-from .proxy import Proxy
+from core.plugin import Plugin
+from core.proxy import Proxy
+from protocol.datatypes import TextComponent
+from proxhy.errors import CommandException
 
-commands: dict[str, Callable[[Proxy, str | None], Awaitable]] = {}
+commands: dict[str, Callable[[Proxy | Plugin, str | None], Awaitable]] = {}
 
 
 class Parameter:

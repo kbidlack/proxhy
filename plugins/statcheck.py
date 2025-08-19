@@ -4,9 +4,13 @@ import json
 import os
 import re
 import uuid
+from pathlib import Path
 from typing import Optional
 
+import hypixel
+import keyring
 from hypixel import (
+    ApiError,
     InvalidApiKey,
     KeyRequired,
     Player,
@@ -14,15 +18,26 @@ from hypixel import (
     RateLimitError,
     TimeoutError,
 )
+from platformdirs import user_cache_dir
 
-from ..aliases import Gamemode
-from ..command import command
-from ..datatypes import UUID, Boolean, Buffer, Chat, String, TextComponent, VarInt
-from ..errors import CommandException
-from ..formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from ..mcmodels import Nick, Team
-from ..proxhy import Proxhy, on_chat
-from ._methods import method
+from core.events import listen_server, subscribe
+from core.plugin import Plugin
+from plugins.command import command
+from protocol import auth
+from protocol.datatypes import (
+    UUID,
+    Boolean,
+    Buffer,
+    Chat,
+    String,
+    TextComponent,
+    VarInt,
+)
+from proxhy.aliases import Gamemode
+from proxhy.errors import CommandException
+from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
+from proxhy.mcmodels import Game, Nick, Team, Teams
+from proxhy.settings import Settings
 
 game_start_msgs = [  # block all the game start messages
     "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
@@ -35,11 +50,94 @@ game_start_msgs = [  # block all the game start messages
 ]
 
 
-class StatCheck(Proxhy):
-    _cached_players: dict
-    nick_team_colors: dict[str, str]  # Nicked player team colors
+class StatCheckPlugin(Plugin):
+    username: str
+    teams: Teams
+    game: Game
+    received_who: asyncio.Event
+    received_locraw: asyncio.Event
+    settings: Settings
 
-    @method
+    def _init_statcheck(self):
+        self.players_with_stats = {}
+        self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
+        self.players_without_stats: set[str] = set()  # players from /who
+        self._cached_players: dict = {}
+        # players from packet_player_list_item
+        self.players: dict[str, str] = {}
+        self._hypixel_api_key = ""
+
+        self.game_error = None  # if error has been sent that game
+
+        self.received_player_stats = asyncio.Event()
+
+        self.player_stats_lock = asyncio.Lock()
+
+        self.log_path = (
+            Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
+        )
+
+    @property
+    def hypixel_api_key(self):
+        if self._hypixel_api_key:
+            return self._hypixel_api_key
+
+        return keyring.get_password("proxhy", "hypixel_api_key")
+
+    @hypixel_api_key.setter
+    def hypixel_api_key(self, key):
+        self._hypixel_api_key = key
+
+        auth.safe_set("proxhy", "hypixel_api_key", key)
+
+    @listen_server(0x01, blocking=True)
+    async def packet_join_game(self, _):
+        # flush player lists
+        self.players.clear()
+        self.players_with_stats.clear()
+        self._cached_players.clear()
+
+        self.received_player_stats.clear()
+        self.game_error = None
+
+    @subscribe("update_teams")
+    async def statcheck_event_update_teams(self, _):
+        # statcheck
+        self.keep_player_stats_updated()
+
+    @listen_server(0x38, blocking=True)
+    async def packet_player_list_item(self, buff: Buffer):
+        action = buff.unpack(VarInt)
+        num_players = buff.unpack(VarInt)
+
+        for _ in range(num_players):
+            _uuid = buff.unpack(UUID)
+            if action == 0:  # add player
+                name = buff.unpack(String)
+                self.players[str(_uuid)] = name
+            elif action == 4:  # remove player
+                try:
+                    del self.players[str(_uuid)]
+                except KeyError:
+                    pass  # some things fail idk
+
+        self.client.send_packet(0x38, buff.getvalue())
+        self.keep_player_stats_updated()
+
+    @subscribe("login_success")
+    async def log_stats_on_login(self, _):
+        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
+        asyncio.create_task(self.log_bedwars_stats("login"))
+
+    @subscribe("close")
+    async def statcheck_on_close(self, _):
+        try:
+            if self.hypixel_client:
+                await self.log_bedwars_stats("logout")
+                await self.hypixel_client.close()
+        except AttributeError:
+            pass  # TODO: log
+
     async def _sc_internal(
         self, ign=None, mode=None, window=None, *stats
     ):  # display_abridged=True
@@ -333,7 +431,6 @@ class StatCheck(Proxhy):
     # async def statcheckfull(self, ign=None, mode=None, window=None, *stats):
     #     return await self._sc_internal(ign, mode, window, False, *stats)
 
-    @method
     async def _update_stats(self):
         """
         Update stats in tab list.
@@ -359,7 +456,6 @@ class StatCheck(Proxhy):
             # setting for tablist fkdr is off
             if not self.settings.bedwars.tablist.show_fkdr.state == "ON":
                 return
-
             player_stats = await asyncio.gather(
                 *[
                     self.hypixel_client.player(player)
@@ -484,7 +580,6 @@ class StatCheck(Proxhy):
         # if we've gotten everyone from /who, stat highlights can be called
         await self.stat_highlights()
 
-    @method
     async def log_bedwars_stats(self, event: str) -> None:
         # chatgpt ahh comments
         """
@@ -533,7 +628,6 @@ class StatCheck(Proxhy):
             # print(f"Error writing stat log: {e}")
             pass  # TODO: log this
 
-    @method
     async def stat_highlights(self):
         """Display top 3 enemy players and nicked players."""
         if not self.players_with_stats:
@@ -647,7 +741,6 @@ class StatCheck(Proxhy):
             .append("\n")
         )
 
-    @method
     def get_team(self, user: str) -> Optional[Team]:
         """
         Get user's team. Returns team name or None if not found.
@@ -663,7 +756,6 @@ class StatCheck(Proxhy):
             None,
         )
 
-    @method
     def keep_player_stats_updated(self):
         # make sure player stats stays updated
         # hypixel resets sometimes
@@ -678,8 +770,10 @@ class StatCheck(Proxhy):
             ),
         )
 
-    @on_chat(lambda s: s.startswith("ONLINE: "), "server", True)  # /who
-    async def on_chat_who(self, message: str, buff: Buffer):
+    @subscribe("chat:server:ONLINE: .*")
+    async def on_chat_who(self, buff: Buffer):
+        message = buff.unpack(Chat)
+
         if not self.received_who.is_set():
             self.received_who.set()
         else:
@@ -691,25 +785,22 @@ class StatCheck(Proxhy):
         )
         return await self._update_stats()
 
-    @on_chat(
-        # user rejoins a game
-        lambda s: ("You will respawn in 10 seconds!" in s)
-        or ("Your bed was destroyed so you are a spectator!" in s),
-        "server",
-        False,
+    @subscribe(
+        "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
-    def on_chat_user_rejoin(self, message: str, buff: Buffer):
+    async def on_chat_user_rejoin(self, buff: Buffer):
         self.server.send_packet(0x01, String("/who"))
         self.received_who.clear()
+        self.client.send_packet(0x02, buff.getvalue())
 
-    @on_chat(
-        lambda s: (StatCheck.settings.bedwars.display_top_stats.state != "OFF")
-        # 3 on states so we just check if its not off
-        and (s in game_start_msgs),
-        "server",
-        block=True,
-    )
-    def on_chat_game_start(self, message: str, buff: Buffer):
+    @subscribe(f"chat:server:({'|'.join(game_start_msgs)})")
+    async def on_chat_game_start(self, buff: Buffer):
+        message = buff.unpack(Chat)
+
+        if self.settings.bedwars.display_top_stats.state == "OFF":
+            self.client.send_packet(0x02, buff.getvalue())
+            return
+
         if message == game_start_msgs[-2]:
             # replace them with the statcheck overview
             self.client.chat(
@@ -717,3 +808,25 @@ class StatCheck(Proxhy):
             )
             self.server.send_packet(0x01, String("/who"))
             self.received_who.clear()
+
+    @command()
+    async def key(self, key):
+        try:
+            new_client = hypixel.Client(key)
+            await new_client.player("gamerboy80")  # test key
+            # await new_client.validate_keys()
+        except (InvalidApiKey, KeyRequired, ApiError):
+            raise CommandException("Invalid API Key!")
+        else:
+            if new_client:
+                await new_client.close()
+
+        if self.hypixel_client:
+            await self.hypixel_client.close()
+
+        self.hypixel_api_key = key
+        self.hypixel_client = hypixel.Client(key)
+        api_key_msg = TextComponent("Updated API Key!").color("green")
+        self.client.chat(api_key_msg)
+
+        await self._update_stats()

@@ -1,4 +1,4 @@
-from .datatypes import TextComponent
+from protocol.datatypes import TextComponent
 
 
 class ProxhyException(Exception):

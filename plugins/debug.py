@@ -1,9 +1,15 @@
-from ..command import command
-from ..datatypes import TextComponent
-from ..proxhy import Proxhy
+from core.plugin import Plugin
+from protocol.datatypes import TextComponent
+from proxhy.mcmodels import Game, Teams
+
+from .command import command
 
 
-class Commands(Proxhy):
+class DebugPlugin(Plugin):
+    game: Game
+    rq_game: Game
+    teams: Teams
+
     # sorta debug commands
     @command("game")
     async def _game(self):
