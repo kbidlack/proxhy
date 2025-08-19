@@ -1,26 +1,12 @@
 import argparse
 import asyncio
-import os
-import signal  # noqa
+import signal  # noqa: F401
 import sys
 from asyncio import StreamReader, StreamWriter
-from importlib import import_module
-from pathlib import Path
 
-from .ext import _methods
-from .proxhy import Proxhy
+from proxhy.proxhy import Proxhy
 
 instances: list[Proxhy] = []
-
-# load proxhy extensions
-for ext in os.listdir(Path(os.path.dirname(__file__)) / "ext"):
-    if ext.startswith("_") or ext[-3:] != ".py":
-        continue
-    import_module(f"proxhy.ext.{ext[:-3]}", package="proxhy.ext")
-
-# load methods -> Proxhy
-for func in _methods.methods:
-    setattr(Proxhy, func.__name__, func)
 
 
 def parse_args():

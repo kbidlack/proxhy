@@ -1,3 +1,6 @@
+# i lwk forgor if we even use this file anymore
+
+
 class Gamemode:
     # TODO add more aliases (duels, )
     gamemodes = {

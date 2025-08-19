@@ -1,5 +1,5 @@
 import json
-from importlib.resources import files
+from importlib.resources import files  # noqa: F401
 from pathlib import Path
 
 from platformdirs import user_config_dir
@@ -7,7 +7,8 @@ from platformdirs import user_config_dir
 config_dir = Path(user_config_dir("proxhy", ensure_exists=True))
 config_dir.mkdir(parents=True, exist_ok=True)
 
-default_settings_path = files("proxhy.assets").joinpath("default_settings.json")
+# default_settings_path = files("proxhy.assets").joinpath("default_settings.json")
+default_settings_path = Path(__file__).parent.parent / "assets/default_settings.json"
 with default_settings_path.open("r") as file:
     default_settings = json.load(file)
 

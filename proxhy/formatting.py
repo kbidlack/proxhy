@@ -6,7 +6,7 @@ from math import floor
 
 from hypixel import Player
 
-from .datatypes import TextComponent
+from protocol.datatypes import TextComponent
 
 
 def get_rank(player: Player):
