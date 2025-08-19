@@ -485,8 +485,12 @@ class StatCheckPlugin(Plugin):
             if not self.game.mode:
                 return
 
-            # setting for tablist fkdr is off
-            if not self.settings.bedwars.tablist.show_fkdr.state == "ON":
+            if not any(
+                (
+                    self.settings.bedwars.tablist.show_fkdr.state != "OFF",
+                    self.settings.bedwars.display_top_stats.state != "OFF",
+                )
+            ):
                 return
 
             player_stats = asyncio.as_completed(
@@ -600,19 +604,21 @@ class StatCheckPlugin(Plugin):
                         }
                     )
 
-                    self.client.send_packet(
-                        0x38,
-                        VarInt(3),
-                        VarInt(1),
-                        UUID(uuid.UUID(str(player.uuid))),
-                        Boolean(True),
-                        Chat(display_name),
-                    )
+                    if self.settings.bedwars.tablist.show_fkdr.state == "ON":
+                        self.client.send_packet(
+                            0x38,
+                            VarInt(3),
+                            VarInt(1),
+                            UUID(uuid.UUID(str(player.uuid))),
+                            Boolean(True),
+                            Chat(display_name),
+                        )
 
         # if we've gotten everyone from /who, stat highlights can be called
-        if not self.stats_highlighted:
-            await self.stat_highlights()
-            self.stats_highlighted = True
+        if self.settings.bedwars.display_top_stats.state != "OFF":
+            if not self.stats_highlighted:
+                await self.stat_highlights()
+                self.stats_highlighted = True
 
     async def log_bedwars_stats(self, event: str) -> None:
         # chatgpt ahh comments
@@ -833,13 +839,13 @@ class StatCheckPlugin(Plugin):
 
         if self.settings.bedwars.display_top_stats.state == "OFF":
             self.client.send_packet(0x02, buff.getvalue())
-            return
 
         if message == game_start_msgs[-2]:
             # replace them with the statcheck overview
-            self.client.chat(
-                TextComponent("Fetching top stats...").color("gold").bold()
-            )
+            if self.settings.bedwars.display_top_stats.state != "OFF":
+                self.client.chat(
+                    TextComponent("Fetching top stats...").color("gold").bold()
+                )
             self.server.send_packet(0x01, String("/who"))
             self.received_who.clear()
 
