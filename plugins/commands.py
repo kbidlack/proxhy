@@ -1,47 +1,27 @@
 import asyncio
 import re
 from collections import namedtuple
-from typing import TYPE_CHECKING, Callable
+from typing import Callable
 
-import hypixel
-from hypixel import ApiError, InvalidApiKey, KeyRequired
+from core.events import listen_client, subscribe
+from core.plugin import Plugin
+from protocol.datatypes import Buffer, Item, SlotData, String, TextComponent
+from protocol.nbt import dumps, from_dict
+from proxhy.errors import CommandException
+from proxhy.mcmodels import Game
+from proxhy.settings import SettingGroup, SettingProperty, Settings
 
-from ..command import CommandException, command, commands
-from ..datatypes import Buffer, Item, SlotData, String, TextComponent
-from ..nbt import dumps, from_dict
-from ..proxhy import Proxhy, on_chat
-from ..settings import SettingGroup, SettingProperty
+from .command import command, commands
 from .window import SettingsMenu, Window, get_trigger
 
+# TODO: move settings out of here into a settings plugin
+# TODO: move settings callbacks to emit/subscribe
 
-class Commands(Proxhy):
-    if TYPE_CHECKING:
-        from .statcheck import StatCheck
 
-        log_bedwars_stats: Callable = StatCheck.log_bedwars_stats
-        _update_stats: Callable = StatCheck._update_stats
-
-    @command()
-    async def key(self, key):
-        try:
-            new_client = hypixel.Client(key)
-            await new_client.player("gamerboy80")  # test key
-            # await new_client.validate_keys()
-        except (InvalidApiKey, KeyRequired, ApiError):
-            raise CommandException("Invalid API Key!")
-        else:
-            if new_client:
-                await new_client.close()
-
-        if self.hypixel_client:
-            await self.hypixel_client.close()
-
-        self.hypixel_api_key = key
-        self.hypixel_client = hypixel.Client(key)
-        api_key_msg = TextComponent("Updated API Key!").color("green")
-        self.client.chat(api_key_msg)
-
-        await self._update_stats()
+class CommandsPlugin(Plugin):
+    rq_game: Game
+    settings: Settings
+    _update_stats: Callable
 
     @command("settingtest")
     async def setting_test(self):
@@ -258,8 +238,10 @@ class Commands(Proxhy):
     async def garlicbread(self):  # Mmm, garlic bread.
         return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
-    @on_chat(lambda s: s.startswith("/"), "client", block=True)
-    async def on_client_chat_command(self, message: str, buff: Buffer):
+    @subscribe("chat:client:/.*")
+    async def on_client_chat_command(self, buff: Buffer):
+        message = buff.unpack(String)
+
         segments = message.split()
         command = commands.get(
             segments[0].removeprefix("/").casefold()
@@ -295,3 +277,11 @@ class Commands(Proxhy):
                         self.client.chat(output)
         else:
             self.server.send_packet(0x01, buff.getvalue())
+
+    @listen_client(0x14)
+    async def packet_tab_complete(self, buff: Buffer):
+        text = buff.unpack(String)
+        if text.startswith("//"):
+            self.server.send_packet(0x14, String(text[1:]), buff.read())
+        else:
+            self.server.send_packet(0x14, buff.getvalue())

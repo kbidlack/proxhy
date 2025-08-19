@@ -6,8 +6,9 @@ import struct
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from importlib.resources import files
+from importlib.resources import files  # noqa: F401
 from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
 
 if TYPE_CHECKING:
@@ -25,7 +26,10 @@ class Pos:
     z: int = 0
 
 
-im_path = files("proxhy.assets").joinpath("item_mappings.json")
+# TODO: fix this and others
+# im_path = files("proxhy.assets").joinpath("item_mappings.json")
+
+im_path = Path(__file__).parent.parent / "assets/item_mappings.json"
 
 with im_path.open("r") as file:
     item_mapping = json.load(file)
