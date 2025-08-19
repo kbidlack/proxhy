@@ -68,6 +68,7 @@ class StatCheckPlugin(Plugin):
         self._hypixel_api_key = ""
 
         self.game_error = None  # if error has been sent that game
+        self.stats_highlighted = False
 
         self.received_player_stats = asyncio.Event()
 
@@ -99,6 +100,7 @@ class StatCheckPlugin(Plugin):
 
         self.received_player_stats.clear()
         self.game_error = None
+        self.stats_highlighted = False
 
     @subscribe("update_teams")
     async def statcheck_event_update_teams(self, _):
@@ -456,12 +458,11 @@ class StatCheckPlugin(Plugin):
             # setting for tablist fkdr is off
             if not self.settings.bedwars.tablist.show_fkdr.state == "ON":
                 return
-            player_stats = await asyncio.gather(
-                *[
+            player_stats = asyncio.as_completed(
+                [
                     self.hypixel_client.player(player)
                     for player in self.players_without_stats
-                ],
-                return_exceptions=True,
+                ]
             )
 
             # the first 3 if cases here just run some checks on the players
@@ -469,15 +470,17 @@ class StatCheckPlugin(Plugin):
             # ^ to improve readability
             # -----------
             # the rest of this for loop gets player display names
-            for player in player_stats:
-                if isinstance(player, PlayerNotFound):  # assume nick
+            for result in player_stats:
+                try:
+                    player_result = await result
+                except PlayerNotFound as player:  # assume nick
                     # I don't actually know if we can assume this is a string
                     # but I want the type checker to be friendly to me
                     # later when I casefold it
                     nick_username: str = player.player
-                    player = Nick(nick_username)
+                    player_result = Nick(nick_username)
                     try:
-                        player.uuid = next(
+                        player_result.uuid = next(
                             u
                             for u, p in self.players.items()
                             # casefold shouldn't technically be necessary here?
@@ -488,7 +491,7 @@ class StatCheckPlugin(Plugin):
                         # idk why this would happen tbh
                         # I think when I wrote this code initially I had a reason
                         continue
-                elif isinstance(player, (InvalidApiKey, RateLimitError, TimeoutError)):
+                except (InvalidApiKey, RateLimitError, TimeoutError) as player:
                     err_message = {
                         InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
                         KeyRequired: TextComponent("No API Key provided!").color("red"),
@@ -505,7 +508,8 @@ class StatCheckPlugin(Plugin):
                         self.client.chat(err_message[type(player)])
 
                     continue
-                elif not isinstance(player, Player):
+
+                if not isinstance(player := player_result, (Player, Nick)):
                     # TODO log this -- also why does this occur?
                     # supposedly session is closed (?)
                     continue
@@ -578,7 +582,9 @@ class StatCheckPlugin(Plugin):
                     )
 
         # if we've gotten everyone from /who, stat highlights can be called
-        await self.stat_highlights()
+        if not self.stats_highlighted:
+            await self.stat_highlights()
+            self.stats_highlighted = True
 
     async def log_bedwars_stats(self, event: str) -> None:
         # chatgpt ahh comments

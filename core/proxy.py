@@ -59,7 +59,8 @@ class Proxy:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
-        items = {}
+        listeners: list[tuple[Callable, PacketListener | str]] = []
+
         for base in reversed(cls.__mro__):
             for item in vars(base).values():
                 meta = getattr(item, "_listener_meta", None)
