@@ -458,6 +458,11 @@ class StatCheckPlugin(Plugin):
     # async def statcheckfull(self, ign=None, mode=None, window=None, *stats):
     #     return await self._sc_internal(ign, mode, window, False, *stats)
 
+    async def _get_player(self, player: str):
+        return self._cached_players.get(player) or await self.hypixel_client.player(
+            player
+        )
+
     async def _update_stats(self):
         """
         Update stats in tab list.
@@ -483,11 +488,9 @@ class StatCheckPlugin(Plugin):
             # setting for tablist fkdr is off
             if not self.settings.bedwars.tablist.show_fkdr.state == "ON":
                 return
+
             player_stats = asyncio.as_completed(
-                [
-                    self.hypixel_client.player(player)
-                    for player in self.players_without_stats
-                ]
+                self._get_player(player) for player in self.players_without_stats
             )
 
             # the first 3 if cases here just run some checks on the players
