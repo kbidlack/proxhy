@@ -61,15 +61,12 @@ class Proxy:
 
         items = {}
         for base in reversed(cls.__mro__):
-            items.update(vars(base))
+            for item in vars(base).values():
+                meta = getattr(item, "_listener_meta", None)
+                if meta is not None:
+                    listeners.append((item, meta))
 
-        listeners: list[tuple[Callable, PacketListener | str]] = [
-            (item, meta)
-            for (_, item) in items.items()
-            if (meta := getattr(item, "_listener_meta", None)) is not None
-        ]
-
-        for func, meta in filter(None, listeners):
+        for func, meta in listeners:
             if isinstance(meta, PacketListener):
                 if meta.override:
                     cls._packet_listeners[meta.source][
