@@ -107,6 +107,31 @@ class StatCheckPlugin(Plugin):
         # statcheck
         self.keep_player_stats_updated()
 
+    @subscribe("setting:bedwars.tablist.show_fkdr")
+    async def bedwars_tablist_show_fkdr_callback(self, data: list):
+        # data = [old_state, new_state]
+        if data == ["OFF", "ON"]:
+            self.received_who.clear()
+            self.server.chat("/who")
+            await self._update_stats()
+        elif data == ["ON", "OFF"]:
+            await self._reset_stats()
+
+    async def _reset_stats(self):
+        for player in self.players_with_stats:
+            for team in self.teams:
+                if player in team.players:
+                    self.client.send_packet(
+                        0x38,
+                        VarInt(3),
+                        VarInt(1),
+                        UUID(uuid.UUID(str(self.players_with_stats[player][0]))),
+                        Boolean(True),
+                        Chat(team.prefix + player + team.suffix),
+                    )
+        self.players_with_stats.clear()
+        self.players_without_stats.clear()
+
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
         action = buff.unpack(VarInt)
