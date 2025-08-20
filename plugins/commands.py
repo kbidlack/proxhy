@@ -2,217 +2,15 @@ import re
 
 from core.events import listen_client, subscribe
 from core.plugin import Plugin
-from protocol.datatypes import Buffer, Item, SlotData, String, TextComponent
-from protocol.nbt import dumps, from_dict
+from protocol.datatypes import Buffer, String, TextComponent
 from proxhy.errors import CommandException
 from proxhy.mcmodels import Game
-from proxhy.settings import SettingGroup, SettingProperty, Settings
 
 from .command import command, commands
-from .window import SettingsMenu, Window, get_trigger
-
-# TODO: move settings out of here into a settings plugin
-# TODO: move settings callbacks to emit/subscribe
 
 
 class CommandsPlugin(Plugin):
     rq_game: Game
-    settings: Settings
-
-    @command("settingtest")
-    async def setting_test(self):
-        self.settings_window = SettingsMenu(self)
-
-        self.settings_window.open()
-
-    @command("setting")
-    async def edit_settings(self, setting_name: str = "", value: str = ""):
-        if not setting_name:
-
-            async def grass_callback(
-                window: Window,
-                slot: int,
-                button: int,
-                action_num: int,
-                mode: int,
-                clicked_item: SlotData,
-            ):
-                if clicked_item.item is not None:
-                    self.client.chat(
-                        TextComponent("You clicked")
-                        .color("green")
-                        .appends(
-                            TextComponent(f"{clicked_item.item.display_name}").color(
-                                "blue"
-                            )
-                        )
-                        .appends(TextComponent("in slot").color("green"))
-                        .appends(TextComponent(f"{slot}").color("yellow"))
-                        .appends(TextComponent("with action #").color("green"))
-                        .append(TextComponent(f"{action_num}").color("yellow"))
-                        .appends(TextComponent("with trigger").color("green"))
-                        .appends(
-                            TextComponent(f" {get_trigger(mode, button, slot)}").color(
-                                "yellow"
-                            )
-                        )
-                    )
-
-                lambda: window  # do something with window
-
-            # example window usage
-            self.settings_window = Window(self, "Settings", num_slots=18)
-
-            self.settings_window.set_slot(
-                3, SlotData(Item.from_name("minecraft:stone"))
-            )
-
-            self.settings_window.open()
-
-            self.settings_window.set_slot(
-                4,
-                SlotData(
-                    Item.from_name("minecraft:grass"),
-                    nbt=dumps(from_dict({"display": {"Name": "§aFribidi Skigma"}})),
-                ),
-                callback=grass_callback,
-            )
-            self.settings_window.set_slot(
-                5,
-                SlotData(Item.from_name("minecraft:grass")),
-                callback=grass_callback,
-            )
-
-            return
-
-        value_oc = value
-        value = value.upper()
-        setting_attrs = setting_name.split(".")
-
-        if len(setting_attrs) == 1:
-            setting_name = setting_attrs[0]
-            if not hasattr(self.settings, setting_name):
-                msg = (
-                    TextComponent("Setting")
-                    .appends(TextComponent(f"'{setting_name}'").color("gold"))
-                    .appends(TextComponent("does not exist!"))
-                )
-                raise CommandException(msg)
-            setting_attrs = [setting_name]
-            parent_obj = self.settings
-        else:
-            prev_sa = "settings"
-            parent_obj = self.settings
-            for sa in setting_attrs[:-1]:
-                if not hasattr(parent_obj, sa):
-                    if isinstance(parent_obj, SettingGroup):
-                        msg = (
-                            TextComponent("Setting group")
-                            .appends(TextComponent(f"'{prev_sa}'").color("gold"))
-                            .appends("does not have a setting named")
-                            .appends(TextComponent(f"'{sa}'").color("gold"))
-                            .append("!")
-                        )
-                        raise CommandException(msg)
-                    elif isinstance(parent_obj, SettingProperty):
-                        msg = (
-                            TextComponent(f"'{prev_sa}'")
-                            .color("gold")
-                            .appends("is a setting!")
-                        )
-                        raise CommandException(msg)
-                    else:
-                        raise CommandException("This should not happen!")
-                prev_sa = sa
-                parent_obj = getattr(parent_obj, sa)
-
-        if not hasattr(parent_obj, setting_attrs[-1]):
-            if isinstance(parent_obj, SettingGroup):
-                msg = (
-                    TextComponent("Setting group")
-                    .appends(
-                        TextComponent(f"'{'.'.join(setting_attrs[:-1])}'").color("gold")
-                    )
-                    .appends("does not have a setting named")
-                    .appends(TextComponent(f"'{setting_attrs[-1]}'").color("gold"))
-                    .append("!")
-                )
-                raise CommandException(msg)
-            elif isinstance(parent_obj, SettingProperty):
-                msg = (
-                    TextComponent(f"'{'.'.join(setting_attrs[:-1])}'")
-                    .color("gold")
-                    .appends("is a setting!")
-                )
-                raise CommandException(msg)
-            else:
-                raise CommandException("This should not happen!")
-
-        setting_obj = getattr(parent_obj, setting_attrs[-1])
-
-        if isinstance(setting_obj, SettingGroup):
-            msg = (
-                TextComponent(f"'{setting_name}'")
-                .color("gold")
-                .appends("is a setting group!")
-            )
-            raise CommandException(msg)
-        elif isinstance(setting_obj, SettingProperty):
-            setting_obj: SettingProperty
-        else:
-            raise CommandException("This should not happen!")
-
-        if value and (value not in setting_obj.states):
-            msg = TextComponent("Invalid value").appends(
-                TextComponent(f"'{value_oc}'")
-                .color("gold")
-                .appends("for setting")
-                .appends(TextComponent(f"'{setting_name}'"))
-                .append(";")
-                .appends("valid values are: ")
-            )
-            for i, tc in enumerate(
-                map(
-                    lambda t: TextComponent(t).color("green"),
-                    setting_obj.states.keys(),
-                )
-            ):
-                if not i == len(setting_obj.states.keys()) - 1:
-                    msg.append(tc).append(TextComponent(","))
-                else:
-                    msg.append(tc)
-
-            raise CommandException(msg)
-
-        old_state = setting_obj.state
-        old_state_color = setting_obj.states[old_state]
-        new_state = value or setting_obj.toggle()[1]
-        setting_obj.state = new_state
-        new_state_color = setting_obj.states[new_state]
-
-        settings_msg = (
-            TextComponent("Changed")
-            .appends(TextComponent(setting_obj.display_name).color("yellow"))
-            .appends(TextComponent("from"))
-            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))
-            .appends(TextComponent("to"))
-            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))
-            .append(TextComponent("!"))
-        )
-        self.client.chat(settings_msg)
-
-        await self.emit("setting:bedwars.tablist.show_fkdr", [old_state, new_state])
-
-    @command("rq")
-    async def requeue(self):
-        if not self.rq_game.mode:
-            raise CommandException("No game to requeue!")
-        else:
-            self.server.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
-
-    @command()  # Mmm, garlic bread.
-    async def garlicbread(self):  # Mmm, garlic bread.
-        return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
     @subscribe("chat:client:/.*")
     async def on_client_chat_command(self, buff: Buffer):
@@ -261,3 +59,14 @@ class CommandsPlugin(Plugin):
             self.server.send_packet(0x14, String(text[1:]), buff.read())
         else:
             self.server.send_packet(0x14, buff.getvalue())
+
+    @command("rq")
+    async def requeue(self):
+        if not self.rq_game.mode:
+            raise CommandException("No game to requeue!")
+        else:
+            self.server.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
+
+    @command()  # Mmm, garlic bread.
+    async def garlicbread(self):  # Mmm, garlic bread.
+        return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.

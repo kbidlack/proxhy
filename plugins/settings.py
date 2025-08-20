@@ -1,0 +1,419 @@
+from __future__ import annotations
+
+import math
+from textwrap import fill
+from typing import Any
+
+from core.plugin import Plugin
+from protocol.datatypes import (
+    Item,
+    SlotData,
+    TextComponent,
+)
+from protocol.nbt import dumps, from_dict
+from proxhy.errors import CommandException
+from proxhy.settings import SettingGroup, SettingProperty, Settings
+
+from .command import command
+from .window import Window, get_trigger
+
+
+class SettingsPlugin(Plugin):
+    settings: Settings
+
+    @command("settingtest")
+    async def setting_test(self):
+        self.settings_window = SettingsMenu(self)
+
+        self.settings_window.open()
+
+    @command("setting")
+    async def edit_settings(self, setting_name: str = "", value: str = ""):
+        if not setting_name:
+
+            async def grass_callback(
+                window: Window,
+                slot: int,
+                button: int,
+                action_num: int,
+                mode: int,
+                clicked_item: SlotData,
+            ):
+                if clicked_item.item is not None:
+                    self.client.chat(
+                        TextComponent("You clicked")
+                        .color("green")
+                        .appends(
+                            TextComponent(f"{clicked_item.item.display_name}").color(
+                                "blue"
+                            )
+                        )
+                        .appends(TextComponent("in slot").color("green"))
+                        .appends(TextComponent(f"{slot}").color("yellow"))
+                        .appends(TextComponent("with action #").color("green"))
+                        .append(TextComponent(f"{action_num}").color("yellow"))
+                        .appends(TextComponent("with trigger").color("green"))
+                        .appends(
+                            TextComponent(f" {get_trigger(mode, button, slot)}").color(
+                                "yellow"
+                            )
+                        )
+                    )
+
+                lambda: window  # do something with window
+
+            # example window usage
+            self.settings_window = Window(self, "Settings", num_slots=18)
+
+            self.settings_window.set_slot(
+                3, SlotData(Item.from_name("minecraft:stone"))
+            )
+
+            self.settings_window.open()
+
+            self.settings_window.set_slot(
+                4,
+                SlotData(
+                    Item.from_name("minecraft:grass"),
+                    nbt=dumps(from_dict({"display": {"Name": "§aFribidi Skigma"}})),
+                ),
+                callback=grass_callback,
+            )
+            self.settings_window.set_slot(
+                5,
+                SlotData(Item.from_name("minecraft:grass")),
+                callback=grass_callback,
+            )
+
+            return
+
+        value_oc = value
+        value = value.upper()
+        setting_attrs = setting_name.split(".")
+
+        if len(setting_attrs) == 1:
+            setting_name = setting_attrs[0]
+            if not hasattr(self.settings, setting_name):
+                msg = (
+                    TextComponent("Setting")
+                    .appends(TextComponent(f"'{setting_name}'").color("gold"))
+                    .appends(TextComponent("does not exist!"))
+                )
+                raise CommandException(msg)
+            setting_attrs = [setting_name]
+            parent_obj = self.settings
+        else:
+            prev_sa = "settings"
+            parent_obj = self.settings
+            for sa in setting_attrs[:-1]:
+                if not hasattr(parent_obj, sa):
+                    if isinstance(parent_obj, SettingGroup):
+                        msg = (
+                            TextComponent("Setting group")
+                            .appends(TextComponent(f"'{prev_sa}'").color("gold"))
+                            .appends("does not have a setting named")
+                            .appends(TextComponent(f"'{sa}'").color("gold"))
+                            .append("!")
+                        )
+                        raise CommandException(msg)
+                    elif isinstance(parent_obj, SettingProperty):
+                        msg = (
+                            TextComponent(f"'{prev_sa}'")
+                            .color("gold")
+                            .appends("is a setting!")
+                        )
+                        raise CommandException(msg)
+                    else:
+                        raise CommandException("This should not happen!")
+                prev_sa = sa
+                parent_obj = getattr(parent_obj, sa)
+
+        if not hasattr(parent_obj, setting_attrs[-1]):
+            if isinstance(parent_obj, SettingGroup):
+                msg = (
+                    TextComponent("Setting group")
+                    .appends(
+                        TextComponent(f"'{'.'.join(setting_attrs[:-1])}'").color("gold")
+                    )
+                    .appends("does not have a setting named")
+                    .appends(TextComponent(f"'{setting_attrs[-1]}'").color("gold"))
+                    .append("!")
+                )
+                raise CommandException(msg)
+            elif isinstance(parent_obj, SettingProperty):
+                msg = (
+                    TextComponent(f"'{'.'.join(setting_attrs[:-1])}'")
+                    .color("gold")
+                    .appends("is a setting!")
+                )
+                raise CommandException(msg)
+            else:
+                raise CommandException("This should not happen!")
+
+        setting_obj = getattr(parent_obj, setting_attrs[-1])
+
+        if isinstance(setting_obj, SettingGroup):
+            msg = (
+                TextComponent(f"'{setting_name}'")
+                .color("gold")
+                .appends("is a setting group!")
+            )
+            raise CommandException(msg)
+        elif isinstance(setting_obj, SettingProperty):
+            setting_obj: SettingProperty
+        else:
+            raise CommandException("This should not happen!")
+
+        if value and (value not in setting_obj.states):
+            msg = TextComponent("Invalid value").appends(
+                TextComponent(f"'{value_oc}'")
+                .color("gold")
+                .appends("for setting")
+                .appends(TextComponent(f"'{setting_name}'"))
+                .append(";")
+                .appends("valid values are: ")
+            )
+            for i, tc in enumerate(
+                map(
+                    lambda t: TextComponent(t).color("green"),
+                    setting_obj.states.keys(),
+                )
+            ):
+                if not i == len(setting_obj.states.keys()) - 1:
+                    msg.append(tc).append(TextComponent(","))
+                else:
+                    msg.append(tc)
+
+            raise CommandException(msg)
+
+        old_state = setting_obj.state
+        old_state_color = setting_obj.states[old_state]
+        new_state = value or setting_obj.toggle()[1]
+        setting_obj.state = new_state
+        new_state_color = setting_obj.states[new_state]
+
+        settings_msg = (
+            TextComponent("Changed")
+            .appends(TextComponent(setting_obj.display_name).color("yellow"))
+            .appends(TextComponent("from"))
+            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))
+            .appends(TextComponent("to"))
+            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))
+            .append(TextComponent("!"))
+        )
+        self.client.chat(settings_msg)
+
+        await self.emit(f"setting:{setting_name}", [old_state, new_state])
+
+
+class SettingsMenu(Window):
+    def __init__(
+        self,
+        proxy: Plugin,
+        num_slots: int = 18,
+        subsetting_path: str = "bedwars.tablist",
+    ):
+        if num_slots % 9 != 0:
+            raise ValueError(
+                f"Expected multiple of 9 for num_slots; got {num_slots} instead."
+            )
+        super().__init__(proxy, "Settings", "minecraft:chest", num_slots)
+        self.num_slots = num_slots
+        self.proxy: SettingsPlugin = proxy  # type: ignore
+        self.settings = self.proxy.settings
+        self.subsetting_path = subsetting_path
+        self.subsettings: dict = self.settings.get_setting_by_path(subsetting_path)
+        self.DISABLED_STATES = {"off", "none", "disabled"}
+
+        self.setting_slots = dict()
+        self.window_items = []
+
+        self.build()
+
+    def build(self):
+        self.settings = (
+            self.proxy.settings
+        )  # re-initialize settings so this can rebuild when settings update
+        self.window_items = self.get_formatted_items()
+        for i in self.window_items:
+            slot, slot_data, callback = i.values()
+            self.set_slot(slot - 1, slot_data, callback=callback)
+
+    def clear(self):
+        self.setting_slots.clear()
+        for i in self.window_items:
+            slot, slot_data, callback = i.values()
+            self.set_slot(slot - 1, SlotData())  # clear slot
+
+    @staticmethod
+    def get_setting_toggle_msg(
+        s_display, old_state, new_state, old_state_color, new_state_color
+    ) -> TextComponent:
+        toggle_msg = (
+            TextComponent("Changed")
+            .appends(TextComponent(s_display).color("yellow"))
+            .appends(TextComponent("from"))
+            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))
+            .appends(TextComponent("to"))
+            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))
+            .append(TextComponent("!"))
+        )
+        return toggle_msg
+
+    def get_state_item(self, state: str) -> SlotData:
+        if str(state).lower() in self.DISABLED_STATES:
+            item = Item.from_display_name("Red Stained Glass Pane")
+            slot_data = SlotData(
+                item,
+                damage=item.data,
+                nbt=dumps(from_dict({"display": {"Name": f"§c§l{state.upper()}"}})),
+            )
+        else:  # assume enabled in some form
+            item = Item.from_display_name("Lime Stained Glass Pane")
+            slot_data = SlotData(
+                item,
+                damage=item.data,
+                nbt=dumps(from_dict({"display": {"Name": f"§a§l{state.upper()}"}})),
+            )
+        return slot_data
+
+    def get_formatted_items(self) -> list[dict]:
+        """Return chest menu layout for settings page; centers everything"""
+
+        items = []
+        items.append(
+            {
+                "slot": self.num_slots - 8,
+                "slot_data": SlotData(
+                    Item.from_name("minecraft:feather"),
+                    nbt=dumps(from_dict({"display": {"Name": "§rBack"}})),
+                ),
+                "callback": None,
+            }
+        )
+        items.append(
+            {
+                "slot": self.num_slots,
+                "slot_data": SlotData(
+                    Item.from_name("minecraft:arrow"),
+                    nbt=dumps(from_dict({"display": {"Name": "§rNext"}})),
+                ),
+                "callback": None,
+            }
+        )
+
+        n_settings = sum(
+            [
+                1
+                for s in self.subsettings.values()
+                if (isinstance(s, dict) and "states" in s)
+            ]
+        )
+        n_groups = sum(
+            [
+                1
+                for s in self.subsettings.values()
+                if (isinstance(s, dict) and "states" not in s)
+            ]
+        )
+
+        # num of slots allocated for each menu feature
+        n_alloc_groups = math.ceil(n_groups / 2) * 2
+        n_alloc_settings = n_settings * 2
+        n_alloc_nav = 2  # feather & arrow
+        n_alloc_padding = 6  # base padding around navigation buttons
+        if n_settings and n_groups:
+            n_alloc_padding += 2  # divide settings & groups
+        slots_needed = n_alloc_groups + n_alloc_settings + n_alloc_nav + n_alloc_padding
+
+        if slots_needed > self.num_slots:
+            # this is def not how ur supposed to use OverflowError but IDGAF LET ME LIVE MY LIFE
+            raise OverflowError(
+                f"Got {n_settings} settings and {n_groups} groups; can't fit into {self.num_slots} slots! ({slots_needed} slots required)"
+            )
+        if n_settings % 2 == 0:
+            is_even = True
+        else:
+            is_even = False
+        print(f"is_even: {is_even}")
+
+        # align settings to center (slot 5 in the middle)
+        # if is_even, put a gap in the middle for symmetry
+
+        # make a list of the actual settings, excluding group metadata like description & item
+        subsettings_non_metadata = []
+        for s in self.subsettings.values():
+            if not isinstance(s, dict):  # catch description/other metadata
+                continue
+            subsettings_non_metadata.append(s)
+
+        for i, s in enumerate(subsettings_non_metadata):
+            slot = (6 - math.floor(n_settings / 2)) + i - 1
+            if is_even and ((i / n_settings) >= 0.5):  # past midpoint & even
+                slot += 1
+
+            lore = fill(s["description"], width=30).split("\n")
+            lore = ["§7" + t for t in lore]
+            lore.extend(["", "§8(Click to toggle)"])
+
+            display_nbt: dict[str, Any] = {  # display item
+                "display": {"Name": f"§r§l{s['display_name']}", "Lore": lore}
+            }
+
+            # add glint if setting is enabled
+            if s["state"].lower() not in self.DISABLED_STATES:
+                display_nbt["ench"] = []
+
+            items.append(
+                {
+                    "slot": slot + 9,
+                    "slot_data": SlotData(
+                        Item.from_name(s["item"]), nbt=dumps(from_dict(display_nbt))
+                    ),
+                    "callback": self.toggle_state_callback,
+                }
+            )
+
+            items.append(
+                {  # state display glass pane, above display item
+                    "slot": slot,
+                    "slot_data": self.get_state_item(s["state"]),
+                    "callback": self.toggle_state_callback,
+                }
+            )
+
+            # save what setting is associated with this slot
+            self.setting_slots[slot] = list(self.subsettings)[i]
+            self.setting_slots[slot + 9] = list(self.subsettings)[i]
+
+        return items
+
+    def toggle_state_callback(
+        self,
+        window: Window,
+        slot: int,
+        button: int,
+        action_num: int,
+        mode: int,
+        clicked_item: SlotData,
+    ):
+        try:
+            setting: str = self.setting_slots[slot + 1]
+        except KeyError:
+            raise KeyError(
+                f"Slot {slot + 1} has no associated setting.\nSettings: {self.setting_slots}"
+            )
+        s_path: str = self.subsetting_path + "." + setting
+        prev_state, next_state = self.settings.toggle_setting_by_path(s_path)
+        self.clear()
+        self.build()
+
+        s_raw = self.settings.get_setting_by_path(s_path)
+        s_display = s_raw["display_name"]
+        prev_color = s_raw["states"][prev_state]
+        next_color = s_raw["states"][next_state]
+        msg = self.get_setting_toggle_msg(
+            s_display, prev_state, next_state, prev_color, next_color
+        )
+
+        self.proxy.client.chat(msg)
