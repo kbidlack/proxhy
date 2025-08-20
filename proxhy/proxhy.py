@@ -6,6 +6,7 @@ from plugins.commands import CommandsPlugin
 from plugins.debug import DebugPlugin
 from plugins.gamestate import GameStatePlugin
 from plugins.login import LoginPlugin
+from plugins.settings import SettingsPlugin
 from plugins.statcheck import StatCheckPlugin
 from plugins.window import WindowPlugin
 
@@ -17,6 +18,7 @@ plugins: tuple[type, ...] = (
     LoginPlugin,
     StatCheckPlugin,
     WindowPlugin,
+    SettingsPlugin,
 )
 
 Proxhy = type("Proxhy", (*plugins, Proxy), {})
