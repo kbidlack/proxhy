@@ -206,7 +206,7 @@ class Settings:
                 setattr(self, key, SettingGroup(value, self, [key]))
 
     def get_setting_by_path(self, path) -> dict:
-        """Get a setting by its path (e.g., 'bedwars.tablist.show_fkdr')."""
+        """Get a setting by its path (e.g., 'bedwars.tablist.show_stats')."""
         keys = path.split(".")
         current: dict = self._config_data
 
@@ -219,7 +219,7 @@ class Settings:
         return current
 
     def toggle_setting_by_path(self, path: str):
-        """Toggle a setting by its path (e.g., 'bedwars.tablist.show_fkdr')."""
+        """Toggle a setting by its path (e.g., 'bedwars.tablist.show_stats')."""
         # Get the setting data
         setting_data = self.get_setting_by_path(path)
 
