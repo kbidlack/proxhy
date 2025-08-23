@@ -521,12 +521,20 @@ class StatCheckPlugin(Plugin):
                         # idk why this would happen tbh
                         # I think when I wrote this code initially I had a reason
                         continue
-                except (InvalidApiKey, RateLimitError, TimeoutError) as player:
+                except (
+                    InvalidApiKey,
+                    RateLimitError,
+                    TimeoutError,
+                    asyncio.TimeoutError,
+                ) as player:
                     err_message = {
                         InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
                         KeyRequired: TextComponent("No API Key provided!").color("red"),
                         RateLimitError: TextComponent("Rate limit!").color("red"),
                         TimeoutError: TextComponent(
+                            f"Request timed out! ({player})"
+                        ).color("red"),
+                        asyncio.TimeoutError: TextComponent(
                             f"Request timed out! ({player})"
                         ).color("red"),
                     }
