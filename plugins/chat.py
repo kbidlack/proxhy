@@ -9,6 +9,7 @@ class ChatPlugin(Plugin):
         results = await self.emit(
             f"chat:server:{buff.unpack(Chat)}", Buffer(buff.getvalue())
         )
+        # if there are no handlers
         if not results:
             self.client.send_packet(0x02, buff.getvalue())
 
