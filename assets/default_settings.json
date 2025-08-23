@@ -6,9 +6,9 @@
             "item": "minecraft:sign",
             "display_name": "Tablist",
             "description": "Settings related to the BedWars player list.",
-            "show_fkdr": {
-                "display_name": "Show Tablist FKDR",
-                "description": "In BedWars, shows users' FKDR next to their name in the tablist.",
+            "show_stats": {
+                "display_name": "Show Tablist Stats",
+                "description": "In BedWars, shows users' stats next to their name in the tablist.",
                 "item": "minecraft:iron_sword",
                 "states": {
                     "OFF": "red",
@@ -17,8 +17,8 @@
                 "state": "OFF"
             },
             "is_mode_specific": {
-                "display_name": "Mode-Specific Tablist FKDR",
-                "description": "In BedWars, the tablist will show users' FKDR for the mode you're playing.\nex: Solo FKDR instead of overall.",
+                "display_name": "Mode-Specific Tablist Stats",
+                "description": "In BedWars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
                 "item": "minecraft:writable_book",
                 "states": {
                     "OFF": "red",
