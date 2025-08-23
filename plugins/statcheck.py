@@ -880,3 +880,4 @@ class StatCheckPlugin(Plugin):
         self.client.chat(api_key_msg)
 
         await self._update_stats()
+        await self.stat_highlights()
