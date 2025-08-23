@@ -100,11 +100,11 @@ class Settings:
             description: str
 
             # SETTINGS
-            show_fkdr: Settings.Bedwars.Tablist.ShowFkdr
+            show_stats: Settings.Bedwars.Tablist.ShowFkdr
             is_mode_specific: Settings.Bedwars.Tablist.IsModeSpecific
 
             # SETTINGS CLASSES
-            # show_fkdr
+            # show_stats
             class ShowFkdr(SettingProperty[Literal["OFF", "ON"]]): ...
             # is_mode_specific
             class IsModeSpecific(SettingProperty[Literal["OFF", "ON"]]): ...

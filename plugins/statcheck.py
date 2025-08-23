@@ -107,12 +107,12 @@ class StatCheckPlugin(Plugin):
         # statcheck
         self.keep_player_stats_updated()
 
-    @subscribe("setting:bedwars.tablist.show_fkdr")
-    async def bedwars_tablist_show_fkdr_callback(self, data: list):
+    @subscribe("setting:bedwars.tablist.show_stats")
+    async def bedwars_tablist_show_stats_callback(self, data: list):
         # data = [old_state, new_state]
         if data == ["OFF", "ON"]:
             self.received_who.clear()
-            self.server.chat("/who")
+            # self.server.chat("/who")
             await self._update_stats()
         elif data == ["ON", "OFF"]:
             await self._reset_stats()
@@ -129,8 +129,6 @@ class StatCheckPlugin(Plugin):
                         Boolean(True),
                         Chat(team.prefix + player + team.suffix),
                     )
-        self.players_with_stats.clear()
-        self.players_without_stats.clear()
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
@@ -487,7 +485,7 @@ class StatCheckPlugin(Plugin):
 
             if not any(
                 (
-                    self.settings.bedwars.tablist.show_fkdr.state != "OFF",
+                    self.settings.bedwars.tablist.show_stats.state != "OFF",
                     self.settings.bedwars.display_top_stats.state != "OFF",
                 )
             ):
@@ -604,7 +602,7 @@ class StatCheckPlugin(Plugin):
                         }
                     )
 
-                    if self.settings.bedwars.tablist.show_fkdr.state == "ON":
+                    if self.settings.bedwars.tablist.show_stats.state == "ON":
                         self.client.send_packet(
                             0x38,
                             VarInt(3),
@@ -800,7 +798,7 @@ class StatCheckPlugin(Plugin):
         # make sure player stats stays updated
         # hypixel resets sometimes
         n_players = len(self.players_with_stats.values())
-        if self.settings.bedwars.tablist.show_fkdr.state == "ON":
+        if self.settings.bedwars.tablist.show_stats.state == "ON":
             self.client.send_packet(
                 0x38,
                 VarInt(3),
