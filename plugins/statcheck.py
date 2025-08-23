@@ -838,6 +838,9 @@ class StatCheckPlugin(Plugin):
     async def on_chat_game_start(self, buff: Buffer):
         message = buff.unpack(Chat)
 
+        if self.game.gametype != "bedwars" or self.stats_highlighted:
+            return self.client.send_packet(0x02, buff.getvalue())
+
         if self.settings.bedwars.display_top_stats.state == "OFF":
             self.client.send_packet(0x02, buff.getvalue())
 
