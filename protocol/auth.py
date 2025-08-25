@@ -10,7 +10,7 @@ def login(email: str, password: str) -> tuple[str, str, str]:
     access_token, username, uuid = msmcauth.login(email, password)
 
     # save auth info
-    safe_set("proxhy", username, f"{email} {uuid}")
+    safe_set("proxhy", username, f"{access_token} {email} {uuid}")
     safe_set("proxhy", email, password)
     return access_token, username, uuid
 
@@ -26,23 +26,15 @@ def load_auth_info(username: str = "") -> tuple[str, str, str]:
         raise RuntimeError(f"No cached credentials for user {username!r}")
 
     parts = record.split(" ")
-    if len(parts) == 3:  # legacy entry with access_token
-        access_token, email, uuid = parts
+    access_token, email, uuid = parts
 
-        # token fresh? (±24 h)
-        iat = jwt.decode(
-            access_token, algorithms=["HS256"], options={"verify_signature": False}
-        )["iat"]
-        if time.time() - float(iat) > 86_000:
-            access_token, _, _ = login(
-                email, keyring.get_password("proxhy", email) or ""
-            )
-        return access_token, username, uuid
+    # token fresh? (±24 h)
+    iat = jwt.decode(
+        access_token, algorithms=["HS256"], options={"verify_signature": False}
+    )["iat"]
+    if time.time() - float(iat) > 86_000:
+        access_token, _, _ = login(email, keyring.get_password("proxhy", email) or "")
 
-    # new lightweight entry ─ always refresh
-    email, uuid = parts
-    password = keyring.get_password("proxhy", email) or ""
-    access_token, _, _ = login(email, password)
     return access_token, username, uuid
 
 
