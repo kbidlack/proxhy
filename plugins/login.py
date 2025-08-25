@@ -5,11 +5,13 @@ import random
 import uuid
 from pathlib import Path
 from secrets import token_bytes
+from typing import Optional
 from unittest.mock import Mock
 
 import aiohttp
 from msmcauth.errors import InvalidCredentials, MsMcAuthException, NotPremium
 
+from core.cache import Cache
 from core.events import listen_client, listen_server
 from core.net import Server, State
 from core.plugin import Plugin
@@ -58,6 +60,12 @@ class LoginPlugin(Plugin):
             "favicon": f"data:image/png;base64,{b64_favicon}",
         }
 
+        self.access_token = ""
+        self.uuid = ""
+        self.secret: bytes = b""
+
+        self.secret_task: Optional[asyncio.Task] = None
+
     @listen_server(0x02, State.LOGIN, blocking=True, override=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
@@ -91,6 +99,16 @@ class LoginPlugin(Plugin):
             self.access_token, self.username, self.uuid = auth.load_auth_info(
                 self.username
             )
+
+            async with Cache() as cache:
+                if self.CONNECT_HOST in cache:
+                    # if we have cached details for this server
+                    # immediately start the login encryption process
+                    server_id, public_key = cache[self.CONNECT_HOST]
+                    self.secret_task = asyncio.create_task(
+                        self._session_encrypt(server_id, public_key)
+                    )
+
         self.server.send_packet(0x00, String(self.username))
 
     @command("login")
@@ -194,13 +212,55 @@ class LoginPlugin(Plugin):
     async def packet_encryption_request(self, buff: Buffer):
         server_id = buff.unpack(String).encode("utf-8")
         public_key = buff.unpack(ByteArray)
+
+        if self.secret_task:
+            self.secret = await self.secret_task
+
+        # admittedly after creating this I realize that hypixel
+        # changes the server id (or public key?) on every login
+        # so it doesn't do much, but I'm leaving it because I kinda
+        # spent a while (not really) making this work and also
+        # it works on other servers which technically doesn't matter, but still...
+        async with Cache() as cache:
+            if self.CONNECT_HOST not in cache or cache[self.CONNECT_HOST] != (
+                server_id,
+                public_key,
+            ):
+                # if server_id/public_key are not cached
+                # OR if the cache is incorrect
+                cache[self.CONNECT_HOST] = (server_id, public_key)
+                self.secret = await self._session_encrypt(server_id, public_key)
+
+        # here, self.secret SHOULD be set from either packet_login_start (cached)
+        # or above conditions
+
+        if not self.secret:
+            # but for whatever reason if we still do not have the secret
+            self.secret = await self._session_encrypt(server_id, public_key)
+
         verify_token = buff.unpack(ByteArray)
 
+        encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, self.secret)
+        encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
+
+        self.server.send_packet(
+            0x01,
+            ByteArray(encrypted_secret),
+            ByteArray(encrypted_verify_token),
+        )
+
+        # enable encryption
+        self.server.key = self.secret
+        self.server.key = self.secret
+
+    async def _session_encrypt(self, server_id: bytes, public_key: bytes) -> bytes:
         # generate shared secret
         secret = token_bytes(16)
 
         if not (self.access_token or self.uuid):
-            raise ValueError("Access token or UUID not set")
+            self.access_token, self.username, self.uuid = auth.load_auth_info(
+                self.username
+            )
 
         payload = {
             "accessToken": self.access_token,
@@ -218,15 +278,4 @@ class LoginPlugin(Plugin):
                         f"Login failed: {response.status} {await response.json()}"
                     )
 
-        encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, secret)
-        encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
-
-        self.server.send_packet(
-            0x01,
-            ByteArray(encrypted_secret),
-            ByteArray(encrypted_verify_token),
-        )
-
-        # enable encryption
-        self.server.key = secret
-        self.server.key = secret
+        return secret
