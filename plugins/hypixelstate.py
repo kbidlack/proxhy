@@ -10,7 +10,7 @@ from protocol.datatypes import Buffer, Byte, ByteArray, Chat, Int, String, VarIn
 from proxhy.mcmodels import Game, Team, Teams
 
 
-class GameStatePlugin(Plugin):
+class HypixelStatePlugin(Plugin):
     game: Game
 
     def _init_gamestate(self):
