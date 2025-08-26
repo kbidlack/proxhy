@@ -526,6 +526,7 @@ class StatCheckPlugin(Plugin):
                     RateLimitError,
                     TimeoutError,
                     asyncio.TimeoutError,
+                    ApiError,
                 ) as player:
                     err_message = {
                         InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
@@ -537,6 +538,9 @@ class StatCheckPlugin(Plugin):
                         asyncio.TimeoutError: TextComponent(
                             f"Request timed out! ({player})"
                         ).color("red"),
+                        ApiError: TextComponent(
+                            f"An API error occurred with the Hypixel API! ({player})"
+                        ).color("red"),
                     }
 
                     # if an error message hasn't already been sent in this game
@@ -544,6 +548,16 @@ class StatCheckPlugin(Plugin):
                     if not self.game_error:
                         self.game_error = player
                         self.client.chat(err_message[type(player)])
+
+                    continue
+                except Exception as player:
+                    if not self.game_error:
+                        self.game_error = player
+                        self.client.chat(
+                            TextComponent(
+                                f"An unknown error occurred! ({player})"
+                            ).color("red")
+                        )
 
                     continue
 
