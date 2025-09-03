@@ -8,10 +8,12 @@ from core.plugin import Plugin
 from protocol.datatypes import (
     Item,
     SlotData,
+    String,
     TextComponent,
 )
 from protocol.nbt import dumps, from_dict
 from proxhy.errors import CommandException
+from proxhy.mcmodels import Game
 from proxhy.settings import SettingGroup, SettingProperty, Settings
 
 from .command import command
@@ -19,10 +21,17 @@ from .window import Window, get_trigger
 
 
 class SettingsPlugin(Plugin):
+    rq_game: Game
     settings: Settings
 
     @command("settingtest")
     async def setting_test(self):
+        self.settings_window = SettingsMenu(self)
+
+        self.settings_window.open()
+
+    @command("s")
+    async def settings_command(self):
         self.settings_window = SettingsMenu(self)
 
         self.settings_window.open()
@@ -203,29 +212,43 @@ class SettingsPlugin(Plugin):
         )
         self.client.chat(settings_msg)
 
-        await self.emit(f"setting:{setting_name}", [old_state, new_state])
+        await self.emit("setting:bedwars.tablist.show_fkdr", [old_state, new_state])
+
+    @command("rq")
+    async def requeue(self):
+        if not self.rq_game.mode:
+            raise CommandException("No game to requeue!")
+        else:
+            self.server.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
+
+    @command()  # Mmm, garlic bread.
+    async def garlicbread(self):  # Mmm, garlic bread.
+        return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
 
 class SettingsMenu(Window):
+    # TODO: add support for multiple pages of settings/groups within a category
     def __init__(
         self,
         proxy: Plugin,
         num_slots: int = 18,
-        subsetting_path: str = "bedwars.tablist",
+        subsetting_path: str = "",
+        window_title: str = "Settings",
     ):
         if num_slots % 9 != 0:
             raise ValueError(
                 f"Expected multiple of 9 for num_slots; got {num_slots} instead."
             )
-        super().__init__(proxy, "Settings", "minecraft:chest", num_slots)
+        super().__init__(proxy, window_title, "minecraft:chest", num_slots)
         self.num_slots = num_slots
         self.proxy: SettingsPlugin = proxy  # type: ignore
         self.settings = self.proxy.settings
         self.subsetting_path = subsetting_path
         self.subsettings: dict = self.settings.get_setting_by_path(subsetting_path)
+
         self.DISABLED_STATES = {"off", "none", "disabled"}
 
-        self.setting_slots = dict()
+        self.menu_slots = dict()
         self.window_items = []
 
         self.build()
@@ -234,13 +257,14 @@ class SettingsMenu(Window):
         self.settings = (
             self.proxy.settings
         )  # re-initialize settings so this can rebuild when settings update
-        self.window_items = self.get_formatted_items()
+        self.subsettings: dict = self.settings.get_setting_by_path(self.subsetting_path)
+        self.window_items: list[dict] = self.get_formatted_items()
         for i in self.window_items:
             slot, slot_data, callback = i.values()
             self.set_slot(slot - 1, slot_data, callback=callback)
 
     def clear(self):
-        self.setting_slots.clear()
+        self.menu_slots.clear()
         for i in self.window_items:
             slot, slot_data, callback = i.values()
             self.set_slot(slot - 1, SlotData())  # clear slot
@@ -281,6 +305,7 @@ class SettingsMenu(Window):
         """Return chest menu layout for settings page; centers everything"""
 
         items = []
+        # back button in bottom left
         items.append(
             {
                 "slot": self.num_slots - 8,
@@ -288,9 +313,11 @@ class SettingsMenu(Window):
                     Item.from_name("minecraft:feather"),
                     nbt=dumps(from_dict({"display": {"Name": "§rBack"}})),
                 ),
-                "callback": None,
+                "callback": self.back_button_callback,
             }
         )
+        # next button in bottom right
+        # not implemented yet, but will go to next page (or loop back to first)
         items.append(
             {
                 "slot": self.num_slots,
@@ -298,7 +325,7 @@ class SettingsMenu(Window):
                     Item.from_name("minecraft:arrow"),
                     nbt=dumps(from_dict({"display": {"Name": "§rNext"}})),
                 ),
-                "callback": None,
+                "callback": NotImplemented,
             }
         )
 
@@ -331,30 +358,37 @@ class SettingsMenu(Window):
             raise OverflowError(
                 f"Got {n_settings} settings and {n_groups} groups; can't fit into {self.num_slots} slots! ({slots_needed} slots required)"
             )
-        if n_settings % 2 == 0:
-            is_even = True
-        else:
-            is_even = False
-        print(f"is_even: {is_even}")
 
         # align settings to center (slot 5 in the middle)
-        # if is_even, put a gap in the middle for symmetry
 
-        # make a list of the actual settings, excluding group metadata like description & item
-        subsettings_non_metadata = []
-        for s in self.subsettings.values():
-            if not isinstance(s, dict):  # catch description/other metadata
-                continue
-            subsettings_non_metadata.append(s)
+        # make a list of the actual settings, excluding groups & metadata like description & item
+        setting_entries: list[tuple[str, dict]] = [
+            (k, v)
+            for k, v in self.subsettings.items()
+            if isinstance(v, dict) and "states" in v and "state" in v
+        ]
+        if n_groups > 0:
+            group_entries = [
+                (k, v)
+                for k, v in self.subsettings.items()
+                if isinstance(v, dict) and "states" not in v and "state" not in v
+            ]
+        else:  # for type checker, otherwise "group_entries is possibly unbound"
+            group_entries = []
 
-        for i, s in enumerate(subsettings_non_metadata):
-            slot = (6 - math.floor(n_settings / 2)) + i - 1
-            if is_even and ((i / n_settings) >= 0.5):  # past midpoint & even
-                slot += 1
+        for i, (name, s) in enumerate(setting_entries):
+            if n_groups == 0:
+                slot = (6 - math.floor(n_settings / 2)) + i - 1
+                if (n_settings % 2 == 0) and (
+                    (i / n_settings) >= 0.5
+                ):  # even & past midpoint
+                    slot += 1  # gap in middle for symmetry
+            else:
+                slot = 4 + (n_alloc_groups // 2) + i
 
             lore = fill(s["description"], width=30).split("\n")
             lore = ["§7" + t for t in lore]
-            lore.extend(["", "§8(Click to toggle)"])
+            lore.extend(["", "§8(Click to toggle)"])  # "" adds a newline
 
             display_nbt: dict[str, Any] = {  # display item
                 "display": {"Name": f"§r§l{s['display_name']}", "Lore": lore}
@@ -383,9 +417,50 @@ class SettingsMenu(Window):
             )
 
             # save what setting is associated with this slot
-            self.setting_slots[slot] = list(self.subsettings)[i]
-            self.setting_slots[slot + 9] = list(self.subsettings)[i]
+            if slot in self.menu_slots:
+                raise IndexError(
+                    f"Tried to allocate slot {slot} for setting '{name}', but it was already allocated for '{self.menu_slots[slot]}'!"
+                )
+            self.menu_slots[slot] = name
+            self.menu_slots[slot + 9] = name
 
+        if n_groups > 0:
+            for i, (name, g) in enumerate(group_entries):
+                if (
+                    n_settings == 0
+                ):  # if there are no settings, groups should fill by rows not columns
+                    if i <= 5:
+                        slot = i + 3
+                    else:
+                        slot = i + 12
+                else:  # if there are settings AND groups, groups should fill by columns to conserve space
+                    if i % 2 == 0:
+                        slot = math.ceil(i / 2) + 3
+                    else:
+                        slot = math.ceil(i / 2) + 12
+
+                lore = fill(g["description"], width=30).split("\n")
+                lore = ["§7" + t for t in lore]
+                lore.extend(["", "§8(Click to open category)"])  # "" adds a newline
+
+                display_nbt: dict[str, Any] = {  # display item
+                    "display": {"Name": f"§r§l{g['display_name']}", "Lore": lore}
+                }
+
+                items.append(
+                    {
+                        "slot": slot,
+                        "slot_data": SlotData(
+                            Item.from_name(g["item"]), nbt=dumps(from_dict(display_nbt))
+                        ),
+                        "callback": self.open_group_callback,
+                    }
+                )
+                if slot in self.menu_slots:
+                    raise IndexError(
+                        f"Tried to allocate slot {slot} for setting '{name}', but it was already allocated for '{self.menu_slots[slot]}'!"
+                    )
+                self.menu_slots[slot] = name
         return items
 
     def toggle_state_callback(
@@ -398,10 +473,10 @@ class SettingsMenu(Window):
         clicked_item: SlotData,
     ):
         try:
-            setting: str = self.setting_slots[slot + 1]
+            setting: str = self.menu_slots[slot + 1]
         except KeyError:
             raise KeyError(
-                f"Slot {slot + 1} has no associated setting.\nSettings: {self.setting_slots}"
+                f"Slot {slot + 1} has no associated element.\nElements: {self.menu_slots}"
             )
         s_path: str = self.subsetting_path + "." + setting
         prev_state, next_state = self.settings.toggle_setting_by_path(s_path)
@@ -417,3 +492,44 @@ class SettingsMenu(Window):
         )
 
         self.proxy.client.chat(msg)
+
+    def open_group_callback(
+        self,
+        window: Window,
+        slot: int,
+        button: int,
+        action_num: int,
+        mode: int,
+        clicked_item: SlotData,
+    ):
+        try:
+            group: str = self.menu_slots[slot + 1]
+        except KeyError:
+            raise KeyError(
+                f"Slot {slot + 1} has no associated element.\nElements: {self.menu_slots}"
+            )
+        if self.subsetting_path:
+            g_path: str = self.subsetting_path + "." + group
+        else:
+            g_path: str = group  # if we are already at the root
+        self.subsetting_path = g_path
+        self.clear()
+        self.build()
+
+    def back_button_callback(
+        self,
+        window: Window,
+        slot: int,
+        button: int,
+        action_num: int,
+        mode: int,
+        clicked_item: SlotData,
+    ):
+        if self.subsetting_path:
+            itemized: list = self.subsetting_path.split(".")
+            itemized.remove(itemized[-1])
+            self.subsetting_path = ".".join(itemized)
+            self.clear()
+            self.build()
+        else:  # at the root already
+            pass
