@@ -18,7 +18,7 @@
             },
             "is_mode_specific": {
                 "display_name": "Mode-Specific Tablist Stats",
-                "description": "In BedWars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
+                "description": "[NOT IMPLEMENTED] In BedWars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
                 "item": "minecraft:writable_book",
                 "states": {
                     "OFF": "red",
@@ -28,7 +28,7 @@
             }
         },
         "display_top_stats": {
-            "display_name": "Preface top players",
+            "display_name": "Preface Top Players",
             "description": "In BedWars, receive a chat message at the start of the game highlighting the best players.",
             "item": "minecraft:golden_sword",
             "states": {
@@ -38,6 +38,16 @@
                 "INDEX": "green"
             },
             "state": "INDEX"
+        },
+        "api_key_reminder": {
+            "display_name": "Invalid API Key Reminders",
+            "description": "In the bedwars pregame, send a reminder with a link to developer.hypixel.net if your API key is invalid.",
+            "item": "minecraft:tripwire_hook",
+            "states": {
+                "OFF": "red",
+                "ON": "green"
+            },
+            "state": "ON"
         }
     }
 }

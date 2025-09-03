@@ -49,14 +49,20 @@ game_start_msgs = [  # block all the game start messages
     "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
 ]
 
+COLOR_CODE_RE = re.compile(r"§.")
+JOIN_RE = re.compile(
+    r"^(?:\[[A-Za-z0-9+]+\]\s*)?"  # optional rank tag like [MVP++]
+    r"(?P<ign>[A-Za-z0-9_]{3,16}) has joined (?P<context>.+)!$"
+)
+
 
 class StatCheckPlugin(Plugin):
-    username: str
     teams: Teams
     game: Game
-    received_who: asyncio.Event
-    received_locraw: asyncio.Event
     settings: Settings
+    received_who: asyncio.Event
+    username: str
+    received_locraw: asyncio.Event
 
     def _init_statcheck(self):
         self.players_with_stats = {}
@@ -77,6 +83,9 @@ class StatCheckPlugin(Plugin):
         self.log_path = (
             Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
         )
+        self._api_key_valid: bool | None = None
+        self._api_key_validated_at: float | None = None
+        self._api_key_ttl = 300  # seconds
 
     @property
     def hypixel_api_key(self):
@@ -90,6 +99,31 @@ class StatCheckPlugin(Plugin):
         self._hypixel_api_key = key
 
         auth.safe_set("proxhy", "hypixel_api_key", key)
+
+    async def validate_api_key(self, force=False) -> bool:
+        # what the hell is this LMAO
+        now = asyncio.get_event_loop().time()
+        if (
+            not force
+            and self._api_key_valid is not None
+            and self._api_key_validated_at
+            and now - self._api_key_validated_at < self._api_key_ttl
+        ):
+            return self._api_key_valid
+        try:
+            client = hypixel.Client(self.hypixel_api_key)
+            await client.player("gamerboy80")
+        except Exception:
+            self._api_key_valid = False
+        else:
+            self._api_key_valid = True
+        finally:
+            try:
+                await client.close()  # type:ignore
+            except Exception:
+                pass
+        self._api_key_validated_at = now
+        return self._api_key_valid
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, _):
@@ -830,6 +864,31 @@ class StatCheckPlugin(Plugin):
                     for uuid_, display_name in self.players_with_stats.values()
                 ),
             )
+
+    @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
+    async def on_queue(self, buff: Buffer):
+        self.client.send_packet(0x02, buff.getvalue())
+        # Preserve original packet bytes BEFORE unpacking
+        raw = buff.unpack(Chat)
+        plain = COLOR_CODE_RE.sub("", raw)
+
+        m = JOIN_RE.match(plain)
+        if m and m.group("ign").casefold() == self.username.casefold():
+            if not self._api_key_valid:
+                self.client.chat(
+                    TextComponent("Invalid API key!")
+                    .color("red")
+                    .append(
+                        TextComponent(" (developer.hypixel.net)")
+                        .underlined()
+                        .click_event(
+                            "open_url", "https://developer.hypixel.net/dashboard/"
+                        )
+                        .color("gray")
+                    )
+                )
+
+        # Forward the original server-formatted line (keeps colors)
 
     @subscribe("chat:server:ONLINE: .*")
     async def on_chat_who(self, buff: Buffer):
