@@ -91,6 +91,7 @@ class Settings:
         # SETTINGS
         display_top_stats: DisplayTopStats
         api_key_reminder: ApiKeyReminder
+        show_rankname: ShowRankname
 
         # GROUPS
         tablist: Tablist
@@ -117,3 +118,6 @@ class Settings:
 
         # api_key_reminder
         class ApiKeyReminder(SettingProperty[Literal["ON", "OFF"]]): ...
+
+        # show_rankname
+        class ShowRankname(SettingProperty[Literal["ON", "OFF"]]): ...

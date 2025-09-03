@@ -25,6 +25,16 @@
                     "ON": "green"
                 },
                 "state": "OFF"
+            },
+            "show_rankname": {
+                "display_name": "Show Rankname in Tablist",
+                "description": "In Bedwars, the tablist will show users' colorized ranks and usernames instead of team color.",
+                "item": "minecraft:name_tag",
+                "states": {
+                    "OFF": "red",
+                    "ON": "green"
+                },
+                "state": "OFF"
             }
         },
         "display_top_stats": {
