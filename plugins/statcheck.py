@@ -627,7 +627,13 @@ class StatCheckPlugin(Plugin):
                         #     )
                         else:  # also this shouldn't run because we already
                             # early return on self.game.gametype not being "bedwars"
-                            display_name = fplayer.rankname
+                            if self.settings.bedwars.tablist.show_rankname.state == "ON":
+                                display_name = fplayer.rankname
+                            elif self.settings.bedwars.tablist.show_rankname.state == "OFF":
+                                display_name = fplayer.raw_name
+                            else:
+                                print('ruh roh')
+                                raise ValueError
                     else:  # if is a nicked player
                         # get team color for nicked player
                         for team in self.teams:
@@ -868,27 +874,37 @@ class StatCheckPlugin(Plugin):
     @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
     async def on_queue(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
-        # Preserve original packet bytes BEFORE unpacking
-        raw = buff.unpack(Chat)
-        plain = COLOR_CODE_RE.sub("", raw)
+        if self.settings.bedwars.api_key_reminder.state == "ON":
+            raw = buff.unpack(Chat)
+            plain = COLOR_CODE_RE.sub("", raw)
 
-        m = JOIN_RE.match(plain)
-        if m and m.group("ign").casefold() == self.username.casefold():
-            if not self._api_key_valid:
-                self.client.chat(
-                    TextComponent("Invalid API key!")
-                    .color("red")
-                    .append(
-                        TextComponent(" (developer.hypixel.net)")
-                        .underlined()
-                        .click_event(
-                            "open_url", "https://developer.hypixel.net/dashboard/"
-                        )
-                        .color("gray")
+            m = JOIN_RE.match(plain)
+            if m and m.group("ign").casefold() == self.username.casefold():
+                # Ensure we have a recent validation
+                now = asyncio.get_event_loop().time()
+                needs_validation = (
+                    self._api_key_valid is None
+                    or (
+                        self._api_key_validated_at
+                        and now - self._api_key_validated_at > self._api_key_ttl
                     )
                 )
+                if needs_validation:
+                    await self.validate_api_key()
 
-        # Forward the original server-formatted line (keeps colors)
+                if self._api_key_valid is False:  # only warn if explicitly invalid
+                    self.client.chat(
+                        TextComponent("Invalid API key! ")
+                        .color("red")
+                        .append(
+                            TextComponent("(developer.hypixel.net)")
+                            .underlined()
+                            .click_event(
+                                "open_url", "https://developer.hypixel.net/dashboard/"
+                            )
+                            .color("gray")
+                        )
+                    )
 
     @subscribe("chat:server:ONLINE: .*")
     async def on_chat_who(self, buff: Buffer):
@@ -937,7 +953,6 @@ class StatCheckPlugin(Plugin):
         try:
             new_client = hypixel.Client(key)
             await new_client.player("gamerboy80")  # test key
-            # await new_client.validate_keys()
         except (InvalidApiKey, KeyRequired, ApiError):
             raise CommandException("Invalid API Key!")
         else:
@@ -949,6 +964,10 @@ class StatCheckPlugin(Plugin):
 
         self.hypixel_api_key = key
         self.hypixel_client = hypixel.Client(key)
+        # Mark as valid immediately (already tested)
+        self._api_key_valid = True
+        self._api_key_validated_at = asyncio.get_event_loop().time()
+
         api_key_msg = TextComponent("Updated API Key!").color("green")
         self.client.chat(api_key_msg)
 
