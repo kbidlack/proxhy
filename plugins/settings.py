@@ -24,8 +24,8 @@ class SettingsPlugin(Plugin):
     rq_game: Game
     settings: Settings
 
-    @command("settingtest")
-    async def setting_test(self):
+    @command("s")
+    async def proxhysettings(self):
         self.settings_window = SettingsMenu(self)
 
         self.settings_window.open()
