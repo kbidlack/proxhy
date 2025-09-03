@@ -206,7 +206,14 @@ class Settings:
                 setattr(self, key, SettingGroup(value, self, [key]))
 
     def get_setting_by_path(self, path) -> dict:
-        """Get a setting by its path (e.g., 'bedwars.tablist.show_stats')."""
+        """
+        Get a setting by its path (e.g., 'bedwars.tablist.show_fkdr').
+        Special cases:
+        - path in ('', None, 'root') returns the root settings dict.
+        """
+        if path == "":
+            return self._config_data
+
         keys = path.split(".")
         current: dict = self._config_data
 

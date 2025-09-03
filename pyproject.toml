@@ -14,7 +14,7 @@ dependencies = [
     "cryptography>=45.0",
     "keyring>=25.6",
     "pyjwt>=2.10",
-    "platformdirs>=4.3"
+    "platformdirs>=4.3",
 ]
 
 [project.scripts]

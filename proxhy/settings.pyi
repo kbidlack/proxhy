@@ -90,6 +90,7 @@ class Settings:
 
         # SETTINGS
         display_top_stats: DisplayTopStats
+        api_key_reminder: ApiKeyReminder
 
         # GROUPS
         tablist: Tablist
@@ -113,3 +114,6 @@ class Settings:
         class DisplayTopStats(
             SettingProperty[Literal["OFF", "FKDR", "STAR", "INDEX"]]
         ): ...
+
+        # api_key_reminder
+        class ApiKeyReminder(SettingProperty[Literal["ON", "OFF"]]): ...
