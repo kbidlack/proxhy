@@ -30,12 +30,6 @@ class SettingsPlugin(Plugin):
 
         self.settings_window.open()
 
-    @command("s")
-    async def settings_command(self):
-        self.settings_window = SettingsMenu(self)
-
-        self.settings_window.open()
-
     @command("setting")
     async def edit_settings(self, setting_name: str = "", value: str = ""):
         if not setting_name:
@@ -212,7 +206,7 @@ class SettingsPlugin(Plugin):
         )
         self.client.chat(settings_msg)
 
-        await self.emit("setting:bedwars.tablist.show_fkdr", [old_state, new_state])
+        await self.emit(f"setting:{setting_name}", [old_state, new_state])
 
     @command("rq")
     async def requeue(self):
