@@ -3,11 +3,12 @@ import time
 
 import jwt
 import keyring
+
 import auth
 
 
-def login(email: str, password: str) -> tuple[str, str, str]:
-    access_token, username, uuid = auth.login(email, password)
+async def login(email: str, password: str) -> tuple[str, str, str]:
+    access_token, username, uuid = await auth.login(email, password)
 
     # save auth info
     safe_set("proxhy", username, f"{access_token} {email} {uuid}")
@@ -22,7 +23,7 @@ def user_exists(username: str) -> bool:
 # https://pypi.org/project/msmcauthaio/
 # just kidding not anymore!! now we use our own auth library because we're cool
 # and got chatgpt to make it for us (sunglasses emoji)
-def load_auth_info(username: str = "") -> tuple[str, str, str]:
+async def load_auth_info(username: str = "") -> tuple[str, str, str]:
     record = keyring.get_password("proxhy", username)
     if record is None:
         raise RuntimeError(f"No cached credentials for user {username!r}")
@@ -35,7 +36,9 @@ def load_auth_info(username: str = "") -> tuple[str, str, str]:
         access_token, algorithms=["HS256"], options={"verify_signature": False}
     )["iat"]
     if time.time() - float(iat) > 86_000:
-        access_token, _, _ = login(email, keyring.get_password("proxhy", email) or "")
+        access_token, _, _ = await login(
+            email, keyring.get_password("proxhy", email) or ""
+        )
 
     return access_token, username, uuid
 

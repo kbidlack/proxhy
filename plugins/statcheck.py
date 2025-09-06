@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable, Optional
 
 import hypixel
 import keyring
@@ -29,10 +29,10 @@ from protocol.datatypes import (
     Boolean,
     Buffer,
     Chat,
+    Int,
     String,
     TextComponent,
     VarInt,
-    Int
 )
 from proxhy.aliases import Gamemode
 from proxhy.errors import CommandException
@@ -504,7 +504,7 @@ class StatCheckPlugin(Plugin):
         return self._cached_players.get(player) or await self.hypixel_client.player(
             player
         )
-    
+
     def get_team_color_code(self, player_name: str) -> str:
         """Return the Minecraft color code (e.g. '§c') for a player, or '' if unknown."""
         # Nicked player cached color (prefix)
@@ -521,7 +521,7 @@ class StatCheckPlugin(Plugin):
         """Return plain color name (e.g. 'Red') if derivable, else raise ValueError."""
         team = self.get_team(player_name)
         if not team:
-            raise ValueError(f'Provided player is not on a team!')
+            raise ValueError(f"Provided player is not on a team!")
         # Team names look like 'Red8'; strip digits
         return re.sub(r"\d+", "", team.name)
 
@@ -640,12 +640,16 @@ class StatCheckPlugin(Plugin):
                         # technically we don't need this since only bedwars
                         # is currently supported. but... futureproofing !!!
                         if self.game.gametype == "bedwars":
-                            show_rankname = self.settings.bedwars.tablist.show_rankname.state
+                            show_rankname = (
+                                self.settings.bedwars.tablist.show_rankname.state
+                            )
                             color_code = self.get_team_color_code(fplayer.raw_name)
                             display_name = " ".join(
                                 (
                                     f"{fplayer.bedwars.level}{color_code}",
-                                    fplayer.rankname if show_rankname == "ON" else fplayer.raw_name,
+                                    fplayer.rankname
+                                    if show_rankname == "ON"
+                                    else fplayer.raw_name,
                                     f" §7| {fplayer.bedwars.fkdr}",
                                 )
                             )
@@ -686,7 +690,7 @@ class StatCheckPlugin(Plugin):
                             player.name: (
                                 player.uuid,
                                 prefix + display_name + suffix,
-                                fplayer
+                                fplayer,
                             )
                         }
                     )
@@ -709,8 +713,10 @@ class StatCheckPlugin(Plugin):
 
         # get first rush stats
         # there's no well-defined first rush for 3s/4s so we only do this for solos and doubles
-        if (self.settings.bedwars.announce_first_rush.state != "OFF" and
-            self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}):
+        if (
+            self.settings.bedwars.announce_first_rush.state != "OFF"
+            and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
+        ):
             self.highlight_adjacent_teams()
 
     def highlight_adjacent_teams(self):
@@ -720,7 +726,7 @@ class StatCheckPlugin(Plugin):
             return
         side_players = self.get_players_on_team(side_rush)
         alt_players = self.get_players_on_team(alt_rush)
-        
+
         map_data = BW_MAPS[self.game.map]
         rush_direction = map_data["rush_direction"]
 
@@ -731,35 +737,43 @@ class StatCheckPlugin(Plugin):
             first_rush, first_players = alt_rush, alt_players
             other_adjacent_rush, other_adjacent_players = side_rush, side_players
         else:
-            raise ValueError(f'Expected Literal "side" or "alt" for BW_MAPS["{self.game.map}"]["rush_direction"]; got {rush_direction} instead.')
-        
-        empty_team_dialogue_first = (TextComponent(f'{first_rush.upper()} TEAM')
+            raise ValueError(
+                f'Expected Literal "side" or "alt" for BW_MAPS["{self.game.map}"]["rush_direction"]; got {rush_direction} instead.'
+            )
+
+        empty_team_dialogue_first = (
+            TextComponent(f"{first_rush.upper()} TEAM")
             .color(first_rush)
-            .append(' is empty!')
-            .color('red'))
-        empty_team_dialogue_alt = (TextComponent(f'{other_adjacent_rush.upper()} TEAM')
-            .color(other_adjacent_rush)
-            .append(TextComponent(' is empty!')
-            .color('red'))
+            .append(" is empty!")
+            .color("red")
         )
-        
+        empty_team_dialogue_alt = (
+            TextComponent(f"{other_adjacent_rush.upper()} TEAM")
+            .color(other_adjacent_rush)
+            .append(TextComponent(" is empty!").color("red"))
+        )
+
         # key to sort player stats with sorted()
         key: Callable[[FormattedPlayer], float]
-        if self.settings.bedwars.display_top_stats.state in {'OFF', 'INDEX'}:
+        if self.settings.bedwars.display_top_stats.state in {"OFF", "INDEX"}:
             key = lambda fp: fp.bedwars.raw_fkdr**2 * fp.bedwars.raw_level
-        elif self.settings.bedwars.display_top_stats.state == 'STAR':
+        elif self.settings.bedwars.display_top_stats.state == "STAR":
             key = lambda fp: fp.bedwars.raw_level
-        elif self.settings.bedwars.display_top_stats.state == 'FKDR':
+        elif self.settings.bedwars.display_top_stats.state == "FKDR":
             key = lambda fp: fp.bedwars.raw_fkdr
         else:
-            raise ValueError(f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.state} instead.')
-        
+            raise ValueError(
+                f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.state} instead.'
+            )
+
         match len(first_players):
             case 0:  # team empty or disconnected
                 title = empty_team_dialogue_first
             case 1:  # solos or doubles with 1 disconnect
                 title = self.players_with_stats[first_players[0]][1]
-            case 2:  # team of 2; calculate which one has better stats based on user pref
+            case (
+                2
+            ):  # team of 2; calculate which one has better stats based on user pref
                 fp1: FormattedPlayer = self.players_with_stats[first_players[0]][2]
                 fp2: FormattedPlayer = self.players_with_stats[first_players[1]][2]
 
@@ -769,7 +783,9 @@ class StatCheckPlugin(Plugin):
                     # if we aren't showing alt rush team stats, we can show both players from first rush
                     subtitle = self.players_with_stats[worse.raw_name][1]
             case _:
-                raise ValueError(f'wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}')
+                raise ValueError(
+                    f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
+                )
         if self.settings.bedwars.announce_first_rush.state == "BOTH ADJACENT":
             match len(other_adjacent_players):
                 case 0:
@@ -777,8 +793,12 @@ class StatCheckPlugin(Plugin):
                 case 1:
                     subtitle = self.players_with_stats[other_adjacent_players[0]][1]
                 case 2:
-                    fp1: FormattedPlayer = self.players_with_stats[other_adjacent_players[0]][2]
-                    fp1: FormattedPlayer = self.players_with_stats[other_adjacent_players[1]][2]
+                    fp1: FormattedPlayer = self.players_with_stats[
+                        other_adjacent_players[0]
+                    ][2]
+                    fp1: FormattedPlayer = self.players_with_stats[
+                        other_adjacent_players[1]
+                    ][2]
                     better, worse = sorted((fp1, fp2), key=key, reverse=True)
                     subtitle = self.players_with_stats[better.raw_name][1]
         self.reset_title()
@@ -787,27 +807,22 @@ class StatCheckPlugin(Plugin):
         #   f'Expected "FIRST RUSH", "BOTH ADJACENT", or "OFF" state for setting bedwars.announce_first_rush; got {self.settings.bedwars.announce_first_rush.state} instead.'
         # )
 
-    def display_title(self, title: TextComponent, subtitle: TextComponent | None = None, fade_in: int=5, duration: int=150, fade_out: int=10):
+    def display_title(
+        self,
+        title: TextComponent,
+        subtitle: TextComponent | None = None,
+        fade_in: int = 5,
+        duration: int = 150,
+        fade_out: int = 10,
+    ):
         # set subtitle
-        self.client.send_packet(
-            0x45,
-            VarInt(1),
-            Chat(subtitle)
-        )
+        self.client.send_packet(0x45, VarInt(1), Chat(subtitle))
         # set timings
         self.client.send_packet(
-            0x45,
-            VarInt(2),
-            Int(fade_in),
-            Int(duration),
-            Int(fade_out)
+            0x45, VarInt(2), Int(fade_in), Int(duration), Int(fade_out)
         )
         # main title; triggers display
-        self.client.send_packet(
-            0x45,
-            VarInt(0),
-            Chat(title)
-        )
+        self.client.send_packet(0x45, VarInt(0), Chat(title))
 
     def hide_title(self):
         self.client.send_packet(0x45, VarInt(3))
@@ -819,15 +834,17 @@ class StatCheckPlugin(Plugin):
         """
         Returns (side_rush, alt_rush) teams
         """
-        # TODO: if the player rejoins as a spectator, this is invoked but they're not on a team so we get a keyerror when team is "" 
+        # TODO: if the player rejoins as a spectator, this is invoked but they're not on a team so we get a keyerror when team is ""
         name = username if username else self.username
-        team = self.get_team_color_name(name).lower()  # will raise valueerror if player is not on a team; handle!
-        
+        team = self.get_team_color_name(
+            name
+        ).lower()  # will raise valueerror if player is not on a team; handle!
+
         side_rush = RUSH_MAPPINGS["default_mappings"]["side_rushes"][team]
         alt_rush = RUSH_MAPPINGS["default_mappings"]["alt_rushes"][team]
 
         return (side_rush, alt_rush)
-    
+
     def get_players_on_team(self, color: str) -> list[str]:
         """
         Return a de-duplicated list of player names on the given team color
@@ -841,7 +858,7 @@ class StatCheckPlugin(Plugin):
         #     if team.name == target:
         #         players.update(team.players)
         # return list(players)
-    
+
         target = color.lower()
         players: set[str] = set()
         for team in self.teams:
@@ -1053,12 +1070,9 @@ class StatCheckPlugin(Plugin):
             if m and m.group("ign").casefold() == self.username.casefold():
                 # Ensure we have a recent validation
                 now = asyncio.get_event_loop().time()
-                needs_validation = (
-                    self._api_key_valid is None
-                    or (
-                        self._api_key_validated_at
-                        and now - self._api_key_validated_at > self._api_key_ttl
-                    )
+                needs_validation = self._api_key_valid is None or (
+                    self._api_key_validated_at
+                    and now - self._api_key_validated_at > self._api_key_ttl
                 )
                 if needs_validation:
                     await self.validate_api_key()

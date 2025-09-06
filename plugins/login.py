@@ -9,8 +9,8 @@ from typing import Optional
 from unittest.mock import Mock
 
 import aiohttp
-from auth.errors import InvalidCredentials, AuthException, NotPremium
 
+from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
 from core.events import listen_client, listen_server
 from core.net import Server, State
@@ -96,7 +96,7 @@ class LoginPlugin(Plugin):
         )
 
         if self.CONNECT_HOST[0] not in {"localhost", "127.0.0.1", "::1"}:
-            self.access_token, self.username, self.uuid = auth.load_auth_info(
+            self.access_token, self.username, self.uuid = await auth.load_auth_info(
                 self.username
             )
 
@@ -119,10 +119,10 @@ class LoginPlugin(Plugin):
             raise CommandException("You can't use that right now!")
 
         try:
-            access_token, username, uuid = auth.login(email, password)
-        except InvalidCredentials as e:
+            access_token, username, uuid = await auth.login(email, password)
+        except InvalidCredentials:
             raise CommandException("Login failed; invalid credentials!")
-        except NotPremium as e:
+        except NotPremium:
             raise CommandException("This account is not premium!")
         except AuthException as e:
             raise CommandException(
@@ -258,7 +258,7 @@ class LoginPlugin(Plugin):
         secret = token_bytes(16)
 
         if not (self.access_token or self.uuid):
-            self.access_token, self.username, self.uuid = auth.load_auth_info(
+            self.access_token, self.username, self.uuid = await auth.load_auth_info(
                 self.username
             )
 

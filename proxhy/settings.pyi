@@ -122,7 +122,7 @@ class Settings:
         # api_key_reminder
         class ApiKeyReminder(SettingProperty[Literal["ON", "OFF"]]): ...
 
-
-
         # announce_first_rush
-        class AnnounceFirstRush(SettingProperty[Literal["OFF", "FIRST RUSH", "BOTH ADJACENT"]]): ...
+        class AnnounceFirstRush(
+            SettingProperty[Literal["OFF", "FIRST RUSH", "BOTH ADJACENT"]]
+        ): ...

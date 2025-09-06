@@ -1,4 +1,3 @@
-
 class AuthException(Exception):
     """Base class for auth-related errors.
 
@@ -9,7 +8,10 @@ class AuthException(Exception):
     detail : str | None
         Optional extra detail (e.g., server response text).
     """
-    def __init__(self, message: str = "", *, code: str | None = None, detail: str | None = None):
+
+    def __init__(
+        self, message: str = "", *, code: str | None = None, detail: str | None = None
+    ):
         super().__init__(message)
         self.code = code
         self.detail = detail
