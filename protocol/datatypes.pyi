@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, Literal, Protocol, TypedDict
+from typing import Any, Literal, Protocol, TypedDict, Optional, Dict
 
 from _typeshed import Incomplete
 
@@ -54,6 +54,13 @@ class SlotData:
 class Buffer(BytesIO):
     def unpack[T](self, kind: type[DataType[Any, T]]) -> T: ...
     def clone(self) -> Buffer: ...
+
+class MapData(TypedDict):
+    max_height: Optional[int]
+    min_height: Optional[int]
+    rush_direction: Literal["side", "alt"]
+
+BW_MAPS = Dict[str, MapData]
 
 class DataType[PT, UT](ABC, metaclass=abc.ABCMeta):
     value: PT | UT

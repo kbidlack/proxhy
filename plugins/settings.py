@@ -457,7 +457,7 @@ class SettingsMenu(Window):
                 self.menu_slots[slot] = name
         return items
 
-    def toggle_state_callback(
+    async def toggle_state_callback(
         self,
         window: Window,
         slot: int,
@@ -484,6 +484,8 @@ class SettingsMenu(Window):
         msg = self.get_setting_toggle_msg(
             s_display, prev_state, next_state, prev_color, next_color
         )
+
+        await self.proxy.emit(f"setting:{s_path}", [prev_state, next_state])
 
         self.proxy.client.chat(msg)
 
