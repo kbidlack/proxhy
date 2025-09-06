@@ -85,6 +85,7 @@ class StatCheckPlugin(Plugin):
 
         self.game_error = None  # if error has been sent that game
         self.stats_highlighted = False
+        self.adjacent_teams_highlighted = False
 
         self.received_player_stats = asyncio.Event()
 
@@ -145,6 +146,7 @@ class StatCheckPlugin(Plugin):
         self.received_player_stats.clear()
         self.game_error = None
         self.stats_highlighted = False
+        self.adjacent_teams_highlighted = False
 
     @subscribe("update_teams")
     async def statcheck_event_update_teams(self, _):
@@ -718,7 +720,9 @@ class StatCheckPlugin(Plugin):
             self.settings.bedwars.announce_first_rush.state != "OFF"
             and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
         ):
-            self.highlight_adjacent_teams()
+            if not self.adjacent_teams_highlighted:
+                self.highlight_adjacent_teams()
+                self.adjacent_teams_highlighted = True
 
     def highlight_adjacent_teams(self):
         try:
@@ -1188,4 +1192,5 @@ class StatCheckPlugin(Plugin):
         self.client.chat(api_key_msg)
 
         await self._update_stats()
-        await self.stat_highlights()
+        if not self.stats_highlighted:
+            await self.stat_highlights()
