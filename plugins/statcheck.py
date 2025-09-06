@@ -75,7 +75,7 @@ class StatCheckPlugin(Plugin):
     received_locraw: asyncio.Event
 
     def _init_statcheck(self):
-        self.players_with_stats: dict[tuple[str, str, FormattedPlayer]] = {}
+        self.players_with_stats: dict[str, tuple[str, str, FormattedPlayer | Nick]] = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: set[str] = set()  # players from /who
         self._cached_players: dict = {}
@@ -521,7 +521,7 @@ class StatCheckPlugin(Plugin):
         """Return plain color name (e.g. 'Red') if derivable, else raise ValueError."""
         team = self.get_team(player_name)
         if not team:
-            raise ValueError(f"Provided player is not on a team!")
+            raise ValueError("Provided player is not on a team!")
         # Team names look like 'Red8'; strip digits
         return re.sub(r"\d+", "", team.name)
 
@@ -672,6 +672,7 @@ class StatCheckPlugin(Plugin):
                                 break
 
                         display_name = f"§5[NICK] {player.name}"
+                        fplayer = player
 
                     # this is where we actually update player stats in tab
                     prefix, suffix = next(
@@ -743,28 +744,30 @@ class StatCheckPlugin(Plugin):
 
         empty_team_dialogue_first = (
             TextComponent(f"{first_rush.upper()} TEAM")
-            .color(first_rush)
+            .color(first_rush)  # type: ignore
             .append(" is empty!")
             .color("red")
         )
         empty_team_dialogue_alt = (
             TextComponent(f"{other_adjacent_rush.upper()} TEAM")
-            .color(other_adjacent_rush)
+            .color(other_adjacent_rush)  # type: ignore
             .append(TextComponent(" is empty!").color("red"))
         )
 
         # key to sort player stats with sorted()
         key: Callable[[FormattedPlayer], float]
         if self.settings.bedwars.display_top_stats.state in {"OFF", "INDEX"}:
-            key = lambda fp: fp.bedwars.raw_fkdr**2 * fp.bedwars.raw_level
+            key = lambda fp: fp.bedwars.raw_fkdr**2 * fp.bedwars.raw_level  # noqa: E731
         elif self.settings.bedwars.display_top_stats.state == "STAR":
-            key = lambda fp: fp.bedwars.raw_level
+            key = lambda fp: fp.bedwars.raw_level  # noqa: E731
         elif self.settings.bedwars.display_top_stats.state == "FKDR":
-            key = lambda fp: fp.bedwars.raw_fkdr
+            key = lambda fp: fp.bedwars.raw_fkdr  # noqa: E731
         else:
             raise ValueError(
                 f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.state} instead.'
             )
+
+        subtitle = None
 
         match len(first_players):
             case 0:  # team empty or disconnected
@@ -774,18 +777,34 @@ class StatCheckPlugin(Plugin):
             case (
                 2
             ):  # team of 2; calculate which one has better stats based on user pref
-                fp1: FormattedPlayer = self.players_with_stats[first_players[0]][2]
-                fp2: FormattedPlayer = self.players_with_stats[first_players[1]][2]
+                fp1 = self.players_with_stats[first_players[0]][2]
+                fp2 = self.players_with_stats[first_players[1]][2]
 
-                better, worse = sorted((fp1, fp2), key=key, reverse=True)
-                title = self.players_with_stats[better.raw_name][1]
+                if isinstance(fp1, Nick):
+                    better = fp1
+                    worse = fp2
+                elif isinstance(fp2, Nick):
+                    better = fp2
+                    worse = fp1
+                else:
+                    better, worse = sorted((fp1, fp2), key=key, reverse=True)
+
+                if isinstance(better, FormattedPlayer):
+                    title = self.players_with_stats[better.raw_name][1]
+                else:
+                    title = self.players_with_stats[better.name][1]
+
                 if self.settings.bedwars.announce_first_rush.state == "FIRST RUSH":
                     # if we aren't showing alt rush team stats, we can show both players from first rush
-                    subtitle = self.players_with_stats[worse.raw_name][1]
+                    if isinstance(worse, FormattedPlayer):
+                        subtitle = self.players_with_stats[worse.raw_name][1]
+                    else:
+                        subtitle = self.players_with_stats[worse.name][1]
             case _:
                 raise ValueError(
                     f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
                 )
+
         if self.settings.bedwars.announce_first_rush.state == "BOTH ADJACENT":
             match len(other_adjacent_players):
                 case 0:
@@ -793,14 +812,25 @@ class StatCheckPlugin(Plugin):
                 case 1:
                     subtitle = self.players_with_stats[other_adjacent_players[0]][1]
                 case 2:
-                    fp1: FormattedPlayer = self.players_with_stats[
-                        other_adjacent_players[0]
-                    ][2]
-                    fp1: FormattedPlayer = self.players_with_stats[
-                        other_adjacent_players[1]
-                    ][2]
-                    better, worse = sorted((fp1, fp2), key=key, reverse=True)
-                    subtitle = self.players_with_stats[better.raw_name][1]
+                    fp1 = self.players_with_stats[other_adjacent_players[0]][2]
+                    fp2 = self.players_with_stats[other_adjacent_players[1]][2]
+                    if isinstance(fp1, Nick):
+                        better = fp1
+                        worse = fp2
+                    elif isinstance(fp2, Nick):
+                        better = fp2
+                        worse = fp1
+                    else:
+                        better, worse = sorted((fp1, fp2), key=key, reverse=True)
+
+                    if isinstance(better, FormattedPlayer):
+                        subtitle = self.players_with_stats[better.raw_name][1]
+                    else:
+                        subtitle = self.players_with_stats[better.name][1]
+                case _:
+                    raise ValueError(
+                        f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
+                    )
         self.reset_title()
         self.display_title(title=title, subtitle=subtitle)
         # raise ValueError(
@@ -809,20 +839,21 @@ class StatCheckPlugin(Plugin):
 
     def display_title(
         self,
-        title: TextComponent,
-        subtitle: TextComponent | None = None,
+        title: TextComponent | str,
+        subtitle: TextComponent | str | None = None,
         fade_in: int = 5,
         duration: int = 150,
         fade_out: int = 10,
     ):
         # set subtitle
-        self.client.send_packet(0x45, VarInt(1), Chat(subtitle))
+        if subtitle:
+            self.client.send_packet(0x45, VarInt(1), Chat.pack(subtitle))
         # set timings
         self.client.send_packet(
             0x45, VarInt(2), Int(fade_in), Int(duration), Int(fade_out)
         )
         # main title; triggers display
-        self.client.send_packet(0x45, VarInt(0), Chat(title))
+        self.client.send_packet(0x45, VarInt(0), Chat.pack(title))
 
     def hide_title(self):
         self.client.send_packet(0x45, VarInt(3))
