@@ -91,7 +91,7 @@ class Settings:
         # SETTINGS
         display_top_stats: DisplayTopStats
         api_key_reminder: ApiKeyReminder
-        show_rankname: ShowRankname
+        announce_first_rush: AnnounceFirstRush
 
         # GROUPS
         tablist: Tablist
@@ -104,12 +104,15 @@ class Settings:
             # SETTINGS
             show_stats: Settings.Bedwars.Tablist.ShowFkdr
             is_mode_specific: Settings.Bedwars.Tablist.IsModeSpecific
+            show_rankname: ShowRankname
 
             # SETTINGS CLASSES
             # show_stats
             class ShowFkdr(SettingProperty[Literal["OFF", "ON"]]): ...
             # is_mode_specific
             class IsModeSpecific(SettingProperty[Literal["OFF", "ON"]]): ...
+            # show_rankname
+            class ShowRankname(SettingProperty[Literal["ON", "OFF"]]): ...
 
         # display_top_stats
         class DisplayTopStats(
@@ -119,5 +122,7 @@ class Settings:
         # api_key_reminder
         class ApiKeyReminder(SettingProperty[Literal["ON", "OFF"]]): ...
 
-        # show_rankname
-        class ShowRankname(SettingProperty[Literal["ON", "OFF"]]): ...
+
+
+        # announce_first_rush
+        class AnnounceFirstRush(SettingProperty[Literal["OFF", "FIRST RUSH", "BOTH ADJACENT"]]): ...

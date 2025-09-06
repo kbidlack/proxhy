@@ -9,7 +9,7 @@ from typing import Optional
 from unittest.mock import Mock
 
 import aiohttp
-from msmcauth.errors import InvalidCredentials, MsMcAuthException, NotPremium
+from auth.errors import InvalidCredentials, AuthException, NotPremium
 
 from core.cache import Cache
 from core.events import listen_client, listen_server
@@ -120,13 +120,13 @@ class LoginPlugin(Plugin):
 
         try:
             access_token, username, uuid = auth.login(email, password)
-        except InvalidCredentials:
+        except InvalidCredentials as e:
             raise CommandException("Login failed; invalid credentials!")
-        except NotPremium:
+        except NotPremium as e:
             raise CommandException("This account is not premium!")
-        except MsMcAuthException:
+        except AuthException as e:
             raise CommandException(
-                "An unknown error occurred while logging in! Try again?"
+                f"An unknown error occurred while logging in! Try again? {e}"
             )
 
         if username != self.username:
