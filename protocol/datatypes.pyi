@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, Literal, Protocol, TypedDict, Optional, Dict
+from typing import Any, Dict, Literal, Optional, Protocol, TypedDict
 
 from _typeshed import Incomplete
 
