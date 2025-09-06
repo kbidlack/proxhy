@@ -3,11 +3,11 @@ import time
 
 import jwt
 import keyring
-import msmcauth
+import auth
 
 
 def login(email: str, password: str) -> tuple[str, str, str]:
-    access_token, username, uuid = msmcauth.login(email, password)
+    access_token, username, uuid = auth.login(email, password)
 
     # save auth info
     safe_set("proxhy", username, f"{access_token} {email} {uuid}")
@@ -20,6 +20,8 @@ def user_exists(username: str) -> bool:
 
 
 # https://pypi.org/project/msmcauthaio/
+# just kidding not anymore!! now we use our own auth library because we're cool
+# and got chatgpt to make it for us (sunglasses emoji)
 def load_auth_info(username: str = "") -> tuple[str, str, str]:
     record = keyring.get_password("proxhy", username)
     if record is None:
