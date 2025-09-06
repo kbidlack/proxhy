@@ -1,13 +1,12 @@
-
 from __future__ import annotations
 
 import os
 import re
 import time
-from typing import Tuple, Dict
+from typing import Dict, Tuple
 from urllib.parse import parse_qsl, urlsplit
 
-import requests
+import aiohttp
 
 from .errors import AuthException, InvalidCredentials, NotPremium
 
@@ -30,6 +29,7 @@ _MC_ENTITLEMENTS = "https://api.minecraftservices.com/entitlements/mcstore"
 _MC_PROFILE = "https://api.minecraftservices.com/minecraft/profile"
 AUTH_DEBUG = 0  # set to 1 if you want to debug errors
 
+
 def _dbg_dump(name: str, content: str | bytes) -> None:
     # Enable if either env var AUTH_DEBUG is set (not "0") OR the module constant AUTH_DEBUG is truthy
     enabled = os.getenv("AUTH_DEBUG")
@@ -51,7 +51,6 @@ def _dbg_dump(name: str, content: str | bytes) -> None:
         f.write(content)
 
 
-
 def _extract_login_form(html: str) -> tuple[str, str]:
     """
     Extract PPFT and urlPost from multiple known Microsoft variants.
@@ -71,48 +70,63 @@ def _extract_login_form(html: str) -> tuple[str, str]:
         # --- JSON-like ---
         if ppft is None:
             m = re.search(r'"sFTTag"\s*:\s*\{\s*"value"\s*:\s*"([^"]+)"', h)
-            if m: ppft = m.group(1)
+            if m:
+                ppft = m.group(1)
         if urlpost is None:
             m = re.search(r'"urlPost"\s*:\s*"([^"]+)"', h)
-            if m: urlpost = m.group(1)
+            if m:
+                urlpost = m.group(1)
 
         # --- Double-escaped JSON (e.g., \" and \\/ ) ---
         if ppft is None:
             m = re.search(r'\\"sFTTag\\"\s*:\s*\{\s*\\"value\\"\s*:\s*\\"([^"]+)\\"', h)
-            if m: ppft = m.group(1)
+            if m:
+                ppft = m.group(1)
         if urlpost is None:
             m = re.search(r'\\"urlPost\\"\s*:\s*\\"([^"]+)\\"', h)
-            if m: urlpost = m.group(1)
+            if m:
+                urlpost = m.group(1)
 
         # --- JS-like (single quotes) ---
         if ppft is None:
             m = re.search(r"sFTTag\s*:\s*\{\s*value\s*:\s*'([^']+)'", h)
-            if m: ppft = m.group(1)
+            if m:
+                ppft = m.group(1)
         if ppft is None:
             # very old inline pattern: sFTTag:'<input ... value="...">'
             m = re.search(r"sFTTag:\s*'[^>]*\bvalue=\"([^\"]+)\"", h)
-            if m: ppft = m.group(1)
+            if m:
+                ppft = m.group(1)
         if urlpost is None:
             m = re.search(r"urlPost\s*:\s*'([^']+)'", h)
-            if m: urlpost = m.group(1)
+            if m:
+                urlpost = m.group(1)
 
         # --- HTML form fallbacks ---
         if ppft is None:
             m = re.search(r'name="PPFT"[^>]*value="([^"]+)"', h, flags=re.I)
-            if m: ppft = m.group(1)
+            if m:
+                ppft = m.group(1)
         if urlpost is None:
             # Prefer POST action
-            m = re.search(r'<form[^>]+method=["\']post["\'][^>]*action=["\']([^"\']+)["\']', h, flags=re.I)
-            if m: urlpost = m.group(1)
+            m = re.search(
+                r'<form[^>]+method=["\']post["\'][^>]*action=["\']([^"\']+)["\']',
+                h,
+                flags=re.I,
+            )
+            if m:
+                urlpost = m.group(1)
         if urlpost is None:
             # Any form action as last resort
             m = re.search(r'<form[^>]*action=["\']([^"\']+)["\']', h, flags=re.I)
-            if m: urlpost = m.group(1)
+            if m:
+                urlpost = m.group(1)
 
         # --- super loose fallback just in case: look for ppsecure/post.srf in the page ---
         if urlpost is None:
             m = re.search(r'https://login\.live\.com/ppsecure/post\.srf[^"\'<> ]*', h)
-            if m: urlpost = m.group(0)
+            if m:
+                urlpost = m.group(0)
 
         return ppft, urlpost
 
@@ -122,9 +136,9 @@ def _extract_login_form(html: str) -> tuple[str, str]:
     if not (ppft and urlpost):
         unescaped = (
             html.replace("\\u0026", "&")
-                .replace("\\u002F", "/")
-                .replace("\\/", "/")
-                .replace('\\"', '"')
+            .replace("\\u002F", "/")
+            .replace("\\/", "/")
+            .replace('\\"', '"')
         )
         ppft, urlpost = _try_extract(unescaped)
 
@@ -132,11 +146,9 @@ def _extract_login_form(html: str) -> tuple[str, str]:
         raise AuthException(
             "Could not locate PPFT/urlPost on authorize page.",
             code="MSA-FORM-PARSE",
-            detail="Tried JSON/JS/HTML + unescaped variants; also ppsecure/post.srf fallback."
+            detail="Tried JSON/JS/HTML + unescaped variants; also ppsecure/post.srf fallback.",
         )
     return ppft, urlpost
-
-
 
 
 def _parse_fragment(url: str) -> Dict[str, str]:
@@ -146,26 +158,30 @@ def _parse_fragment(url: str) -> Dict[str, str]:
     return dict(parse_qsl(frag))
 
 
-def _follow_for_fragment(session: requests.Session, start_url: str, timeout: float) -> Dict[str, str]:
+async def _follow_for_fragment(
+    session: aiohttp.ClientSession, start_url: str, timeout: float
+) -> Dict[str, str]:
     # Follow up to 10 redirects without auto-redirects so we can read Location fragments.
     url = start_url
     for _ in range(10):
-        r = session.get(url, timeout=timeout, allow_redirects=False)
-        loc = r.headers.get("Location")
-        if not loc:
-            if r.headers.get("Content-Type", "").startswith("text/html"):
-                html = r.text
-                _dbg_dump("desktop_srf.html", html)
-                m = re.search(r"access_token=([^&\"'<>]+)", html)
-                if m:
-                    return {"access_token": m.group(1)}
-            break
-        if "#" in loc and "access_token=" in loc:
-            return _parse_fragment(loc)
-        if not loc.lower().startswith("http"):
-            parts = urlsplit(url)
-            loc = f"{parts.scheme}://{parts.netloc}{loc}"
-        url = loc
+        async with session.get(
+            url, timeout=aiohttp.ClientTimeout(total=timeout), allow_redirects=False
+        ) as r:
+            loc = r.headers.get("Location")
+            if not loc:
+                if r.headers.get("Content-Type", "").startswith("text/html"):
+                    html = await r.text()
+                    _dbg_dump("desktop_srf.html", html)
+                    m = re.search(r"access_token=([^&\"'<>]+)", html)
+                    if m:
+                        return {"access_token": m.group(1)}
+                break
+            if "#" in loc and "access_token=" in loc:
+                return _parse_fragment(loc)
+            if not loc.lower().startswith("http"):
+                parts = urlsplit(url)
+                loc = f"{parts.scheme}://{parts.netloc}{loc}"
+            url = loc
     return {}
 
 
@@ -194,51 +210,71 @@ def _looks_like_interactive_challenge(text: str) -> bool:
     return any(n.lower() in text_lower for n in needles)
 
 
-def _ms_login_with_password(email: str, password: str, timeout: float = 30.0) -> Dict[str, str]:
-    with requests.Session() as s:
-        s.headers.update({
+async def _ms_login_with_password(
+    email: str, password: str, timeout: float = 30.0
+) -> Dict[str, str]:
+    async with aiohttp.ClientSession(
+        headers={
             "User-Agent": "Mozilla/5.0",
             "Accept-Language": "en-US,en;q=0.9",
-        })
-        r = s.get(_LIVE_AUTHORIZE, timeout=timeout, allow_redirects=True)
-        r.raise_for_status()
-        ppft, urlpost = _extract_login_form(r.text)
+        }
+    ) as session:
+        async with session.get(
+            _LIVE_AUTHORIZE, timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as r:
+            r.raise_for_status()
+            html = await r.text()
+            ppft, urlpost = _extract_login_form(html)
 
         data = {"login": email, "loginfmt": email, "passwd": password, "PPFT": ppft}
-        r2 = s.post(urlpost, data=data, timeout=timeout, allow_redirects=True)
-        txt = r2.text or ""
-        _dbg_dump("post_resp.html", txt)
+        async with session.post(
+            urlpost, data=data, timeout=aiohttp.ClientTimeout(total=timeout)
+        ) as r2:
+            txt = await r2.text() or ""
+            _dbg_dump("post_resp.html", txt)
 
-        if _looks_like_password_error(txt):
-            raise InvalidCredentials("Your account or password is incorrect.", code="MSA-WRONG-PASSWORD")
+            if _looks_like_password_error(txt):
+                raise InvalidCredentials(
+                    "Your account or password is incorrect.", code="MSA-WRONG-PASSWORD"
+                )
 
-        if _looks_like_interactive_challenge(txt):
-            # Cannot complete interactive steps in a headless/password-only flow.
-            raise InvalidCredentials("Account requires interactive verification (2FA/KMSI/CAPTCHA).", code="MSA-INTERACTIVE")
+            if _looks_like_interactive_challenge(txt):
+                # Cannot complete interactive steps in a headless/password-only flow.
+                raise InvalidCredentials(
+                    "Account requires interactive verification (2FA/KMSI/CAPTCHA).",
+                    code="MSA-INTERACTIVE",
+                )
 
-        # 1) Check redirect history for a fragment
-        for h in r2.history + [r2]:
-            loc = getattr(h, "headers", {}).get("Location")
-            if loc and "#" in loc and "access_token=" in loc:
-                return _parse_fragment(loc)
+            # 1) Check redirect history for a fragment
+            for h in list(r2.history) + [r2]:
+                loc = getattr(h, "headers", {}).get("Location")
+                if loc and "#" in loc and "access_token=" in loc:
+                    return _parse_fragment(loc)
 
-        # 2) Check the URL itself
-        if "#" in r2.url:
-            frag = _parse_fragment(r2.url)
+            # 2) Check the URL itself
+            if "#" in str(r2.url):
+                frag = _parse_fragment(str(r2.url))
+                if "access_token" in frag:
+                    return frag
+
+            # 3) Manually re-follow to capture Location fragments
+            frag = await _follow_for_fragment(session, _LIVE_AUTHORIZE, timeout=timeout)
             if "access_token" in frag:
                 return frag
 
-        # 3) Manually re-follow to capture Location fragments
-        frag = _follow_for_fragment(s, _LIVE_AUTHORIZE, timeout=timeout)
-        if "access_token" in frag:
-            return frag
-
-        # No token visible
-        raise AuthException("Microsoft login finished without returning an access_token.", code="MSA-NO-TOKEN")
+            # No token visible
+            raise AuthException(
+                "Microsoft login finished without returning an access_token.",
+                code="MSA-NO-TOKEN",
+            )
 
 
-def _xbox_live_auth(ms_access_token: str, timeout: float = 15.0) -> tuple[str, str]:
-    def do_req(ticket: str) -> requests.Response:
+async def _xbox_live_auth(
+    ms_access_token: str, timeout: float = 15.0
+) -> tuple[str, str]:
+    async def do_req(
+        session: aiohttp.ClientSession, ticket: str
+    ) -> aiohttp.ClientResponse:
         payload = {
             "Properties": {
                 "AuthMethod": "RPS",
@@ -248,125 +284,184 @@ def _xbox_live_auth(ms_access_token: str, timeout: float = 15.0) -> tuple[str, s
             "RelyingParty": "http://auth.xboxlive.com",
             "TokenType": "JWT",
         }
-        return requests.post(
+        return await session.post(
             _XBL_USER_AUTH,
             json=payload,
             headers={"Content-Type": "application/json", "Accept": "application/json"},
-            timeout=timeout,
+            timeout=aiohttp.ClientTimeout(total=timeout),
         )
 
-    last = None
-    for ticket in (f"d={ms_access_token}", ms_access_token):
-        r = do_req(ticket)
-        last = r
-        if r.ok:
-            data = r.json()
-            token = data.get("Token")
-            try:
-                uhs = data["DisplayClaims"]["xui"][0]["uhs"]
-            except Exception as e:
-                raise AuthException(f"Xbox Live response missing user hash: {e}", code="XBL-MALFORMED")
-            if not token or not uhs:
-                raise AuthException("Xbox Live response missing token/uhs.", code="XBL-MALFORMED")
-            return token, uhs
+    async with aiohttp.ClientSession() as session:
+        last_response = None
+        for ticket in (f"d={ms_access_token}", ms_access_token):
+            async with await do_req(session, ticket) as r:
+                last_response = r
+                if r.ok:
+                    data = await r.json()
+                    token = data.get("Token")
+                    try:
+                        uhs = data["DisplayClaims"]["xui"][0]["uhs"]
+                    except Exception as e:
+                        raise AuthException(
+                            f"Xbox Live response missing user hash: {e}",
+                            code="XBL-MALFORMED",
+                        )
+                    if not token or not uhs:
+                        raise AuthException(
+                            "Xbox Live response missing token/uhs.",
+                            code="XBL-MALFORMED",
+                        )
+                    return token, uhs
 
-    try:
-        detail = last.json()
-    except Exception:
-        detail = last.text if last is not None else "no response"
-    raise AuthException("Xbox Live authentication failed.", code="XBL-FAILED", detail=str(detail))
+        try:
+            detail = await last_response.json() if last_response else None
+        except Exception:
+            detail = await last_response.text() if last_response else "no response"
+        raise AuthException(
+            "Xbox Live authentication failed.", code="XBL-FAILED", detail=str(detail)
+        )
 
 
-def _xsts_authorize(xbl_token: str, timeout: float = 15.0) -> tuple[str, str]:
+async def _xsts_authorize(xbl_token: str, timeout: float = 15.0) -> tuple[str, str]:
     payload = {
         "Properties": {"SandboxId": "RETAIL", "UserTokens": [xbl_token]},
         "RelyingParty": "rp://api.minecraftservices.com/",
         "TokenType": "JWT",
     }
-    r = requests.post(
-        _XSTS_AUTHORIZE,
-        json=payload,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
-        timeout=timeout,
-    )
-    if r.status_code == 401:
-        try:
-            data = r.json()
-            xerr = data.get("XErr")
-        except Exception:
-            xerr = None
-        if xerr == 2148916238:
-            raise AuthException("Xbox Live: child account; must be added to a family.", code="XSTS-CHILD")
-        if xerr == 2148916233:
-            raise AuthException("Xbox Live: no Xbox profile; sign in to Xbox once then retry.", code="XSTS-NOPROFILE")
-        raise AuthException("XSTS authorization failed (401).", code="XSTS-401")
-    r.raise_for_status()
-    data = r.json()
-    token = data.get("Token")
-    try:
-        uhs = data["DisplayClaims"]["xui"][0]["uhs"]
-    except Exception as e:
-        raise AuthException(f"XSTS response missing user hash: {e}", code="XSTS-MALFORMED")
-    if not token:
-        raise AuthException("XSTS response missing token.", code="XSTS-MALFORMED")
-    return token, uhs
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            _XSTS_AUTHORIZE,
+            json=payload,
+            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as r:
+            if r.status == 401:
+                try:
+                    data = await r.json()
+                    xerr = data.get("XErr")
+                except Exception:
+                    xerr = None
+                if xerr == 2148916238:
+                    raise AuthException(
+                        "Xbox Live: child account; must be added to a family.",
+                        code="XSTS-CHILD",
+                    )
+                if xerr == 2148916233:
+                    raise AuthException(
+                        "Xbox Live: no Xbox profile; sign in to Xbox once then retry.",
+                        code="XSTS-NOPROFILE",
+                    )
+                raise AuthException("XSTS authorization failed (401).", code="XSTS-401")
+            r.raise_for_status()
+            data = await r.json()
+            token = data.get("Token")
+            try:
+                uhs = data["DisplayClaims"]["xui"][0]["uhs"]
+            except Exception as e:
+                raise AuthException(
+                    f"XSTS response missing user hash: {e}", code="XSTS-MALFORMED"
+                )
+            if not token:
+                raise AuthException(
+                    "XSTS response missing token.", code="XSTS-MALFORMED"
+                )
+            return token, uhs
 
 
-def _mc_login_with_xbox(uhs: str, xsts_token: str, timeout: float = 15.0) -> str:
+async def _mc_login_with_xbox(uhs: str, xsts_token: str, timeout: float = 15.0) -> str:
     ident = f"XBL3.0 x={uhs};{xsts_token}"
     payload = {"identityToken": ident, "ensureLegacyEnabled": True}
-    r = requests.post(
-        _MC_LOGIN_WITH_XBOX,
-        json=payload,
-        headers={"Content-Type": "application/json"},
-        timeout=timeout,
-    )
-    if not r.ok:
-        raise AuthException(f"Minecraft login_with_xbox failed: {r.status_code}", code="MC-LOGIN", detail=r.text)
-    data = r.json()
-    access = data.get("access_token")
-    if not access:
-        raise AuthException("Minecraft login did not return access_token.", code="MC-LOGIN-MALFORMED")
-    return access
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            _MC_LOGIN_WITH_XBOX,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as r:
+            if not r.ok:
+                error_text = await r.text()
+                raise AuthException(
+                    f"Minecraft login_with_xbox failed: {r.status}",
+                    code="MC-LOGIN",
+                    detail=error_text,
+                )
+            data = await r.json()
+            access = data.get("access_token")
+            if not access:
+                raise AuthException(
+                    "Minecraft login did not return access_token.",
+                    code="MC-LOGIN-MALFORMED",
+                )
+            return access
 
 
-def _mc_check_ownership(mc_access_token: str, timeout: float = 15.0) -> bool:
-    r = requests.get(_MC_ENTITLEMENTS, headers={"Authorization": f"Bearer {mc_access_token}"}, timeout=timeout)
-    if not r.ok:
-        try:
-            detail = r.json()
-        except Exception:
-            detail = r.text
-        raise AuthException("Entitlements check failed.", code="MC-ENTITLEMENTS", detail=str(detail))
-    data = r.json()
-    items = data.get("items") or []
-    return any(it.get("name") in ("product_minecraft", "game_minecraft") for it in items) or bool(items)
+async def _mc_check_ownership(mc_access_token: str, timeout: float = 15.0) -> bool:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            _MC_ENTITLEMENTS,
+            headers={"Authorization": f"Bearer {mc_access_token}"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as r:
+            if not r.ok:
+                try:
+                    detail = await r.json()
+                except Exception:
+                    detail = await r.text()
+                raise AuthException(
+                    "Entitlements check failed.",
+                    code="MC-ENTITLEMENTS",
+                    detail=str(detail),
+                )
+            data = await r.json()
+            items = data.get("items") or []
+            return any(
+                it.get("name") in ("product_minecraft", "game_minecraft")
+                for it in items
+            ) or bool(items)
 
 
-def _mc_profile(mc_access_token: str, timeout: float = 15.0) -> tuple[str, str]:
-    r = requests.get(_MC_PROFILE, headers={"Authorization": f"Bearer {mc_access_token}"}, timeout=timeout)
-    if r.status_code == 404:
-        raise NotPremium("Minecraft profile not found; account may not own Java Edition.", code="MC-NOT-PREMIUM")
-    if not r.ok:
-        try:
-            detail = r.json()
-        except Exception:
-            detail = r.text
-        raise AuthException("Failed to fetch Minecraft profile.", code="MC-PROFILE", detail=str(detail))
-    data = r.json()
-    return data.get("name", ""), data.get("id", "")
+async def _mc_profile(mc_access_token: str, timeout: float = 15.0) -> tuple[str, str]:
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            _MC_PROFILE,
+            headers={"Authorization": f"Bearer {mc_access_token}"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as r:
+            if r.status == 404:
+                raise NotPremium(
+                    "Minecraft profile not found; account may not own Java Edition.",
+                    code="MC-NOT-PREMIUM",
+                )
+            if not r.ok:
+                try:
+                    detail = await r.json()
+                except Exception:
+                    detail = await r.text()
+                raise AuthException(
+                    "Failed to fetch Minecraft profile.",
+                    code="MC-PROFILE",
+                    detail=str(detail),
+                )
+            data = await r.json()
+            return data.get("name", ""), data.get("id", "")
 
 
-def login(email: str, password: str) -> Tuple[str, str, str]:
-    token_data = _ms_login_with_password(email, password)
-    xbl_token, _ = _xbox_live_auth(token_data["access_token"])
-    xsts_token, uhs = _xsts_authorize(xbl_token)
-    mc_access_token = _mc_login_with_xbox(uhs, xsts_token)
+async def login(email: str, password: str) -> Tuple[str, str, str]:
+    token_data = await _ms_login_with_password(email, password)
+    xbl_token, _ = await _xbox_live_auth(token_data["access_token"])
+    xsts_token, uhs = await _xsts_authorize(xbl_token)
+    mc_access_token = await _mc_login_with_xbox(uhs, xsts_token)
 
-    if not _mc_check_ownership(mc_access_token):
-        raise NotPremium("This Microsoft account does not own Minecraft: Java Edition.", code="MC-NOT-PREMIUM")
+    if not await _mc_check_ownership(mc_access_token):
+        raise NotPremium(
+            "This Microsoft account does not own Minecraft: Java Edition.",
+            code="MC-NOT-PREMIUM",
+        )
 
-    username, uuid_ = _mc_profile(mc_access_token)
+    username, uuid_ = await _mc_profile(mc_access_token)
     if not username or not uuid_:
-        raise AuthException("Minecraft profile incomplete (missing name/id).", code="MC-PROFILE-INCOMPLETE")
+        raise AuthException(
+            "Minecraft profile incomplete (missing name/id).",
+            code="MC-PROFILE-INCOMPLETE",
+        )
     return mc_access_token, username, uuid_
