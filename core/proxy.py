@@ -43,6 +43,7 @@ class Proxy:
 
         self.state = State.HANDSHAKING
         self.open = True
+        self.closed = asyncio.Event()
 
         self.CONNECT_HOST = connect_host
 
@@ -158,3 +159,5 @@ class Proxy:
             pass
 
         self.client.close()
+
+        self.closed.set()
