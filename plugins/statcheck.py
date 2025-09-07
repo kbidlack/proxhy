@@ -1186,6 +1186,7 @@ class StatCheckPlugin(Plugin):
         self._api_key_validated_at = asyncio.get_event_loop().time()
 
         api_key_msg = TextComponent("Updated API Key!").color("green")
+        self.game_error = None
         self.client.chat(api_key_msg)
 
         await self._update_stats()
