@@ -749,13 +749,12 @@ class StatCheckPlugin(Plugin):
         empty_team_dialogue_first = (
             TextComponent(f"{first_rush.upper()} TEAM")
             .color(first_rush)  # type: ignore
-            .append(" is empty!")
-            .color("red")
+            .appends(TextComponent("is empty!").color("red"))
         )
         empty_team_dialogue_alt = (
             TextComponent(f"{other_adjacent_rush.upper()} TEAM")
             .color(other_adjacent_rush)  # type: ignore
-            .append(TextComponent(" is empty!").color("red"))
+            .appends(TextComponent("is empty!").color("red"))
         )
 
         # key to sort player stats with sorted()
@@ -865,15 +864,12 @@ class StatCheckPlugin(Plugin):
     def reset_title(self):
         self.client.send_packet(0x45, VarInt(4))
 
-    def get_adjacent_teams(self, username=None) -> tuple[str, str]:
+    def get_adjacent_teams(self) -> tuple[str, str]:
         """
         Returns (side_rush, alt_rush) teams
         """
-        # TODO: if the player rejoins as a spectator, this is invoked but they're not on a team so we get a keyerror when team is ""
-        name = username if username else self.username
-        team = self.get_team_color_name(
-            name
-        ).lower()  # will raise valueerror if player is not on a team; handle!
+        team = self.get_own_team_color().lower()
+        # will raise valueerror if player is not on a team; handle!
 
         side_rush = RUSH_MAPPINGS["default_mappings"]["side_rushes"][team]
         alt_rush = RUSH_MAPPINGS["default_mappings"]["alt_rushes"][team]
@@ -951,36 +947,37 @@ class StatCheckPlugin(Plugin):
             # print(f"Error writing stat log: {e}")
             pass  # TODO: log this
 
+    def get_own_team_color(self) -> str:
+        """Returns stripped team color, like 'green' or 'pink'."""
+        try:
+            own_team = self.get_team_color_name(self.username)  # mostly works
+            if own_team:  # fails if spectator
+                return own_team
+        except ValueError:
+            pass  # nicked player probably
+
+        sidebar_own_team = next(
+            (team for team in self.teams if "YOU" in team.suffix), None
+        )
+        if sidebar_own_team is None:
+            own_team_color = ""  # this shouldn't happen
+        else:
+            match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
+            if match_:
+                own_team_color = match_.group(1)
+            else:
+                own_team_color = ""  # this also shouldn't happen
+        return own_team_color
+
     async def stat_highlights(self):
         """Display top 3 enemy players and nicked players."""
         if not self.players_with_stats:
             return "No stats found!"
 
-        own_team = self.get_team(self.username)
+        own_team_color = self.get_own_team_color()
 
         # find team color as str (e.g. Pink, Blue, etc.)
         # TODO: move to method?
-        if own_team is not None:
-            # teams in bedwars are like:
-            # Pink8, Blue7, Green3, etc. per player
-            # so pink team might have two players in teams Pink8 and Pink9
-            own_team_color = re.sub(r"\d", "", own_team.name)
-        else:
-            # fall back team in sidebar
-            # this might happen, for example, if player is in spec
-            # since the above player teams do not apply in spec mode
-            # so we look for "YOU" in sidebar
-            sidebar_own_team = next(
-                (team for team in self.teams if "YOU" in team.suffix), None
-            )
-            if sidebar_own_team is None:
-                own_team_color = ""  # this shouldn't happen
-            else:
-                match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
-                if match_:
-                    own_team_color = match_.group(1)
-                else:
-                    own_team_color = ""  # this also shouldn't happen
 
         enemy_players = []
         enemy_nicks = []
