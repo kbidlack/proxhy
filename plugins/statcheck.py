@@ -210,7 +210,11 @@ class StatCheckPlugin(Plugin):
             pass  # TODO: log
 
     async def _sc_internal(
-        self, ign=None, mode=None, window=None, *stats
+        self,
+        ign: str = "",
+        mode: str = "bedwars",
+        window: Optional[float] = -1.0,
+        *stats,
     ):  # display_abridged=True
         """
         Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
@@ -233,13 +237,14 @@ class StatCheckPlugin(Plugin):
                     f"Received type {type(window)} for time window; could not convert to float."
                 )
 
+        if window == -1.0:
+            window = None
+
         # Use player's name and assume gamemode is bedwars.
         ign = ign or self.username
 
-        if (Gamemode(mode) or "bedwars") != "bedwars":
+        if (gamemode := Gamemode(mode)) != "bedwars":
             raise CommandException("Currently only Bedwars stats are supported!")
-
-        gamemode = "bedwars"
 
         # verify stats
         if not stats:
@@ -491,12 +496,14 @@ class StatCheckPlugin(Plugin):
         return fplayer.format_stats(gamemode, *stats).hover_text(hover_text)
 
     @command("sc")
-    async def statcheck(self, ign=None, mode=None, window=None, *stats):
+    async def statcheck(
+        self, ign: str = "", mode: str = "bedwars", window: float = -1.0, *stats: str
+    ):
         return await self._sc_internal(ign, mode, window, *stats)
 
     @command("scw")
-    async def scweekly(self, ign=None, mode=None, *stats):
-        return await self._sc_internal(ign, mode, 7, *stats)
+    async def scweekly(self, ign: str = "", mode: str = "bedwars", *stats: str):
+        return await self._sc_internal(ign, mode, 7.0, *stats)
 
     # @command("scfull")
     # async def statcheckfull(self, ign=None, mode=None, window=None, *stats):
