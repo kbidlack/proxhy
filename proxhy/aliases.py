@@ -1,4 +1,4 @@
-# i lwk forgor if we even use this file anymore
+from typing import Optional
 
 
 class Gamemode:
@@ -8,7 +8,7 @@ class Gamemode:
         "skywars": frozenset({"skywars", "sw", "s"}),
     }
 
-    def __new__(cls, value: str | None):
+    def __new__(cls, value: str | None) -> Optional[str]:
         value = value or ""  # .casefold() doesn't work on None
         gamemode = (g for g, a in cls.gamemodes.items() if value.casefold() in a)
         return next(gamemode, None)
