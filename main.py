@@ -1,6 +1,6 @@
 import argparse
 import asyncio
-import signal  # noqa: F401
+import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
@@ -108,35 +108,39 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     return server
 
 
-# Function to handle graceful shutdown
 async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
+    """Handle graceful shutdown with force option on second interrupt."""
     server.num_cancels += 1
 
     if server.num_cancels > 1:
+        print("\nForcing shutdown...", end=" ", flush=True)
         for instance in instances:
             await instance.close()
         loop.stop()
-    elif server.num_cancels <= 1:
-        if instances:
-            print("\nWaiting for all clients to disconnect...", end="")
-            # Close the server
-            server.close()
-            await server.wait_closed()
-            print("done!")
-        else:
-            server.close()
-            await server.wait_closed()
+        print("done!")
+        return
+
+    if instances:
+        print("Waiting for all clients to disconnect...", end="", flush=True)
+        for instance in instances:
+            await instance.closed.wait()
+        print("done!")
+    else:
+        print("Shutting down...", end=" ", flush=True)
+        server.close()
+        await server.wait_closed()
+        print("done!")
+
+    loop.stop()
 
 
 # Main entry point
 async def _main():
-    # loop = asyncio.get_running_loop()
-    # loop.add_signal_handler(
-    #     signal.SIGINT,
-    #     lambda: asyncio.create_task(shutdown(loop, server, signal.SIGINT)),
-    # )
-    # this doesn't work on windows
-    # and i'm not going to fix it :D
+    loop = asyncio.get_running_loop()
+    loop.add_signal_handler(
+        signal.SIGINT,
+        lambda: asyncio.create_task(shutdown(loop, server, signal.SIGINT)),
+    )
 
     try:
         server = await start(
