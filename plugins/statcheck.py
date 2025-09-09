@@ -38,7 +38,7 @@ from proxhy.aliases import Gamemode
 from proxhy.errors import CommandException
 from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from proxhy.mcmodels import Game, Nick, Team, Teams
-from proxhy.settings import Settings
+from proxhy.settings import ProxhySettings
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 with open(ASSETS_DIR / "bedwars_maps.json", "r", encoding="utf-8") as f:
@@ -69,7 +69,7 @@ COLOR_CODE = re.compile(r"(§[0-9a-fk-or])", re.IGNORECASE)
 class StatCheckPlugin(Plugin):
     teams: Teams
     game: Game
-    settings: Settings
+    settings: ProxhySettings
     received_who: asyncio.Event
     username: str
     received_locraw: asyncio.Event
@@ -558,8 +558,8 @@ class StatCheckPlugin(Plugin):
 
             if not any(
                 (
-                    self.settings.bedwars.tablist.show_stats.state != "OFF",
-                    self.settings.bedwars.display_top_stats.state != "OFF",
+                    self.settings.bedwars.tablist.show_stats.get() != "OFF",
+                    self.settings.bedwars.display_top_stats.get() != "OFF",
                 )
             ):
                 return
@@ -650,7 +650,7 @@ class StatCheckPlugin(Plugin):
                         # is currently supported. but... futureproofing !!!
                         if self.game.gametype == "bedwars":
                             show_rankname = (
-                                self.settings.bedwars.tablist.show_rankname.state
+                                self.settings.bedwars.tablist.show_rankname.get()
                             )
                             color_code = self.get_team_color_code(fplayer.raw_name)
                             display_name = " ".join(
@@ -705,7 +705,7 @@ class StatCheckPlugin(Plugin):
                         }
                     )
 
-                    if self.settings.bedwars.tablist.show_stats.state == "ON":
+                    if self.settings.bedwars.tablist.show_stats.get() == "ON":
                         self.client.send_packet(
                             0x38,
                             VarInt(3),
@@ -716,7 +716,7 @@ class StatCheckPlugin(Plugin):
                         )
 
         # if we've gotten everyone from /who, stat highlights can be called
-        if self.settings.bedwars.display_top_stats.state != "OFF":
+        if self.settings.bedwars.display_top_stats.get() != "OFF":
             if not self.stats_highlighted:
                 await self.stat_highlights()
                 self.stats_highlighted = True
@@ -724,7 +724,7 @@ class StatCheckPlugin(Plugin):
         # get first rush stats
         # there's no well-defined first rush for 3s/4s so we only do this for solos and doubles
         if (
-            self.settings.bedwars.announce_first_rush.state != "OFF"
+            self.settings.bedwars.announce_first_rush.get() != "OFF"
             and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
         ):
             if not self.adjacent_teams_highlighted:
@@ -766,15 +766,15 @@ class StatCheckPlugin(Plugin):
 
         # key to sort player stats with sorted()
         key: Callable[[FormattedPlayer], float]
-        if self.settings.bedwars.display_top_stats.state in {"OFF", "INDEX"}:
+        if self.settings.bedwars.display_top_stats.get() in {"OFF", "INDEX"}:
             key = lambda fp: fp.bedwars.raw_fkdr**2 * fp.bedwars.raw_level  # noqa: E731
-        elif self.settings.bedwars.display_top_stats.state == "STAR":
+        elif self.settings.bedwars.display_top_stats.get() == "STAR":
             key = lambda fp: fp.bedwars.raw_level  # noqa: E731
-        elif self.settings.bedwars.display_top_stats.state == "FKDR":
+        elif self.settings.bedwars.display_top_stats.get() == "FKDR":
             key = lambda fp: fp.bedwars.raw_fkdr  # noqa: E731
         else:
             raise ValueError(
-                f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.state} instead.'
+                f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.get()} instead.'
             )
 
         subtitle = None
@@ -804,7 +804,7 @@ class StatCheckPlugin(Plugin):
                 else:
                     title = self.players_with_stats[better.name][1]
 
-                if self.settings.bedwars.announce_first_rush.state == "FIRST RUSH":
+                if self.settings.bedwars.announce_first_rush.get() == "FIRST RUSH":
                     # if we aren't showing alt rush team stats, we can show both players from first rush
                     if isinstance(worse, FormattedPlayer):
                         subtitle = self.players_with_stats[worse.raw_name][1]
@@ -815,7 +815,7 @@ class StatCheckPlugin(Plugin):
                     f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
                 )
 
-        if self.settings.bedwars.announce_first_rush.state == "BOTH ADJACENT":
+        if self.settings.bedwars.announce_first_rush.get() == "BOTH ADJACENT":
             match len(other_adjacent_players):
                 case 0:
                     subtitle = empty_team_dialogue_alt
@@ -1020,11 +1020,11 @@ class StatCheckPlugin(Plugin):
                 fkdr = int(fplayer.bedwars.raw_fkdr)
                 stars = int(fplayer.bedwars.raw_level)
 
-                if self.settings.bedwars.display_top_stats.state == "FKDR":
+                if self.settings.bedwars.display_top_stats.get() == "FKDR":
                     rank_value = fkdr
-                elif self.settings.bedwars.display_top_stats.state == "STARS":
+                elif self.settings.bedwars.display_top_stats.get() == "STARS":
                     rank_value = stars
-                elif self.settings.bedwars.display_top_stats.state == "INDEX":
+                elif self.settings.bedwars.display_top_stats.get() == "INDEX":
                     rank_value = fkdr * stars
                 else:
                     rank_value = fkdr
@@ -1087,7 +1087,7 @@ class StatCheckPlugin(Plugin):
         # make sure player stats stays updated
         # hypixel resets sometimes
         n_players = len(self.players_with_stats.values())
-        if self.settings.bedwars.tablist.show_stats.state == "ON":
+        if self.settings.bedwars.tablist.show_stats.get() == "ON":
             self.client.send_packet(
                 0x38,
                 VarInt(3),
@@ -1101,7 +1101,7 @@ class StatCheckPlugin(Plugin):
     @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
     async def on_queue(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
-        if self.settings.bedwars.api_key_reminder.state == "ON":
+        if self.settings.bedwars.api_key_reminder.get() == "ON":
             raw = buff.unpack(Chat)
             plain = COLOR_CODE_RE.sub("", raw)
 
@@ -1160,12 +1160,12 @@ class StatCheckPlugin(Plugin):
         if self.game.gametype != "bedwars" or self.stats_highlighted:
             return self.client.send_packet(0x02, buff.getvalue())
 
-        if self.settings.bedwars.display_top_stats.state == "OFF":
+        if self.settings.bedwars.display_top_stats.get() == "OFF":
             self.client.send_packet(0x02, buff.getvalue())
 
         if message == game_start_msgs[-2]:
             # replace them with the statcheck overview
-            if self.settings.bedwars.display_top_stats.state != "OFF":
+            if self.settings.bedwars.display_top_stats.get() != "OFF":
                 self.client.chat(
                     TextComponent("Fetching top stats...").color("gold").bold()
                 )
