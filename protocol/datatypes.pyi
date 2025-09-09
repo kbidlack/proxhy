@@ -12,6 +12,25 @@ from _typeshed import Incomplete
 class AsyncReader[T](Protocol):
     async def read(self, n: int = -1) -> T: ...
 
+type Color_T = Literal[
+    "black",
+    "dark_blue",
+    "dark_green",
+    "dark_aqua",
+    "dark_red",
+    "dark_purple",
+    "gold",
+    "gray",
+    "dark_gray",
+    "blue",
+    "green",
+    "aqua",
+    "red",
+    "light_purple",
+    "yellow",
+    "white",
+]
+
 @dataclass
 class Pos:
     x: int = ...
@@ -140,24 +159,7 @@ class TextComponent:
     ) -> TextComponent: ...
     def color(
         self,
-        color: Literal[
-            "black",
-            "dark_blue",
-            "dark_green",
-            "dark_aqua",
-            "dark_red",
-            "dark_purple",
-            "gold",
-            "gray",
-            "dark_gray",
-            "blue",
-            "green",
-            "aqua",
-            "red",
-            "light_purple",
-            "yellow",
-            "white",
-        ],
+        color: Color_T,
     ) -> TextComponent: ...
     def font(self, font: str) -> TextComponent: ...
     def bold(self, bold: bool = True) -> TextComponent: ...

@@ -20,12 +20,13 @@ from protocol.datatypes import (
     String,
     UnsignedByte,
 )
-from proxhy.settings import Settings
+from proxhy.settings import ProxhySettings
 
 
 class WindowPlugin(Plugin):
+    settings: ProxhySettings
+
     def _init_window(self):
-        self.settings = Settings()
         self.windows: dict[int, Window] = {}
 
     @listen_client(0x0D)
