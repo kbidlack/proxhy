@@ -3,12 +3,22 @@ from __future__ import annotations
 import os
 import re
 import time
-from typing import Dict, Tuple
+from typing import Dict, TypedDict
 from urllib.parse import parse_qsl, urlsplit
 
 import aiohttp
 
 from .errors import AuthException, InvalidCredentials, NotPremium
+
+
+class LoginResult(TypedDict):
+    """Result of a successful login operation."""
+
+    access_token: str
+    username: str
+    uuid: str
+    refresh_token: str
+
 
 # Endpoints
 _LIVE_AUTHORIZE = (
@@ -155,7 +165,17 @@ def _parse_fragment(url: str) -> Dict[str, str]:
     if "#" not in url:
         return {}
     frag = url.split("#", 1)[1]
-    return dict(parse_qsl(frag))
+    parsed = dict(parse_qsl(frag))
+    # URL decode the tokens if present
+    if "access_token" in parsed:
+        from urllib.parse import unquote
+
+        parsed["access_token"] = unquote(parsed["access_token"])
+    if "refresh_token" in parsed:
+        from urllib.parse import unquote
+
+        parsed["refresh_token"] = unquote(parsed["refresh_token"])
+    return parsed
 
 
 async def _follow_for_fragment(
@@ -174,7 +194,12 @@ async def _follow_for_fragment(
                     _dbg_dump("desktop_srf.html", html)
                     m = re.search(r"access_token=([^&\"'<>]+)", html)
                     if m:
-                        return {"access_token": m.group(1)}
+                        result = {"access_token": m.group(1)}
+                        # Also look for refresh token
+                        m_refresh = re.search(r"refresh_token=([^&\"'<>]+)", html)
+                        if m_refresh:
+                            result["refresh_token"] = m_refresh.group(1)
+                        return result
                 break
             if "#" in loc and "access_token=" in loc:
                 return _parse_fragment(loc)
@@ -267,6 +292,86 @@ async def _ms_login_with_password(
                 "Microsoft login finished without returning an access_token.",
                 code="MSA-NO-TOKEN",
             )
+
+
+async def refresh_ms_token(refresh_token: str, timeout: float = 30.0) -> Dict[str, str]:
+    """
+    Refresh a Microsoft access token using a refresh token.
+
+    Args:
+        refresh_token: The refresh token obtained from a previous login
+        timeout: Request timeout in seconds
+
+    Returns:
+        Dictionary containing the new access_token and potentially a new refresh_token
+
+    Raises:
+        AuthException: If the refresh fails
+        InvalidCredentials: If the refresh token is invalid
+    """
+    # For the password flow, we need to use the token refresh endpoint
+    refresh_url = "https://login.live.com/oauth20_token.srf"
+
+    data = {
+        "client_id": "000000004C12AE6F",
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "redirect_uri": "https://login.live.com/oauth20_desktop.srf",
+        "scope": "service::user.auth.xboxlive.com::MBI_SSL",
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            refresh_url,
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as r:
+            if r.status == 400:
+                try:
+                    error_data = await r.json()
+                    error_desc = error_data.get("error_description", "")
+                    if (
+                        "invalid_grant" in error_desc.lower()
+                        or "expired" in error_desc.lower()
+                    ):
+                        raise InvalidCredentials(
+                            "Refresh token is invalid or expired.",
+                            code="MSA-REFRESH-EXPIRED",
+                        )
+                except Exception:
+                    pass
+                raise InvalidCredentials(
+                    "Failed to refresh token: invalid refresh token.",
+                    code="MSA-REFRESH-INVALID",
+                )
+
+            if not r.ok:
+                try:
+                    detail = await r.json()
+                except Exception:
+                    detail = await r.text()
+                raise AuthException(
+                    f"Token refresh failed: {r.status}",
+                    code="MSA-REFRESH-FAILED",
+                    detail=str(detail),
+                )
+
+            data = await r.json()
+            result = {}
+
+            if "access_token" in data:
+                result["access_token"] = data["access_token"]
+            if "refresh_token" in data:
+                result["refresh_token"] = data["refresh_token"]
+
+            if not result.get("access_token"):
+                raise AuthException(
+                    "Refresh response missing access_token.",
+                    code="MSA-REFRESH-MALFORMED",
+                )
+
+            return result
 
 
 async def _xbox_live_auth(
@@ -446,7 +551,26 @@ async def _mc_profile(mc_access_token: str, timeout: float = 15.0) -> tuple[str,
             return data.get("name", ""), data.get("id", "")
 
 
-async def login(email: str, password: str) -> Tuple[str, str, str]:
+async def login(email: str, password: str) -> LoginResult:
+    """
+    Login with Microsoft account credentials.
+
+    Args:
+        email: Microsoft account email
+        password: Microsoft account password
+
+    Returns:
+        Dictionary containing:
+        - access_token: Minecraft access token
+        - username: Minecraft username
+        - uuid: Minecraft UUID
+        - refresh_token: Microsoft refresh token (may be empty if not provided)
+
+    Raises:
+        AuthException: If authentication fails
+        InvalidCredentials: If credentials are invalid
+        NotPremium: If the account doesn't own Minecraft
+    """
     token_data = await _ms_login_with_password(email, password)
     xbl_token, _ = await _xbox_live_auth(token_data["access_token"])
     xsts_token, uhs = await _xsts_authorize(xbl_token)
@@ -464,4 +588,55 @@ async def login(email: str, password: str) -> Tuple[str, str, str]:
             "Minecraft profile incomplete (missing name/id).",
             code="MC-PROFILE-INCOMPLETE",
         )
-    return mc_access_token, username, uuid_
+
+    return {
+        "access_token": mc_access_token,
+        "username": username,
+        "uuid": uuid_,
+        "refresh_token": token_data.get("refresh_token", ""),
+    }
+
+
+async def login_with_refresh_token(refresh_token: str) -> LoginResult:
+    """
+    Login using a refresh token instead of email/password.
+
+    Args:
+        refresh_token: The refresh token from a previous login
+
+    Returns:
+        Dictionary containing:
+        - access_token: Minecraft access token
+        - username: Minecraft username
+        - uuid: Minecraft UUID
+        - refresh_token: New Microsoft refresh token (may be empty if not provided)
+
+    Raises:
+        AuthException: If authentication fails
+        InvalidCredentials: If the refresh token is invalid
+        NotPremium: If the account doesn't own Minecraft
+    """
+    token_data = await refresh_ms_token(refresh_token)
+    xbl_token, _ = await _xbox_live_auth(token_data["access_token"])
+    xsts_token, uhs = await _xsts_authorize(xbl_token)
+    mc_access_token = await _mc_login_with_xbox(uhs, xsts_token)
+
+    if not await _mc_check_ownership(mc_access_token):
+        raise NotPremium(
+            "This Microsoft account does not own Minecraft: Java Edition.",
+            code="MC-NOT-PREMIUM",
+        )
+
+    username, uuid_ = await _mc_profile(mc_access_token)
+    if not username or not uuid_:
+        raise AuthException(
+            "Minecraft profile incomplete (missing name/id).",
+            code="MC-PROFILE-INCOMPLETE",
+        )
+
+    return {
+        "access_token": mc_access_token,
+        "username": username,
+        "uuid": uuid_,
+        "refresh_token": token_data.get("refresh_token", ""),
+    }

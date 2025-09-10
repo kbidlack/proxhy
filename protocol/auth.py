@@ -8,11 +8,17 @@ import auth
 
 
 async def login(email: str, password: str) -> tuple[str, str, str]:
-    access_token, username, uuid = await auth.login(email, password)
+    """Login with email/password and cache the refresh token."""
+    result = await auth.login(email, password)
+    access_token = result["access_token"]
+    username = result["username"]
+    uuid = result["uuid"]
+    refresh_token = result["refresh_token"]
 
-    # save auth info
-    safe_set("proxhy", username, f"{access_token} {email} {uuid}")
-    safe_set("proxhy", email, password)
+    # Save auth info using refresh token
+    auth_data = f"{access_token} {refresh_token} {uuid}"
+    safe_set("proxhy", username, auth_data)
+
     return access_token, username, uuid
 
 
@@ -24,23 +30,59 @@ def user_exists(username: str) -> bool:
 # just kidding not anymore!! now we use our own auth library because we're cool
 # and got chatgpt to make it for us (sunglasses emoji)
 async def load_auth_info(username: str = "") -> tuple[str, str, str]:
+    """Load cached auth info and refresh token if needed."""
     record = keyring.get_password("proxhy", username)
     if record is None:
         raise RuntimeError(f"No cached credentials for user {username!r}")
 
     parts = record.split(" ")
-    access_token, email, uuid = parts
+    if len(parts) != 3:
+        raise RuntimeError(f"Invalid cached credential format for user {username!r}")
 
-    # token fresh? (±24 h)
-    iat = jwt.decode(
-        access_token, algorithms=["HS256"], options={"verify_signature": False}
-    )["iat"]
-    if time.time() - float(iat) > 86_000:
-        access_token, _, _ = await login(
-            email, keyring.get_password("proxhy", email) or ""
+    access_token, refresh_token, uuid = parts
+
+    # Check if token needs refreshing (older than 23 hours)
+    try:
+        iat = jwt.decode(
+            access_token, algorithms=["HS256"], options={"verify_signature": False}
+        )["iat"]
+        token_age = time.time() - float(iat)
+
+        if token_age > 82_800:  # 23 hours in seconds
+            access_token, refresh_token = await _refresh_and_update_tokens(
+                username, refresh_token, uuid
+            )
+
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        # If token is malformed, try to refresh
+        access_token, refresh_token = await _refresh_and_update_tokens(
+            username, refresh_token, uuid
         )
 
     return access_token, username, uuid
+
+
+async def _refresh_and_update_tokens(
+    username: str, refresh_token: str, uuid: str
+) -> tuple[str, str]:
+    """Helper function to refresh tokens and update storage."""
+    try:
+        result = await auth.login_with_refresh_token(refresh_token)
+        access_token = result["access_token"]
+        new_refresh_token = result["refresh_token"]
+
+        # Update stored credentials with new tokens
+        if new_refresh_token:
+            auth_data = f"{access_token} {new_refresh_token} {uuid}"
+            safe_set("proxhy", username, auth_data)
+            return access_token, new_refresh_token
+        else:
+            return access_token, refresh_token
+
+    except Exception:
+        raise RuntimeError(
+            f"Failed to refresh token for user {username!r}. Manual re-login required."
+        )
 
 
 # ---------- CRED-SIZE GUARD ----------
@@ -65,24 +107,28 @@ def safe_set(service: str, user: str, secret: str) -> None:
 
 
 def refresh_access_token(refresh_token: str) -> str:
-    # https://gist.github.com/dewycube/223d4e9b3cddde932fbbb7cfcfb96759 for refresh token
-    # https://mojang-api-docs.gapple.pw/authentication/msa
+    """
+    Refresh a Microsoft access token using the refresh token.
 
-    # this doesn't work ):
+    This function is now implemented using the auth module's refresh functionality.
+    """
+    import asyncio
 
-    # r = requests.post(
-    #     "https://login.live.com/oauth20_token.srf",
-    #     data={
-    #         "scope": "service::user.auth.xboxlive.com::MBI_SSL",
-    #         "client_id": "000000004c12ae6f",
-    #         "grant_type": "refresh_token",
-    #         "refresh_token": refresh_token,
-    #     },
-    # )
-    # print(r.json())
-    # return r.json()["access_token"], r.json()["refresh_token"]
+    async def _refresh():
+        return await auth.refresh_ms_token(refresh_token)
 
-    raise NotImplementedError(
-        "fun fact (if you couldn't tell by the error type): this isn't implemented"
-        f"also I should do something with refresh_token so my editor likes me: {refresh_token}"
-    )
+    # Run the async function in a new event loop if needed
+    try:
+        loop = asyncio.get_event_loop()
+        if loop.is_running():
+            # If we're already in an async context, we can't use this function
+            raise RuntimeError(
+                "refresh_access_token cannot be called from async context. Use auth.refresh_ms_token directly."
+            )
+        else:
+            result = loop.run_until_complete(_refresh())
+    except RuntimeError:
+        # No event loop running, create a new one
+        result = asyncio.run(_refresh())
+
+    return result["access_token"]
