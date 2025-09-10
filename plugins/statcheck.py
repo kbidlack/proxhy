@@ -176,6 +176,22 @@ class StatCheckPlugin(Plugin):
                         Chat(team.prefix + player + team.suffix),
                     )
 
+    @subscribe("setting:bedwars.tablist.show_rankname")
+    async def bedwars_tablist_show_rankname_callback(self, data: list):
+        show_rankname = self.settings.bedwars.tablist.show_rankname.get()
+        for player, (_uuid, _dname, fplayer) in self.players_with_stats.items():
+            if isinstance(fplayer, FormattedPlayer):
+                color_code = self.get_team_color_code(fplayer.raw_name)
+                display_name = " ".join(
+                    (
+                        f"{fplayer.bedwars.level}{color_code}",
+                        fplayer.rankname if show_rankname == "ON" else fplayer.raw_name,
+                        f" §7| {fplayer.bedwars.fkdr}",
+                    )
+                )
+                self.players_with_stats[player] = (_uuid, display_name, fplayer)
+        self.keep_player_stats_updated()
+
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
         action = buff.unpack(VarInt)
