@@ -136,18 +136,30 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
 # Main entry point
 async def _main():
-    loop = asyncio.get_running_loop()
-    loop.add_signal_handler(
-        signal.SIGINT,
-        lambda: asyncio.create_task(shutdown(loop, server, signal.SIGINT)),
+    # Start server first so the signal handler can reference it safely
+    server = await start(
+        host="localhost",
+        port=args.port,
     )
+    server.num_cancels = 0
+
+    loop = asyncio.get_running_loop()
+
+    # Cross-platform SIGINT handling: use loop.add_signal_handler where supported;
+    # on Windows, fall back to signal.signal + loop.call_soon_threadsafe.
+    def _on_sigint():
+        asyncio.create_task(shutdown(loop, server, signal.SIGINT))
 
     try:
-        server = await start(
-            host="localhost",
-            port=args.port,
-        )
-        server.num_cancels = 0
+        try:
+            loop.add_signal_handler(signal.SIGINT, _on_sigint)
+        except (NotImplementedError, AttributeError):
+            # Windows / event loops without add_signal_handler
+            signal.signal(
+                signal.SIGINT,
+                lambda s, f: loop.call_soon_threadsafe(_on_sigint),
+            )
+
         await server.serve_forever()
     except asyncio.CancelledError:
         pass  # hehe
