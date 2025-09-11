@@ -9,6 +9,7 @@ from plugins.login import LoginPlugin
 from plugins.settings import SettingsPlugin
 from plugins.statcheck import StatCheckPlugin
 from plugins.window import WindowPlugin
+from plugins.spatial import SpatialPlugin
 
 plugins: tuple[type, ...] = (
     ChatPlugin,
@@ -19,6 +20,7 @@ plugins: tuple[type, ...] = (
     StatCheckPlugin,
     WindowPlugin,
     SettingsPlugin,
+    SpatialPlugin,
 )
 
 Proxhy = type("Proxhy", (*plugins, Proxy), {})

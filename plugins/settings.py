@@ -367,9 +367,9 @@ class SettingsMenu(Window):
                         slot = i + 12
                 else:  # if there are settings AND groups, groups should fill by columns to conserve space
                     if i % 2 == 0:
-                        slot = math.ceil(i / 2) + 3
+                        slot = math.floor(i / 2) + 3
                     else:
-                        slot = math.ceil(i / 2) + 12
+                        slot = math.floor(i / 2) + 12
 
                 lore = fill(g.description, width=30).split("\n")
                 lore = ["§7" + t for t in lore]
