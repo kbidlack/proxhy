@@ -1169,6 +1169,7 @@ class StatCheckPlugin(Plugin):
         self.server.send_packet(0x01, String("/who"))
         self.received_who.clear()
         self.client.send_packet(0x02, buff.getvalue())
+        self.game.started = True
 
     @subscribe(f"chat:server:({'|'.join(game_start_msgs)})")
     async def on_chat_game_start(self, buff: Buffer):
@@ -1197,6 +1198,7 @@ class StatCheckPlugin(Plugin):
                 )
             self.server.send_packet(0x01, String("/who"))
             self.received_who.clear()
+            self.game.started = True
 
     @command()
     async def key(self, key):

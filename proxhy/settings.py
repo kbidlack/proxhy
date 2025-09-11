@@ -53,6 +53,26 @@ class TablistGroup(SettingGroup):
         )
 
 
+class VisualGroup(SettingGroup):
+    def __init__(self, storage: SettingsStorage):
+        super().__init__(
+            key="visual",
+            display_name="Visual",
+            description="Toggle Proxhy's visual feautures.",
+            item="minecraft:ender_eye",
+        )
+
+        self.height_limit_warnings: Setting[Literal["OFF", "ON"]] = create_setting(
+            key="bedwars.visual.height_limit_warnings",
+            display_name="Height Limit Warnings",
+            description="When you're near the top or bottom of the map, display particles and a warning in the actionbar.",
+            item="minecraft:quartz_stairs",
+            states={"ON": "green", "OFF": "red"},
+            default_state="ON",
+            storage=storage,
+        )
+
+
 class BedwarsGroup(SettingGroup):
     def __init__(self, storage: SettingsStorage):
         super().__init__(
@@ -63,6 +83,8 @@ class BedwarsGroup(SettingGroup):
         )
 
         self.tablist = TablistGroup(storage)
+
+        self.visual = VisualGroup(storage)
 
         self.display_top_stats: Setting[Literal["OFF", "FKDR", "STAR", "INDEX"]] = (
             create_setting(
