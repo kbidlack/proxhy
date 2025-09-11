@@ -38,6 +38,7 @@ class Game:
     mode: str = ""
     map: str = ""
     lobbyname: str = ""
+    started: bool = False
 
     def __setattr__(self, name: str, value) -> None:
         if isinstance(value, str):
@@ -52,6 +53,7 @@ class Game:
         self.mode = ""
         self.map = ""
         self.lobbyname = ""
+        self.started = False
 
         for key, value in data.items():
             setattr(self, key, value)
