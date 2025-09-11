@@ -98,6 +98,8 @@ class StatCheckPlugin(Plugin):
         self._api_key_validated_at: float | None = None
         self._api_key_ttl = 300  # seconds
 
+        self.update_stats_complete = asyncio.Event()
+
     @property
     def hypixel_api_key(self):
         if self._hypixel_api_key:
@@ -737,17 +739,11 @@ class StatCheckPlugin(Plugin):
                 await self.stat_highlights()
                 self.stats_highlighted = True
 
-        # get first rush stats
-        # there's no well-defined first rush for 3s/4s so we only do this for solos and doubles
-        if (
-            self.settings.bedwars.announce_first_rush.get() != "OFF"
-            and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
-        ):
-            if not self.adjacent_teams_highlighted:
-                self.highlight_adjacent_teams()
-                self.adjacent_teams_highlighted = True
+        self.update_stats_complete.set()  # emit an event to say we've finished statchecks
 
-    def highlight_adjacent_teams(self):
+    async def highlight_adjacent_teams(self) -> None:
+        """Waits until stats are updated; displays a title card with stats of adjacent team(s)."""
+        await self.update_stats_complete.wait()
         try:
             side_rush, alt_rush = self.get_adjacent_teams()
         except ValueError:  # player is not on a team
@@ -855,13 +851,14 @@ class StatCheckPlugin(Plugin):
                         subtitle = self.players_with_stats[better.name][1]
                 case _:
                     raise ValueError(
-                        f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
+                        f"wtf how are there {len(other_adjacent_players)} ppl on that team???\nplayers on alt rush team: {other_adjacent_players}"
                     )
         self.reset_title()
         self.display_title(title=title, subtitle=subtitle)
         # raise ValueError(
         #   f'Expected "FIRST RUSH", "BOTH ADJACENT", or "OFF" state for setting bedwars.announce_first_rush; got {self.settings.bedwars.announce_first_rush.state} instead.'
         # )
+        self.adjacent_teams_highlighted = True
 
     def display_title(
         self,
@@ -983,13 +980,17 @@ class StatCheckPlugin(Plugin):
             (team for team in self.teams if "YOU" in team.suffix), None
         )
         if sidebar_own_team is None:
-            own_team_color = ""  # this shouldn't happen
+            raise ValueError(
+                "Player is not on a team; cannot determine own team color."
+            )
         else:
             match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
             if match_:
                 own_team_color = match_.group(1)
             else:
-                own_team_color = ""  # this also shouldn't happen
+                raise ValueError(
+                    f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
+                )
         return own_team_color
 
     async def stat_highlights(self):
@@ -1179,7 +1180,16 @@ class StatCheckPlugin(Plugin):
         if self.settings.bedwars.display_top_stats.get() == "OFF":
             self.client.send_packet(0x02, buff.getvalue())
 
-        if message == game_start_msgs[-2]:
+        if message == game_start_msgs[-2]:  # runs once
+            if (
+                self.settings.bedwars.announce_first_rush.get() != "OFF"
+                and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
+                and not self.adjacent_teams_highlighted
+            ):
+                # get first rush stats
+                # there's no well-defined first rush for 3s/4s so we only do this for solos and doubles
+                asyncio.create_task(self.highlight_adjacent_teams())
+
             # replace them with the statcheck overview
             if self.settings.bedwars.display_top_stats.get() != "OFF":
                 self.client.chat(
