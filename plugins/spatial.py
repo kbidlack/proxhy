@@ -1,10 +1,8 @@
 import asyncio
-import time
 import numpy as np
 from core.events import listen_server, listen_client, subscribe
 from core.plugin import Plugin
 from proxhy.mcmodels import Game, Teams
-from .command import command
 from proxhy.settings import ProxhySettings
 from protocol.datatypes import (
     Buffer,
@@ -135,17 +133,3 @@ class SpatialPlugin(Plugin):
             Int(count),  # num of particles
             # VarInt.pack(data),  # array of VarInt; most particles have length 0
         )
-
-    @command("ptest")
-    async def spawn_redstone_particle(self):
-        if self.position is None:
-            return
-        height_loop_tasks = [
-            t
-            for t in asyncio.all_tasks()
-            if t.get_coro().__name__ == self.check_height_loop.__name__
-        ]
-        self.client.chat(
-            f"{str(height_loop_tasks)}\nTotal tasks: {len(height_loop_tasks)}"
-        )
-        self.display_particle(particle_id=30, pos=self.position)
