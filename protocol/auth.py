@@ -171,23 +171,17 @@ async def _refresh_and_update_tokens(
     username: str, refresh_token: str, uuid: str
 ) -> tuple[str, str]:
     """Helper function to refresh tokens and update storage."""
-    try:
-        result = await auth.login_with_refresh_token(refresh_token)
-        access_token = result["access_token"]
-        new_refresh_token = result["refresh_token"]
+    result = await auth.login_with_refresh_token(refresh_token)
+    access_token = result["access_token"]
+    new_refresh_token = result["refresh_token"]
 
-        # Update stored credentials with new tokens
-        if new_refresh_token:
-            auth_data = f"{access_token} {new_refresh_token} {uuid}"
-            safe_set("proxhy", username, auth_data)
-            return access_token, new_refresh_token
-        else:
-            return access_token, refresh_token
-
-    except Exception:
-        raise RuntimeError(
-            f"Failed to refresh token for user {username!r}. Manual re-login required."
-        )
+    # Update stored credentials with new tokens
+    if new_refresh_token:
+        auth_data = f"{access_token} {new_refresh_token} {uuid}"
+        safe_set("proxhy", username, auth_data)
+        return access_token, new_refresh_token
+    else:
+        return access_token, refresh_token
 
 
 def refresh_access_token(refresh_token: str) -> str:
