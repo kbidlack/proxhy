@@ -5,7 +5,7 @@ import random
 import uuid
 from pathlib import Path
 from secrets import token_bytes
-from typing import Optional
+from typing import Literal, Optional
 from unittest.mock import Mock
 
 import aiohttp
@@ -24,6 +24,7 @@ from protocol.datatypes import (
     Buffer,
     Byte,
     ByteArray,
+    Chat,
     Double,
     Float,
     Int,
@@ -40,6 +41,7 @@ class LoginPlugin(Plugin):
     def _init_login(self):
         self.logged_in = False
         self.logging_in = False
+        self.regenerating_credentials = False
 
         # load favicon
         # https://github.com/barneygale/quarry/blob/master/quarry/net/server.py/#L356-L357
@@ -107,6 +109,8 @@ class LoginPlugin(Plugin):
         if not auth.user_exists(self.username):
             return await self.login()
 
+        if auth.token_needs_refresh(self.username):
+            return await self.login(reason="regen")
         reader, writer = await asyncio.open_connection(
             self.CONNECT_HOST[0], self.CONNECT_HOST[1]
         )
@@ -144,7 +148,7 @@ class LoginPlugin(Plugin):
 
     @command("login")
     async def login_command(self, email, password):
-        if not self.logging_in:
+        if (not self.logging_in) or self.regenerating_credentials:
             raise CommandException("You can't use that right now!")
 
         login_msg = TextComponent("Logging in...").color("gold")
@@ -198,7 +202,7 @@ class LoginPlugin(Plugin):
 
         self.state = State(next_state)
 
-    async def login(self):
+    async def login(self, reason: Literal["logging_in", "regen"] = "logging_in"):
         # immediately send login start to enter login server
         self.state = State.PLAY
         self.logging_in = True
@@ -230,8 +234,38 @@ class LoginPlugin(Plugin):
 
         self.keep_alive_task = asyncio.create_task(self.login_keep_alive())
 
-        self.client.chat("You have not logged into Proxhy with this account yet!")
-        self.client.chat("Use /login <email> <password> to log in.")
+        if reason == "logging_in":
+            self.client.chat("You have not logged into Proxhy with this account yet!")
+            self.client.chat("Use /login <email> <password> to log in.")
+        else:
+            self.regenerating_credentials = True
+            self.client.chat(TextComponent("Regenerating credentials!").color("green"))
+            self.client.chat(
+                TextComponent(
+                    f"You will be redirected to {self.CONNECT_HOST[0]} soon..."
+                ).color("gold")
+            )
+            try:
+                self.access_token, self.username, self.uuid = await auth.load_auth_info(
+                    self.username
+                )
+            except Exception as e:
+                return self.client.send_packet(
+                    0x40,
+                    Chat.pack(
+                        TextComponent(
+                            f"Failed to regenerate credentials ):\n {type(e).__name__}: {e}"
+                        ).color("red")
+                    ),
+                )
+
+            success_msg = TextComponent(
+                f"Credentials regenerated successfully! Redirecting to {self.CONNECT_HOST[0]}..."
+            ).color("green")
+            self.client.chat(success_msg)
+            self.state = State.LOGIN
+
+            await self.packet_login_start(Buffer(String.pack(self.username)))
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
