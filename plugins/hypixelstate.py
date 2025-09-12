@@ -35,8 +35,6 @@ class HypixelStatePlugin(Plugin):
         if not self.client_type == "lunar":
             self.server.send_packet(0x01, String("/locraw"))
 
-        self.client.send_packet(0x01, buff.getvalue())
-
     def _update_teams(self, buff: Buffer):
         name = buff.unpack(String)
         mode = buff.unpack(Byte)
