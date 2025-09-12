@@ -96,11 +96,7 @@ class Proxy:
                     else:
                         asyncio.create_task(handler(self, Buffer(packet_data)))
                 if not results:
-                    try:
-                        self.server.send_packet(packet_id, packet_data)
-                    except Exception:
-                        print(packet_id, self.state)
-                        print(self._packet_listeners)
+                    self.server.send_packet(packet_id, packet_data)
 
         await self.close()
 

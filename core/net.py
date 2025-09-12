@@ -37,8 +37,9 @@ class Stream:
         self.compression_threshold = -1
 
         self.open = True
-        # this isn't really used but whatever
         self.paused = False
+        self._pause_event = asyncio.Event()
+        self._pause_event.set()  # Initially not paused
 
     @property
     def key(self):
@@ -53,14 +54,14 @@ class Stream:
         self.decryptor = self.cipher.decryptor()
 
     async def read(self, n=-1):
+        # Wait until the stream is not paused
+        await self._pause_event.wait()
+
         try:
             data = await self.reader.read(n)
         except (BrokenPipeError, ConnectionResetError):
             self.close()
             return b""
-
-        while self.paused:
-            await asyncio.sleep(0.1)
 
         return self.decryptor.update(data) if self.encrypted else data
 
@@ -80,7 +81,68 @@ class Stream:
 
     def close(self):
         self.open = False
+
+        # Cancel any running discard task
+        if hasattr(self, "_discard_task"):
+            self._discard_task.cancel()
+
+        # Unpause to release any hanging readers
+        if hasattr(self, "_pause_event"):
+            self._pause_event.set()
+
         return self.writer.close()
+
+    def pause(self, discard=False):
+        """
+        Pause the stream. Any pending read() calls will hang until unpause() is called.
+
+        Args:
+            discard: If True, incoming data will be discarded while paused.
+                    If False, data will accumulate in the reader buffer.
+        """
+        self.paused = True
+        self._pause_event.clear()
+
+        # Start a background task to discard incoming data if requested
+        if hasattr(self, "_discard_task"):
+            self._discard_task.cancel()
+
+        if discard:
+            self._discard_task = asyncio.create_task(self._discard_data())
+
+    def unpause(self):
+        """
+        Unpause the stream. Any hanging read() calls will resume.
+        """
+        self.paused = False
+
+        # Cancel the data discarding task
+        if hasattr(self, "_discard_task"):
+            self._discard_task.cancel()
+
+        self._pause_event.set()
+
+    async def _discard_data(self):
+        """
+        Background task that discards incoming data while paused.
+        """
+        try:
+            while self.paused and self.open:
+                try:
+                    # Read and discard data in small chunks
+                    data = await asyncio.wait_for(self.reader.read(1024), timeout=0.1)
+                    if not data:
+                        # Connection closed
+                        break
+                except asyncio.TimeoutError:
+                    # No data available, continue
+                    continue
+                except (BrokenPipeError, ConnectionResetError):
+                    self.close()
+                    break
+        except asyncio.CancelledError:
+            # Task was cancelled, normal when unpausing
+            pass
 
     def send_packet(self, id: int, *data: bytes) -> None:
         packet = VarInt(id) + b"".join(data)

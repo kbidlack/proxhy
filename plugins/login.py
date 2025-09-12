@@ -9,6 +9,7 @@ from typing import Optional
 from unittest.mock import Mock
 
 import aiohttp
+import hypixel
 
 from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
@@ -26,8 +27,6 @@ from protocol.datatypes import (
     Double,
     Float,
     Int,
-    Pos,
-    Position,
     String,
     TextComponent,
     UnsignedByte,
@@ -65,14 +64,41 @@ class LoginPlugin(Plugin):
         self.secret: bytes = b""
 
         self.secret_task: Optional[asyncio.Task] = None
+        self.keep_alive_task = None
 
     @listen_server(0x02, State.LOGIN, blocking=True, override=True)
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
         self.logged_in = True
 
-        self.client.send_packet(0x02, buff.read())
+        if not self.logging_in:
+            self.client.send_packet(0x02, buff.read())
+
         await self.emit("login_success")
+
+    @listen_server(0x01, blocking=True)
+    async def packet_join_game(self, buff: Buffer):
+        self.client.unpause()
+
+        if self.logging_in:
+            self.logging_in = False
+
+            _ = buff.unpack(Int)  # entity id
+            gamemode = buff.unpack(UnsignedByte)
+            dimension = buff.unpack(Byte)
+            difficulty = buff.unpack(UnsignedByte)
+            _ = buff.unpack(UnsignedByte)  # max players
+            level_type = buff.unpack(String)
+
+            self.client.send_packet(
+                0x07,
+                Int(dimension),  # dimension
+                UnsignedByte.pack(difficulty),  # difficulty
+                UnsignedByte.pack(gamemode),  # gamemode
+                String.pack(level_type),  # level type
+            )
+        else:
+            self.client.send_packet(0x01, buff.getvalue())
 
     @listen_client(0x00, State.LOGIN, blocking=True, override=True)
     async def packet_login_start(self, buff: Buffer):
@@ -86,6 +112,11 @@ class LoginPlugin(Plugin):
         )
         self.server = Server(reader, writer)
         asyncio.create_task(self.handle_server())
+
+        if self.keep_alive_task:
+            self.keep_alive_task.cancel()
+
+        self.client.pause(discard=True)
 
         self.server.send_packet(
             0x00,
@@ -113,10 +144,11 @@ class LoginPlugin(Plugin):
 
     @command("login")
     async def login_command(self, email, password):
-        login_msg = TextComponent("Logging in...").color("gold")
-        self.client.chat(login_msg)
         if not self.logging_in:
             raise CommandException("You can't use that right now!")
+
+        login_msg = TextComponent("Logging in...").color("gold")
+        self.client.chat(login_msg)
 
         try:
             access_token, username, uuid = await auth.login(email, password)
@@ -137,13 +169,18 @@ class LoginPlugin(Plugin):
         self.access_token = access_token
         self.uuid = uuid
 
-        success_msg = TextComponent("Logged in; rejoin proxhy to play!").color("green")
+        success_msg = TextComponent(
+            f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
+        ).color("green")
         self.client.chat(success_msg)
+        self.state = State.LOGIN
+
+        await self.packet_login_start(Buffer(String.pack(self.username)))
 
     async def login_keep_alive(self):
         while True:
             await asyncio.sleep(10)
-            if self.state == State.PLAY and self.client.open:
+            if self.state == State.PLAY and self.client.open and self.logging_in:
                 self.client.send_packet(0x00, VarInt(random.randint(0, 256)))
             else:
                 await self.close()
@@ -168,7 +205,13 @@ class LoginPlugin(Plugin):
 
         # fake server stream
         self.server = Mock()
-        self.client.send_packet(0x02, String(str(uuid.uuid4())), String(self.username))
+
+        async with (c := hypixel.Client()):
+            uuid_ = await c._get_uuid(self.username)
+
+        self.client.send_packet(
+            0x02, String(str(uuid.UUID(uuid_))), String(self.username)
+        )
 
         self.client.send_packet(
             0x01,
@@ -181,12 +224,11 @@ class LoginPlugin(Plugin):
             Boolean(True),
         )
 
-        self.client.send_packet(0x05, Position(Pos(0, 0, 0)))
         self.client.send_packet(
             0x08, Double(0), Double(0), Double(0), Float(0), Float(0), Byte(b"\x00")
         )
 
-        asyncio.create_task(self.login_keep_alive())
+        self.keep_alive_task = asyncio.create_task(self.login_keep_alive())
 
         self.client.chat("You have not logged into Proxhy with this account yet!")
         self.client.chat("Use /login <email> <password> to log in.")
@@ -250,7 +292,6 @@ class LoginPlugin(Plugin):
         )
 
         # enable encryption
-        self.server.key = self.secret
         self.server.key = self.secret
 
     async def _session_encrypt(self, server_id: bytes, public_key: bytes) -> bytes:
