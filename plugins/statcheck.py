@@ -28,7 +28,6 @@ from protocol.datatypes import (
     Boolean,
     Buffer,
     Chat,
-    Int,
     String,
     TextComponent,
     VarInt,
@@ -894,36 +893,12 @@ class StatCheckPlugin(Plugin):
                     raise ValueError(
                         f"wtf how are there {len(other_adjacent_players)} ppl on that team???\nplayers on alt rush team: {other_adjacent_players}"
                     )
-        self.reset_title()
-        self.display_title(title=title, subtitle=subtitle)
+        self.client.reset_title()
+        self.client.set_title(title=title, subtitle=subtitle)
         # raise ValueError(
         #   f'Expected "FIRST RUSH", "BOTH ADJACENT", or "OFF" state for setting bedwars.announce_first_rush; got {self.settings.bedwars.announce_first_rush.state} instead.'
         # )
         self.adjacent_teams_highlighted = True
-
-    def display_title(
-        self,
-        title: TextComponent | str,
-        subtitle: TextComponent | str | None = None,
-        fade_in: int = 5,
-        duration: int = 150,
-        fade_out: int = 10,
-    ):
-        # set subtitle
-        if subtitle:
-            self.client.send_packet(0x45, VarInt(1), Chat.pack(subtitle))
-        # set timings
-        self.client.send_packet(
-            0x45, VarInt(2), Int(fade_in), Int(duration), Int(fade_out)
-        )
-        # main title; triggers display
-        self.client.send_packet(0x45, VarInt(0), Chat.pack(title))
-
-    def hide_title(self):
-        self.client.send_packet(0x45, VarInt(3))
-
-    def reset_title(self):
-        self.client.send_packet(0x45, VarInt(4))
 
     def get_adjacent_teams(self) -> tuple[str, str]:
         """
