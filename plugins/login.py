@@ -11,13 +11,13 @@ from unittest.mock import Mock
 import aiohttp
 import hypixel
 
+import auth
 from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
 from core.events import listen_client, listen_server
 from core.net import Server, State
 from core.plugin import Plugin
 from plugins.command import command
-from protocol import auth
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
     Boolean,
