@@ -23,7 +23,6 @@ from platformdirs import user_cache_dir
 from core.events import listen_server, subscribe
 from core.plugin import Plugin
 from plugins.command import command
-from protocol import auth
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -111,7 +110,7 @@ class StatCheckPlugin(Plugin):
     def hypixel_api_key(self, key):
         self._hypixel_api_key = key
 
-        auth.safe_set("proxhy", "hypixel_api_key", key)
+        keyring.set_password("proxhy", "hypixel_api_key", key)
 
     async def validate_api_key(self, force=False) -> bool:
         # what the hell is this LMAO
