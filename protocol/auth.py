@@ -1,12 +1,12 @@
-import os
-import time
 import json
+import time
 from pathlib import Path
 from typing import Any
 
 import jwt
 import keyring
 from cryptography.fernet import Fernet
+from platformdirs import user_data_dir
 
 import auth
 
@@ -31,17 +31,7 @@ async def login(email: str, password: str) -> tuple[str, str, str]:
 
 def _get_data_dir() -> Path:
     """Get the platform-appropriate data directory for storing encrypted tokens."""
-    if os.name == "nt":  # Windows
-        base = os.environ.get("APPDATA", os.path.expanduser("~"))
-    elif os.name == "posix":
-        if os.uname().sysname == "Darwin":  # macOS
-            base = os.path.expanduser("~/Library/Application Support")
-        else:  # Linux
-            base = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
-    else:
-        base = os.path.expanduser("~")
-
-    data_dir = Path(base) / "proxhy"
+    data_dir = Path(user_data_dir("proxhy"))
     data_dir.mkdir(parents=True, exist_ok=True)
     return data_dir
 
@@ -129,6 +119,30 @@ def user_exists(username: str) -> bool:
     return user_file.exists()
 
 
+def token_needs_refresh(username: str) -> bool:
+    """Check if a user's token needs refreshing (older than 23 hours)."""
+    record = safe_get("proxhy", username)
+    if record is None:
+        return False  # No token exists, so can't refresh
+
+    parts = record.split(" ")
+    if len(parts) != 3:
+        return True  # Malformed token, needs refresh
+
+    access_token, _, _ = parts
+
+    try:
+        iat = jwt.decode(
+            access_token, algorithms=["HS256"], options={"verify_signature": False}
+        )["iat"]
+        token_age = time.time() - float(iat)
+        return token_age > 82_800  # 23 hours in seconds
+
+    except (jwt.InvalidTokenError, KeyError, ValueError):
+        # If token is malformed, it needs refreshing
+        return True
+
+
 # https://pypi.org/project/msmcauthaio/
 # just kidding not anymore!! now we use our own auth library because we're cool
 # and got chatgpt to make it for us (sunglasses emoji)
@@ -144,20 +158,8 @@ async def load_auth_info(username: str = "") -> tuple[str, str, str]:
 
     access_token, refresh_token, uuid = parts
 
-    # Check if token needs refreshing (older than 23 hours)
-    try:
-        iat = jwt.decode(
-            access_token, algorithms=["HS256"], options={"verify_signature": False}
-        )["iat"]
-        token_age = time.time() - float(iat)
-
-        if token_age > 82_800:  # 23 hours in seconds
-            access_token, refresh_token = await _refresh_and_update_tokens(
-                username, refresh_token, uuid
-            )
-
-    except (jwt.InvalidTokenError, KeyError, ValueError):
-        # If token is malformed, try to refresh
+    # Check if token needs refreshing and refresh if necessary
+    if token_needs_refresh(username):
         access_token, refresh_token = await _refresh_and_update_tokens(
             username, refresh_token, uuid
         )
