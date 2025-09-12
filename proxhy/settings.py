@@ -35,7 +35,7 @@ class TablistGroup(SettingGroup):
         self.is_mode_specific: Setting[Literal["OFF", "ON"]] = create_setting(
             key="bedwars.tablist.is_mode_specific",
             display_name="Mode-Specific Tablist Stats",
-            description="[NOT IMPLEMENTED] In Bedwars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
+            description="In Bedwars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
             item="minecraft:writable_book",
             states={"OFF": "red", "ON": "green"},
             default_state="OFF",

@@ -3,6 +3,7 @@
 from copy import deepcopy
 from dataclasses import dataclass, field
 from math import floor
+from typing import Literal
 
 from hypixel import Player
 
@@ -459,11 +460,36 @@ class BedwarsStats:
     fkdr: str = ""
     wins: str = ""
     wlr: str = ""
+
     raw_level: int = 0
     raw_final_kills: int = 0
     raw_fkdr: float = 0.0
     raw_wins: int = 0
     raw_wlr: float = 0.0
+
+    eight_one_stats: dict = field(default_factory=dict)
+    eight_two_stats: dict = field(default_factory=dict)
+    four_three_stats: dict = field(default_factory=dict)
+    four_four_stats: dict = field(default_factory=dict)
+    two_four_stats: dict = field(default_factory=dict)
+    rush_stats: dict = field(default_factory=dict)
+    ultimate_stats: dict = field(default_factory=dict)
+    lucky_stats: dict = field(default_factory=dict)
+    castle_stats: dict = field(default_factory=dict)
+    swap_stats: dict = field(default_factory=dict)
+    voidless_stats: dict = field(default_factory=dict)
+
+    raw_eight_one_stats: dict = field(default_factory=dict)
+    raw_eight_two_stats: dict = field(default_factory=dict)
+    raw_four_three_stats: dict = field(default_factory=dict)
+    raw_four_four_stats: dict = field(default_factory=dict)
+    raw_two_four_stats: dict = field(default_factory=dict)
+    raw_rush_stats: dict = field(default_factory=dict)
+    raw_ultimate_stats: dict = field(default_factory=dict)
+    raw_lucky_stats: dict = field(default_factory=dict)
+    raw_castle_stats: dict = field(default_factory=dict)
+    raw_swap_stats: dict = field(default_factory=dict)
+    raw_voidless_stats: dict = field(default_factory=dict)
 
     finals: str = ""  # alias for final_kills
 
@@ -525,6 +551,38 @@ class FormattedPlayer:
         self.bedwars.raw_wins = self.original_player.bedwars.wins
         self.bedwars.raw_wlr = self.original_player.bedwars.wlr
 
+        self.bedwars.eight_one_stats = self.get_bedwars_mode_stats("eight_one", True)
+        self.bedwars.eight_two_stats = self.get_bedwars_mode_stats("eight_two", True)
+        self.bedwars.four_three_stats = self.get_bedwars_mode_stats("four_three", True)
+        self.bedwars.four_four_stats = self.get_bedwars_mode_stats("four_four", True)
+        self.bedwars.two_four_stats = self.get_bedwars_mode_stats("two_four", True)
+        self.bedwars.rush_stats = self.get_bedwars_mode_stats("rush", True)
+        self.bedwars.ultimate_stats = self.get_bedwars_mode_stats("ultimate", True)
+        self.bedwars.lucky_stats = self.get_bedwars_mode_stats("lucky", True)
+        self.bedwars.castle_stats = self.get_bedwars_mode_stats("castle", True)
+        self.bedwars.swap_stats = self.get_bedwars_mode_stats("swap", True)
+        self.bedwars.voidless_stats = self.get_bedwars_mode_stats("voidless", True)
+
+        self.bedwars.raw_eight_one_stats = self.get_bedwars_mode_stats(
+            "eight_one", False
+        )
+        self.bedwars.raw_eight_two_stats = self.get_bedwars_mode_stats(
+            "eight_two", False
+        )
+        self.bedwars.raw_four_three_stats = self.get_bedwars_mode_stats(
+            "four_three", False
+        )
+        self.bedwars.raw_four_four_stats = self.get_bedwars_mode_stats(
+            "four_four", False
+        )
+        self.bedwars.raw_two_four_stats = self.get_bedwars_mode_stats("two_four", False)
+        self.bedwars.raw_rush_stats = self.get_bedwars_mode_stats("rush", False)
+        self.bedwars.raw_ultimate_stats = self.get_bedwars_mode_stats("ultimate", False)
+        self.bedwars.raw_lucky_stats = self.get_bedwars_mode_stats("lucky", False)
+        self.bedwars.raw_castle_stats = self.get_bedwars_mode_stats("castle", False)
+        self.bedwars.raw_swap_stats = self.get_bedwars_mode_stats("swap", False)
+        self.bedwars.raw_voidless_stats = self.get_bedwars_mode_stats("voidless", False)
+
         # Format skywars stats
         self.skywars.level = format_sw_star(
             self.original_player.skywars.level, self.original_player
@@ -547,6 +605,126 @@ class FormattedPlayer:
         self.rank_color = self.rank[:2]
         sep: str = "" if self.rank == "§7" else " "  # no space for non
         self.rankname = sep.join((f"{self.rank}", f"{self.name}"))
+
+    def get_bedwars_mode_stats(
+        self,
+        mode: Literal[
+            "eight_one",
+            "eight_two",
+            "four_three",
+            "four_four",
+            "two_four",
+            "rush",
+            "ultimate",
+            "lucky",
+            "castle",
+            "swap",
+            "voidless",
+        ],
+        formatted: bool,
+    ) -> dict[str, str | float | int]:
+        non_dream_m = {"eight_one", "eight_two", "four_three", "four_four", "two_four"}
+        dream_m = {"rush", "ultimate", "lucky", "castle", "swap", "voidless"}
+        stats = self.original_player._data.get("stats", {}).get("Bedwars", {})
+
+        if mode in non_dream_m:
+            fk_key = f"{mode}_final_kills_bedwars"
+            fd_key = f"{mode}_final_deaths_bedwars"
+            kills_key = f"{mode}_kills_bedwars"
+            deaths_key = f"{mode}_deaths_bedwars"
+            wins_key = f"{mode}_wins_bedwars"
+            losses_key = f"{mode}_losses_bedwars"
+
+            fk = float(stats.get(fk_key, 0))
+            fd = float(stats.get(fd_key, 0))
+            kills = float(stats.get(kills_key, 0))
+            deaths = float(stats.get(deaths_key, 0))
+            wins = float(stats.get(wins_key, 0))
+            losses = float(stats.get(losses_key, 0))
+
+        elif mode in dream_m:
+            # For dream modes, aggregate over any key that includes the dream substring.
+            fk = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_final_kills_bedwars") and f"_{mode}_" in key
+            )
+            fd = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_final_deaths_bedwars") and f"_{mode}_" in key
+            )
+            kills = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_kills_bedwars") and f"_{mode}_" in key
+            )
+            deaths = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_deaths_bedwars") and f"_{mode}_" in key
+            )
+            wins = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_wins_bedwars") and f"_{mode}_" in key
+            )
+            losses = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_losses_bedwars") and f"_{mode}_" in key
+            )
+        else:
+            raise ValueError(f"Unknown mode '{mode}'")
+
+        try:
+            mode_fkdr = fk / fd if fd > 0 else float(fk)
+        except Exception:
+            mode_fkdr = 0
+
+        try:
+            mode_kdr = kills / deaths if deaths > 0 else float(kills)
+        except Exception:
+            mode_kdr = 0
+
+        try:
+            mode_wlr = wins / losses if losses > 0 else float(wins)
+        except Exception:
+            mode_wlr = 0
+
+        # Round the results and apply color formatting for the numeric values.
+        mode_fkdr = round(mode_fkdr, 2)
+        mode_wlr = round(mode_wlr, 2)
+
+        if formatted:
+            formatted_fk = format_bw_finals(fk)
+            formatted_wins = format_bw_wins(wins)
+            formatted_fkdr = format_bw_fkdr(mode_fkdr)
+            formatted_wlr = format_bw_wlr(mode_wlr)
+
+            return {
+                "final_kills": formatted_fk,
+                "final_deaths": str(fd),
+                "kills": str(kills),
+                "deaths": str(deaths),
+                "wins": formatted_wins,
+                "losses": str(losses),
+                "fkdr": formatted_fkdr,
+                "kdr": str(mode_kdr),
+                "wlr": formatted_wlr,
+            }
+        else:
+            return {
+                "final_kills": fk,
+                "final_deaths": fd,
+                "kills": kills,
+                "deaths": deaths,
+                "wins": wins,
+                "losses": losses,
+                "fkdr": mode_fkdr,
+                "kdr": mode_kdr,
+                "wlr": mode_wlr,
+            }
 
     def format_stats(
         self, mode: str, *stats: str, sep=" ", name: bool = True

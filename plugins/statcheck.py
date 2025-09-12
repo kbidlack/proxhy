@@ -164,6 +164,37 @@ class StatCheckPlugin(Plugin):
         elif data == ["ON", "OFF"]:
             await self._reset_stats()
 
+    @subscribe("setting:bedwars.tablist.is_mode_specific")
+    async def bedwars_tablist_is_mode_specific_callback(self, data: list):
+        # data = [old_state, new_state]
+        if self.settings.bedwars.tablist.show_stats.get() == "ON":
+            # Recalculate display names with new mode-specific setting
+            for player, (uuid, _, fplayer) in self.players_with_stats.items():
+                if isinstance(fplayer, FormattedPlayer):
+                    show_rankname = self.settings.bedwars.tablist.show_rankname.get()
+                    color_code = self.get_team_color_code(fplayer.raw_name)
+
+                    if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
+                        fkdr = fplayer.bedwars.__getattribute__(
+                            f"{self.game.mode[8:].lower()}_stats"
+                        )["fkdr"]
+                    else:
+                        fkdr = fplayer.bedwars.fkdr
+
+                    display_name = " ".join(
+                        (
+                            f"{fplayer.bedwars.level}{color_code}",
+                            fplayer.rankname
+                            if show_rankname == "ON"
+                            else fplayer.raw_name,
+                            f" §7| {fkdr}",
+                        )
+                    )
+                    self.players_with_stats[player] = (uuid, display_name, fplayer)
+
+            # Update the tab list immediately
+            self.keep_player_stats_updated()
+
     async def _reset_stats(self):
         for player in self.players_with_stats:
             for team in self.teams:
@@ -670,13 +701,22 @@ class StatCheckPlugin(Plugin):
                                 self.settings.bedwars.tablist.show_rankname.get()
                             )
                             color_code = self.get_team_color_code(fplayer.raw_name)
+                            if (
+                                self.settings.bedwars.tablist.is_mode_specific.get()
+                                == "ON"
+                            ):
+                                fkdr = fplayer.bedwars.__getattribute__(
+                                    f"{self.game.mode[8:].lower()}_stats"
+                                )["fkdr"]
+                            else:
+                                fkdr = fplayer.bedwars.fkdr
                             display_name = " ".join(
                                 (
                                     f"{fplayer.bedwars.level}{color_code}",
                                     fplayer.rankname
                                     if show_rankname == "ON"
                                     else fplayer.raw_name,
-                                    f" §7| {fplayer.bedwars.fkdr}",
+                                    f" §7| {fkdr}",
                                 )
                             )
                         # elif self.game.gametype == "skywars":
@@ -743,6 +783,8 @@ class StatCheckPlugin(Plugin):
     async def highlight_adjacent_teams(self) -> None:
         """Waits until stats are updated; displays a title card with stats of adjacent team(s)."""
         await self.update_stats_complete.wait()
+        if not self._api_key_valid:
+            return
         try:
             side_rush, alt_rush = self.get_adjacent_teams()
         except ValueError:  # player is not on a team
@@ -1033,6 +1075,17 @@ class StatCheckPlugin(Plugin):
                 fplayer = FormattedPlayer(player)
 
                 # Calculate ranking value
+                if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
+                    fkdr = fplayer.bedwars.__getattribute__(
+                        f"raw_{self.game.mode[8:].lower()}_stats"
+                    )["fkdr"]
+                    f_fkdr = fplayer.bedwars.__getattribute__(
+                        f"{self.game.mode[8:].lower()}_stats"
+                    )["fkdr"]
+                else:
+                    fkdr = fplayer.bedwars.raw_fkdr
+                    f_fkdr = fplayer.bedwars.fkdr
+
                 fkdr = int(fplayer.bedwars.raw_fkdr)
                 stars = int(fplayer.bedwars.raw_level)
 
@@ -1041,7 +1094,7 @@ class StatCheckPlugin(Plugin):
                 elif self.settings.bedwars.display_top_stats.get() == "STARS":
                     rank_value = stars
                 elif self.settings.bedwars.display_top_stats.get() == "INDEX":
-                    rank_value = fkdr * stars
+                    rank_value = fkdr**2 * stars
                 else:
                     rank_value = fkdr
 
@@ -1049,7 +1102,7 @@ class StatCheckPlugin(Plugin):
                     {
                         "name": player_name,
                         "star_formatted": fplayer.bedwars.level,
-                        "fkdr_formatted": fplayer.bedwars.fkdr,
+                        "fkdr_formatted": f_fkdr,
                         "rank_value": rank_value,
                         "team_color": player_team.prefix,
                     }
