@@ -53,7 +53,6 @@ class Game:
         self.mode = ""
         self.map = ""
         self.lobbyname = ""
-        self.started = False
 
         for key, value in data.items():
             setattr(self, key, value)

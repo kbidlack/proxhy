@@ -42,7 +42,7 @@ from proxhy.settings import ProxhySettings
 
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 with open(ASSETS_DIR / "bedwars_maps.json", "r", encoding="utf-8") as f:
-    BW_MAPS = json.load(f)
+    BW_MAPS: dict = json.load(f)
 f.close()
 with open(ASSETS_DIR / "rush_mappings.json", "r", encoding="utf-8") as f:
     RUSH_MAPPINGS = json.load(f)
