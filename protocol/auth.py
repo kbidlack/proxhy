@@ -1,8 +1,12 @@
 import os
 import time
+import json
+from pathlib import Path
+from typing import Any
 
 import jwt
 import keyring
+from cryptography.fernet import Fernet
 
 import auth
 
@@ -22,8 +26,107 @@ async def login(email: str, password: str) -> tuple[str, str, str]:
     return access_token, username, uuid
 
 
+# ---------- CROSS-PLATFORM ENCRYPTED STORAGE ----------
+
+
+def _get_data_dir() -> Path:
+    """Get the platform-appropriate data directory for storing encrypted tokens."""
+    if os.name == "nt":  # Windows
+        base = os.environ.get("APPDATA", os.path.expanduser("~"))
+    elif os.name == "posix":
+        if os.uname().sysname == "Darwin":  # macOS
+            base = os.path.expanduser("~/Library/Application Support")
+        else:  # Linux
+            base = os.environ.get("XDG_DATA_HOME", os.path.expanduser("~/.local/share"))
+    else:
+        base = os.path.expanduser("~")
+
+    data_dir = Path(base) / "proxhy"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    return data_dir
+
+
+def _get_or_create_encryption_key() -> bytes:
+    """Get encryption key from keyring or create a new one."""
+    key_b64 = keyring.get_password("proxhy", "_encryption_key")
+    if key_b64 is None:
+        # Generate new key and store in keyring
+        key = Fernet.generate_key()
+        keyring.set_password("proxhy", "_encryption_key", key.decode())
+        return key
+    return key_b64.encode()
+
+
+def _encrypt_data(data: dict[str, Any]) -> bytes:
+    """Encrypt auth data using Fernet."""
+    key = _get_or_create_encryption_key()
+    fernet = Fernet(key)
+    json_data = json.dumps(data).encode()
+    return fernet.encrypt(json_data)
+
+
+def _decrypt_data(encrypted_data: bytes) -> dict[str, Any]:
+    """Decrypt auth data using Fernet."""
+    key = _get_or_create_encryption_key()
+    fernet = Fernet(key)
+    json_data = fernet.decrypt(encrypted_data)
+    return json.loads(json_data.decode())
+
+
+def safe_set(service: str, user: str, auth_data: str) -> None:
+    """
+    Store auth data using cross-platform encrypted file storage.
+    The encryption key is stored in the system keyring (short, under any limits).
+    The actual tokens are encrypted and stored in a file.
+    """
+    # Parse the auth_data string back into components
+    parts = auth_data.split(" ")
+    if len(parts) != 3:
+        raise ValueError("Invalid auth_data format")
+
+    access_token, refresh_token, uuid = parts
+    data = {
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "uuid": uuid,
+        "timestamp": time.time(),
+    }
+
+    encrypted_data = _encrypt_data(data)
+
+    # Store in user-specific file
+    data_dir = _get_data_dir()
+    user_file = data_dir / f"{user}.enc"
+    user_file.write_bytes(encrypted_data)
+
+
+def safe_get(service: str, user: str) -> str | None:
+    """
+    Retrieve auth data from encrypted file storage.
+    Returns the data in the original format: "access_token refresh_token uuid"
+    """
+    data_dir = _get_data_dir()
+    user_file = data_dir / f"{user}.enc"
+
+    if not user_file.exists():
+        return None
+
+    try:
+        encrypted_data = user_file.read_bytes()
+        data = _decrypt_data(encrypted_data)
+
+        # Return in original format
+        return f"{data['access_token']} {data['refresh_token']} {data['uuid']}"
+    except Exception:
+        # If decryption fails, treat as if no data exists
+        return None
+
+
 def user_exists(username: str) -> bool:
-    return keyring.get_password("proxhy", username) is not None
+    """Check if user has stored credentials."""
+    data_dir = _get_data_dir()
+    user_file = data_dir / f"{username}.enc"
+    return user_file.exists()
 
 
 # https://pypi.org/project/msmcauthaio/
@@ -31,7 +134,7 @@ def user_exists(username: str) -> bool:
 # and got chatgpt to make it for us (sunglasses emoji)
 async def load_auth_info(username: str = "") -> tuple[str, str, str]:
     """Load cached auth info and refresh token if needed."""
-    record = keyring.get_password("proxhy", username)
+    record = safe_get("proxhy", username)
     if record is None:
         raise RuntimeError(f"No cached credentials for user {username!r}")
 
@@ -83,27 +186,6 @@ async def _refresh_and_update_tokens(
         raise RuntimeError(
             f"Failed to refresh token for user {username!r}. Manual re-login required."
         )
-
-
-# ---------- CRED-SIZE GUARD ----------
-MAX_SECRET_CHARS = 1_250  # ≈2 500 bytes in the Windows vault
-
-
-def safe_set(service: str, user: str, secret: str) -> None:
-    """
-    Write to the keyring unless the secret is too large for Windows
-    Credential Manager's 2 560-byte blob limit.  Raises ValueError
-    early instead of letting win32cred.CredWrite explode later.
-    """
-    if len(secret) > MAX_SECRET_CHARS and os.name == "nt":
-        raise ValueError(
-            f"Secret for {service}/{user} is too large "
-            f"({len(secret)} > {MAX_SECRET_CHARS} characters)."
-        )
-    keyring.set_password(service, user, secret)
-
-
-# -------------------------------------
 
 
 def refresh_access_token(refresh_token: str) -> str:
