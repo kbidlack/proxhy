@@ -1,19 +1,19 @@
 import asyncio
+
 import numpy as np
-from core.events import listen_server, listen_client, subscribe
+
+from core.events import listen_client, listen_server, subscribe
 from core.plugin import Plugin
-from proxhy.mcmodels import Game, Teams
-from proxhy.settings import ProxhySettings
+from plugins.statcheck import BW_MAPS
 from protocol.datatypes import (
+    Boolean,
     Buffer,
     Double,
-    Chat,
-    TextComponent,
-    Boolean,
     Float,
     Int,
 )
-from plugins.statcheck import BW_MAPS
+from proxhy.mcmodels import Game, Teams
+from proxhy.settings import ProxhySettings
 
 
 class SpatialPlugin(Plugin):
@@ -87,7 +87,7 @@ class SpatialPlugin(Plugin):
         if abs(min_height - y) <= 3 or abs(max_height - y) <= 5:
             limit_dist = round(max(min(y - min_height, max_height - y), 0))
             color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
-            self.actionbar_text(
+            self.client.set_actionbar_text(
                 f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
             )
             particle_y = (  # whichever height limit the player is closest to
@@ -102,9 +102,6 @@ class SpatialPlugin(Plugin):
                 self.display_particle(
                     particle_id=30, pos=(particle_x, particle_y, particle_z)
                 )
-
-    def actionbar_text(self, msg: str | TextComponent):
-        self.client.send_packet(0x02, Chat.pack(msg) + b"\x02")
 
     def display_particle(
         self,

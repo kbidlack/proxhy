@@ -10,7 +10,7 @@ from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import CFB8
 
-from protocol.datatypes import Chat, String, TextComponent, VarInt
+from protocol.datatypes import Chat, Int, String, TextComponent, VarInt
 
 
 class State(Enum):
@@ -164,6 +164,31 @@ class Stream:
 class Client(Stream):
     def chat(self, message: str | TextComponent) -> None:
         self.send_packet(0x02, Chat.pack_msg(message))
+
+    def set_title(
+        self,
+        title: TextComponent | str,
+        subtitle: TextComponent | str | None = None,
+        fade_in: int = 5,
+        duration: int = 150,
+        fade_out: int = 10,
+    ):
+        # set subtitle
+        if subtitle:
+            self.send_packet(0x45, VarInt(1), Chat.pack(subtitle))
+        # set timings
+        self.send_packet(0x45, VarInt(2), Int(fade_in), Int(duration), Int(fade_out))
+        # main title; triggers display
+        self.send_packet(0x45, VarInt(0), Chat.pack(title))
+
+    def hide_title(self):
+        self.send_packet(0x45, VarInt(3))
+
+    def reset_title(self):
+        self.send_packet(0x45, VarInt(4))
+
+    def set_actionbar_text(self, msg: str | TextComponent):
+        self.send_packet(0x02, Chat.pack(msg) + b"\x02")
 
 
 class Server(Stream):
