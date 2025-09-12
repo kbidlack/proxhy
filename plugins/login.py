@@ -239,11 +239,13 @@ class LoginPlugin(Plugin):
             self.client.chat("Use /login <email> <password> to log in.")
         else:
             self.regenerating_credentials = True
-            self.client.chat(TextComponent("Regenerating credentials!").color("green"))
-            self.client.chat(
-                TextComponent(
-                    f"You will be redirected to {self.CONNECT_HOST[0]} soon..."
-                ).color("gold")
+            self.client.set_title(
+                title=TextComponent("Please Wait").color("red"),
+                subtitle=TextComponent("You will be redirected to")
+                .color("white")
+                .appends(TextComponent(self.CONNECT_HOST[0]).color("gold"))
+                .appends(TextComponent("soon!").color("white")),
+                duration=200,
             )
             try:
                 self.access_token, self.username, self.uuid = await auth.load_auth_info(
@@ -259,9 +261,12 @@ class LoginPlugin(Plugin):
                     ),
                 )
 
-            success_msg = TextComponent(
-                f"Credentials regenerated successfully! Redirecting to {self.CONNECT_HOST[0]}..."
-            ).color("green")
+            success_msg = (
+                TextComponent("Credentials regenerated successfully! Redirecting to")
+                .color("green")
+                .appends(TextComponent(self.CONNECT_HOST[0]).color("gold"))
+            )
+            self.client.reset_title()
             self.client.chat(success_msg)
             self.state = State.LOGIN
 
