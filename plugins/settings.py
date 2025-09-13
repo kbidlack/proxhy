@@ -17,7 +17,7 @@ from proxhy.errors import CommandException
 from proxhy.mcmodels import Game
 from proxhy.settings import ProxhySettings
 
-from .command import command
+from ..proxhy.command import command
 from .window import Window
 
 
