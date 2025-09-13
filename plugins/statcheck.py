@@ -5,7 +5,7 @@ import os
 import re
 import uuid
 from pathlib import Path
-from typing import Callable, Optional
+from typing import Callable, Optional, TypedDict
 
 import hypixel
 import keyring
@@ -64,6 +64,12 @@ JOIN_RE = re.compile(
 COLOR_CODE = re.compile(r"(§[0-9a-fk-or])", re.IGNORECASE)
 
 
+class PlayersWithStats(TypedDict):
+    uuid: str
+    display_name: str
+    fplayer: FormattedPlayer | Nick
+
+
 class StatCheckPlugin(Plugin):
     teams: Teams
     game: Game
@@ -73,7 +79,7 @@ class StatCheckPlugin(Plugin):
     received_locraw: asyncio.Event
 
     def _init_statcheck(self):
-        self.players_with_stats: dict[str, tuple[str, str, FormattedPlayer | Nick]] = {}
+        self.players_with_stats: dict[str, PlayersWithStats] = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: set[str] = set()  # players from /who
         self._cached_players: dict = {}
@@ -189,7 +195,11 @@ class StatCheckPlugin(Plugin):
                             f" §7| {fkdr}",
                         )
                     )
-                    self.players_with_stats[player] = (uuid, display_name, fplayer)
+                    self.players_with_stats[player] = {
+                        "uuid": uuid,
+                        "display_name": display_name,
+                        "fplayer": fplayer,
+                    }
 
             # Update the tab list immediately
             self.keep_player_stats_updated()
@@ -202,7 +212,7 @@ class StatCheckPlugin(Plugin):
                         0x38,
                         VarInt(3),
                         VarInt(1),
-                        UUID(uuid.UUID(str(self.players_with_stats[player][0]))),
+                        UUID(uuid.UUID(str(self.players_with_stats[player]["uuid"]))),
                         Boolean(True),
                         Chat(team.prefix + player + team.suffix),
                     )
@@ -220,7 +230,11 @@ class StatCheckPlugin(Plugin):
                         f" §7| {fplayer.bedwars.fkdr}",
                     )
                 )
-                self.players_with_stats[player] = (_uuid, display_name, fplayer)
+                self.players_with_stats[player] = {
+                    "uuid": _uuid,
+                    "display_name": display_name,
+                    "fplayer": fplayer,
+                }
         self.keep_player_stats_updated()
 
     @listen_server(0x38, blocking=True)
@@ -751,15 +765,11 @@ class StatCheckPlugin(Plugin):
                         ("", ""),
                     )
 
-                    self.players_with_stats.update(
-                        {
-                            player.name: (
-                                player.uuid,
-                                prefix + display_name + suffix,
-                                fplayer,
-                            )
-                        }
-                    )
+                    self.players_with_stats[player.name] = {
+                        "uuid": player.uuid,
+                        "display_name": prefix + display_name + suffix,
+                        "fplayer": fplayer,
+                    }
 
                     if self.settings.bedwars.tablist.show_stats.get() == "ON":
                         self.client.send_packet(
@@ -835,12 +845,12 @@ class StatCheckPlugin(Plugin):
             case 0:  # team empty or disconnected
                 title = empty_team_dialogue_first
             case 1:  # solos or doubles with 1 disconnect
-                title = self.players_with_stats[first_players[0]][1]
+                title = self.players_with_stats[first_players[0]]["display_name"]
             case (
                 2
             ):  # team of 2; calculate which one has better stats based on user pref
-                fp1 = self.players_with_stats[first_players[0]][2]
-                fp2 = self.players_with_stats[first_players[1]][2]
+                fp1 = self.players_with_stats[first_players[0]]["fplayer"]
+                fp2 = self.players_with_stats[first_players[1]]["fplayer"]
 
                 if isinstance(fp1, Nick):
                     better = fp1
@@ -852,16 +862,18 @@ class StatCheckPlugin(Plugin):
                     better, worse = sorted((fp1, fp2), key=key, reverse=True)
 
                 if isinstance(better, FormattedPlayer):
-                    title = self.players_with_stats[better.raw_name][1]
+                    title = self.players_with_stats[better.raw_name]["display_name"]
                 else:
-                    title = self.players_with_stats[better.name][1]
+                    title = self.players_with_stats[better.name]["display_name"]
 
                 if self.settings.bedwars.announce_first_rush.get() == "FIRST RUSH":
                     # if we aren't showing alt rush team stats, we can show both players from first rush
                     if isinstance(worse, FormattedPlayer):
-                        subtitle = self.players_with_stats[worse.raw_name][1]
+                        subtitle = self.players_with_stats[worse.raw_name][
+                            "display_name"
+                        ]
                     else:
-                        subtitle = self.players_with_stats[worse.name][1]
+                        subtitle = self.players_with_stats[worse.name]["display_name"]
             case _:
                 raise ValueError(
                     f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
@@ -872,10 +884,12 @@ class StatCheckPlugin(Plugin):
                 case 0:
                     subtitle = empty_team_dialogue_alt
                 case 1:
-                    subtitle = self.players_with_stats[other_adjacent_players[0]][1]
+                    subtitle = self.players_with_stats[other_adjacent_players[0]][
+                        "display_name"
+                    ]
                 case 2:
-                    fp1 = self.players_with_stats[other_adjacent_players[0]][2]
-                    fp2 = self.players_with_stats[other_adjacent_players[1]][2]
+                    fp1 = self.players_with_stats[other_adjacent_players[0]]["fplayer"]
+                    fp2 = self.players_with_stats[other_adjacent_players[1]]["fplayer"]
                     if isinstance(fp1, Nick):
                         better = fp1
                         worse = fp2
@@ -886,9 +900,11 @@ class StatCheckPlugin(Plugin):
                         better, worse = sorted((fp1, fp2), key=key, reverse=True)
 
                     if isinstance(better, FormattedPlayer):
-                        subtitle = self.players_with_stats[better.raw_name][1]
+                        subtitle = self.players_with_stats[better.raw_name][
+                            "display_name"
+                        ]
                     else:
-                        subtitle = self.players_with_stats[better.name][1]
+                        subtitle = self.players_with_stats[better.name]["display_name"]
                 case _:
                     raise ValueError(
                         f"wtf how are there {len(other_adjacent_players)} ppl on that team???\nplayers on alt rush team: {other_adjacent_players}"
@@ -1138,7 +1154,10 @@ class StatCheckPlugin(Plugin):
                 VarInt(n_players),
                 *(
                     UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
-                    for uuid_, display_name, _ in self.players_with_stats.values()
+                    for uuid_, display_name in (
+                        (d["uuid"], d["display_name"])
+                        for d in self.players_with_stats.values()
+                    )
                 ),
             )
 
