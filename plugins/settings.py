@@ -13,11 +13,11 @@ from protocol.datatypes import (
     TextComponent,
 )
 from protocol.nbt import dumps, from_dict
+from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.mcmodels import Game
 from proxhy.settings import ProxhySettings
 
-from ..proxhy.command import command
 from .window import Window
 
 

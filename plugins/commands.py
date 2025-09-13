@@ -1,21 +1,30 @@
 import re
+import shelve
+from pathlib import Path
+from typing import Literal
+
+import hypixel
+from platformdirs import user_config_dir
 
 from core.events import listen_client, subscribe
 from core.plugin import Plugin
-from protocol.datatypes import Buffer, Item, SlotData, String, TextComponent
+from protocol.datatypes import Buffer, Chat, Item, SlotData, String, TextComponent
 from protocol.nbt import dumps, from_dict
+from proxhy.command import Command, command
 from proxhy.errors import CommandException
+from proxhy.formatting import FormattedPlayer
 from proxhy.mcmodels import Game
 
-from ..proxhy.command import Command, command
 from .window import Window, get_trigger
 
 
 class CommandsPlugin(Plugin):
     rq_game: Game
+    hypixel_client: hypixel.Client
 
     def _init_commands(self):
         self.commands: dict[str, Command] = {}
+        self.AB_DATA_PATH = Path(user_config_dir("proxhy")) / "autoboop.db"
 
         for item in dir(self):
             try:
@@ -85,6 +94,97 @@ class CommandsPlugin(Plugin):
     @command()  # Mmm, garlic bread.
     async def garlicbread(self):  # Mmm, garlic bread.
         return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
+
+    @command("ab")
+    async def autoboop(
+        self, action: Literal["add", "remove", "list"], player: str = ""
+    ):
+        if action in {"add", "remove"} and not player:
+            raise CommandException(f"Please specify a player to {action}!")
+
+        if action in {"list"} and player:
+            raise CommandException(
+                TextComponent("/autoboop list")
+                .color("gold")
+                .appends("takes no arguments!")
+            )
+
+        try:
+            fplayer = FormattedPlayer
+            if player:
+                fplayer = FormattedPlayer(await self.hypixel_client.player(player))
+        except hypixel.PlayerNotFound:
+            raise CommandException(
+                TextComponent("Player '")
+                .appends(TextComponent(player).color("blue"))
+                .appends("' was not found!")
+            )
+
+        with shelve.open(self.AB_DATA_PATH) as db:
+            if action == "list":
+                players = sorted(db.keys())
+                if not players:
+                    return self.client.chat(
+                        TextComponent("No players in autoboop!").color("green")
+                    )
+                self.client.chat(TextComponent("Players in autoboop:").color("green"))
+                msg = TextComponent("> ").color("green")
+                for i, player in enumerate(players):
+                    if i != 0:
+                        msg.append(TextComponent(", ").color("green"))
+                    msg.append(TextComponent(db.get(player)).color("aqua"))
+                self.client.chat(msg)
+            elif action == "add":
+                if db.get(fplayer.name):
+                    raise CommandException(
+                        TextComponent("Player")
+                        .appends(fplayer.rankname)
+                        .appends("is already in autoboop!")
+                    )
+                db[fplayer.name] = fplayer.rankname
+                self.client.chat(
+                    TextComponent("Added")
+                    .color("green")
+                    .appends(
+                        TextComponent(fplayer.rankname).appends(
+                            TextComponent("to autoboop!").color("green")
+                        )
+                    )
+                )
+            else:  # remove
+                if not db.get(fplayer.name):
+                    raise CommandException(
+                        TextComponent("Player")
+                        .appends(fplayer.rankname)
+                        .appends("is not in autoboop!")
+                    )
+                del db[fplayer.name]
+                self.client.chat(
+                    TextComponent("Removed")
+                    .color("green")
+                    .appends(
+                        TextComponent(fplayer.rankname).appends(
+                            TextComponent("from autoboop!").color("green")
+                        )
+                    )
+                )
+
+    @subscribe(r"chat:server:(Guild|Friend) > ([A-Za-z0-9_]+) joined.$")
+    async def on_guild_join(self, buff: Buffer):
+        player = re.match(
+            r"^(Guild|Friend) > ([A-Za-z0-9_]+) joined\.$", buff.unpack(Chat)
+        )
+
+        if (not player) or (not player.group(2)):
+            return
+
+        player = str(player.group(2))
+
+        with shelve.open(self.AB_DATA_PATH) as db:
+            if db.get(player):
+                self.server.chat(f"/boop {player}")
+
+        self.client.send_packet(0x02, buff.getvalue())
 
     @command()
     async def fribidiskigma(self):
