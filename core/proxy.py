@@ -1,6 +1,6 @@
 import asyncio
 import re
-import zlib
+import zlib  # pyright: ignore[reportShadowedImports]
 from asyncio import StreamReader, StreamWriter
 from collections import defaultdict
 from typing import Any, Callable, Coroutine, Literal

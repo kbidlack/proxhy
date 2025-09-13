@@ -1,7 +1,10 @@
-import re
+# pyright: reportMissingModuleSource=false
+
 import json
+import re
 import time
 from urllib.parse import urljoin
+
 import requests
 from bs4 import BeautifulSoup, Tag
 from tqdm import tqdm
