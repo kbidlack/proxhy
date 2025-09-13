@@ -1,8 +1,7 @@
 from core.plugin import Plugin
 from protocol.datatypes import TextComponent
+from proxhy.command import command
 from proxhy.mcmodels import Game, Teams
-
-from ..proxhy.command import command
 
 
 class DebugPlugin(Plugin):
