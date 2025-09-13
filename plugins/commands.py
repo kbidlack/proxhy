@@ -7,21 +7,34 @@ from protocol.nbt import dumps, from_dict
 from proxhy.errors import CommandException
 from proxhy.mcmodels import Game
 
-from .command import command, commands
+from .command import Command, command
 from .window import Window, get_trigger
 
 
 class CommandsPlugin(Plugin):
     rq_game: Game
 
+    def _init_commands(self):
+        self.commands: dict[str, Command] = {}
+
+        for item in dir(self):
+            try:
+                obj = getattr(self, item)
+                if hasattr(obj, "_command"):
+                    command: Command = getattr(obj, "_command")
+                    for alias in command.aliases:
+                        self.commands.update({alias: command})
+            except AttributeError:
+                pass  # yeah
+
     @subscribe("chat:client:/.*")
     async def on_client_chat_command(self, buff: Buffer):
         message = buff.unpack(String)
 
         segments = message.split()
-        command = commands.get(
+        command = self.commands.get(
             segments[0].removeprefix("/").casefold()
-        ) or commands.get(segments[0].removeprefix("//").casefold())
+        ) or self.commands.get(segments[0].removeprefix("//").casefold())
         if command:
             try:
                 output: str | TextComponent = await command(self, message)
