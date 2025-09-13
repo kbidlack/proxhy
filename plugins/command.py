@@ -1,12 +1,15 @@
 import inspect
-from typing import Awaitable, Callable, Literal, get_args, get_origin
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Literal,
+    get_args,
+    get_origin,
+)
 
-from core.plugin import Plugin
-from core.proxy import Proxy
 from protocol.datatypes import TextComponent
 from proxhy.errors import CommandException
-
-commands: dict[str, Callable[[Proxy | Plugin, str | None], Awaitable]] = {}
 
 
 class Parameter:
@@ -51,11 +54,7 @@ class Command:
         ]
 
         self.aliases = aliases
-        commands.update({self.name: self})
-        for alias in self.aliases:
-            commands.update({alias: self})
 
-    # decorator
     async def __call__(self, proxy, message: str):
         segments = message.split()
         args = segments[1:]
@@ -106,5 +105,9 @@ class Command:
             return await self.function(proxy, *args)
 
 
-def command(*aliases):
-    return lambda func: Command(func, *aliases)
+def command[**P](*aliases):
+    def wrapper(func: Callable[P, Awaitable[Any]]):
+        setattr(func, "_command", Command(func, *(func.__name__, *aliases)))
+        return func
+
+    return wrapper
