@@ -22,7 +22,6 @@ from platformdirs import user_cache_dir
 
 from core.events import listen_server, subscribe
 from core.plugin import Plugin
-from plugins.command import command
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -33,6 +32,7 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.aliases import Gamemode
+from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from proxhy.mcmodels import Game, Nick, Team, Teams
@@ -1165,10 +1165,8 @@ class StatCheckPlugin(Plugin):
     async def on_queue(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
         if self.settings.bedwars.api_key_reminder.get() == "ON":
-            raw = buff.unpack(Chat)
-            plain = COLOR_CODE_RE.sub("", raw)
-
-            m = JOIN_RE.match(plain)
+            message = buff.unpack(Chat)
+            m = JOIN_RE.match(message)
             if m and m.group("ign").casefold() == self.username.casefold():
                 # Ensure we have a recent validation
                 now = asyncio.get_event_loop().time()
