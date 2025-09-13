@@ -2,7 +2,7 @@ from core.plugin import Plugin
 from protocol.datatypes import TextComponent
 from proxhy.mcmodels import Game, Teams
 
-from .command import command
+from ..proxhy.command import command
 
 
 class DebugPlugin(Plugin):

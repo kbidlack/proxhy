@@ -7,7 +7,7 @@ from protocol.nbt import dumps, from_dict
 from proxhy.errors import CommandException
 from proxhy.mcmodels import Game
 
-from .command import Command, command
+from ..proxhy.command import Command, command
 from .window import Window, get_trigger
 
 
