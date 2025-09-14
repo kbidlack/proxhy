@@ -1,4 +1,5 @@
-import argparse, json, re
+import argparse
+import json
 from pathlib import Path
 
 # Placeholders we'll replace with regex fragments

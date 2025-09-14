@@ -794,6 +794,8 @@ class StatCheckPlugin(Plugin):
         await self.update_stats_complete.wait()
         if not self._api_key_valid:
             return
+        if self.game.map is None:
+            raise ValueError("Could not determine map!")
         try:
             side_rush, alt_rush = self.get_adjacent_teams()
         except ValueError:  # player is not on a team
@@ -801,18 +803,15 @@ class StatCheckPlugin(Plugin):
         side_players = self.get_players_on_team(side_rush)
         alt_players = self.get_players_on_team(alt_rush)
 
-        map_data = BW_MAPS[self.game.map]
-        rush_direction = map_data["rush_direction"]
-
-        if rush_direction == "side":
+        if self.game.map.rush_direction == "side":
             first_rush, first_players = side_rush, side_players
             other_adjacent_rush, other_adjacent_players = alt_rush, alt_players
-        elif rush_direction == "alt":
+        elif self.game.map.rush_direction == "alt":
             first_rush, first_players = alt_rush, alt_players
             other_adjacent_rush, other_adjacent_players = side_rush, side_players
         else:
             raise ValueError(
-                f'Expected Literal "side" or "alt" for BW_MAPS["{self.game.map}"]["rush_direction"]; got {rush_direction} instead.'
+                f'Expected Literal "side" or "alt" for self.game.map.rush_direction; got {self.game.map.rush_direction} instead.'
             )
 
         empty_team_dialogue_first = (

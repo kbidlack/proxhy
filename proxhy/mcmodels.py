@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
+import json
+from typing import Optional, Literal
 
 
 @dataclass
@@ -31,12 +34,51 @@ class Teams(list[Team]):
             self.remove(team)
 
 
+bw_maps_path = Path(__file__).parent.parent / "assets/bedwars_maps.json"
+
+with bw_maps_path.open("r") as file:
+    bw_maps: dict = json.load(file)
+maps = []
+
+
+@dataclass
+class BedwarsMap:
+    name: str
+    rush_direction: Optional[Literal["side", "alt"]] = None
+    max_height: Optional[int] = None
+    min_height: Optional[int] = None
+
+    @classmethod
+    def get(cls, name: str) -> BedwarsMap:
+        """Get any BedwarsMap obj from a map name"""
+        name = name.lower()
+        for m in maps:
+            if m.name == name:
+                return m
+        if name not in bw_maps.keys():
+            raise ValueError(f"Unknown map {name}.")
+        map_dict: dict = bw_maps[name]
+        new = BedwarsMap(
+            name=name,
+            rush_direction=map_dict.get("rush_direction"),
+            max_height=map_dict.get("max_height"),
+            min_height=map_dict.get("min_height"),
+        )
+        maps.append(new)
+        return new
+
+    def __eq__(self, other: object):
+        if not isinstance(other, BedwarsMap):
+            return NotImplemented  # i was gonna do False but apparently this is more correct
+        return self.name == other.name
+
+
 @dataclass
 class Game:
     server: str = ""
     gametype: str = ""
     mode: str = ""
-    map: str = ""
+    map: Optional[BedwarsMap] = None
     lobbyname: str = ""
     started: bool = False
 
@@ -51,11 +93,14 @@ class Game:
         self.server = ""
         self.gametype = ""
         self.mode = ""
-        self.map = ""
+        self.map = None
         self.lobbyname = ""
 
         for key, value in data.items():
-            setattr(self, key, value)
+            if key != "map":
+                setattr(self, key, value)
+            else:
+                self.map = BedwarsMap(name=value)
 
 
 @dataclass
