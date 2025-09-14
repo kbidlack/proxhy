@@ -67,7 +67,7 @@ class SpatialPlugin(Plugin):
         """Called once when the proxy is started; loops indefinitely"""
         while True:
             if (
-                self.game.map  # we are in a game & not lobby
+                self.game.map is not None  # we are in a game & not lobby
                 and self.settings.bedwars.visual.height_limit_warnings.get() == "ON"
                 and self.game.started
             ):
@@ -78,11 +78,11 @@ class SpatialPlugin(Plugin):
     async def height_limit_warnings(self):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
-        if self.position is None:
+        if self.position is None or self.game.map is None:
             return
         y = self.position[1]
-        max_height: int = BW_MAPS[self.game.map]["max_height"] or 255
-        min_height: int = BW_MAPS[self.game.map]["min_height"] or 0
+        max_height: int = self.game.map.max_height or 255
+        min_height: int = self.game.map.max_height or 0
 
         if abs(min_height - y) <= 3 or abs(max_height - y) <= 5:
             limit_dist = round(max(min(y - min_height, max_height - y), 0))
