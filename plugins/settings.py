@@ -423,9 +423,9 @@ class SettingsMenu(Window):
             s_display, prev_state, next_state, prev_color, next_color
         )
 
-        await self.proxy.emit(f"setting:{s_path}", [prev_state, next_state])
-
         self.proxy.client.chat(msg)
+
+        await self.proxy.emit(f"setting:{s_path}", [prev_state, next_state])
 
     def open_group_callback(
         self,
