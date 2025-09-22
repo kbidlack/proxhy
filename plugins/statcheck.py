@@ -276,7 +276,8 @@ class StatCheckPlugin(Plugin):
         mode: str = "bedwars",
         window: Optional[float] = -1.0,
         *stats,
-    ):  # display_abridged=True
+        display_abridged=True,
+    ):
         """
         Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
         cumulative values from approximately one week ago. It then overrides the player's live FKDR and WLR attributes,
@@ -471,8 +472,10 @@ class StatCheckPlugin(Plugin):
 
         # List of modes in the order to appear.
         modes = ["Solo", "Doubles", "3v3v3v3", "4v4v4v4"]
-        # if not display_abridged:
-        modes.extend(["4v4", "Rush", "Ultimate", "Lucky", "Castle", "Swap", "Voidless"])
+        if not display_abridged:
+            modes.extend(
+                ["4v4", "Rush", "Ultimate", "Lucky", "Castle", "Swap", "Voidless"]
+            )
         mode_lines = []
 
         dreams_linebreak_init, dreams_linebreak_complete = False, False
@@ -550,8 +553,8 @@ class StatCheckPlugin(Plugin):
 
         if mode_lines:
             hover_text += "".join(mode_lines)
-        # if display_abridged:
-        #     hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
+        if display_abridged:
+            hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
 
         # Format the hover text and send the chat message.
         return fplayer.format_stats(gamemode, *stats).hover_text(hover_text)
@@ -566,9 +569,11 @@ class StatCheckPlugin(Plugin):
     async def scweekly(self, ign: str = "", mode: str = "bedwars", *stats: str):
         return await self._sc_internal(ign, mode, 7.0, *stats)
 
-    # @command("scfull")
-    # async def statcheckfull(self, ign=None, mode=None, window=None, *stats):
-    #     return await self._sc_internal(ign, mode, window, False, *stats)
+    @command("scfull")
+    async def statcheckfull(
+        self, ign: str = "", mode: str = "bedwars", window: float = -1.0, *stats
+    ):
+        return await self._sc_internal(ign, mode, window, *stats, display_abridged=True)
 
     async def _get_player(self, player: str):
         return self._cached_players.get(player) or await self.hypixel_client.player(
