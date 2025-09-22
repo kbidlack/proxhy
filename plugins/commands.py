@@ -119,6 +119,8 @@ class CommandsPlugin(Plugin):
                 .appends(TextComponent(player).color("blue"))
                 .appends("' was not found!")
             )
+        except hypixel.InvalidApiKey:
+            raise CommandException("Invalid API Key!")
 
         with shelve.open(self.AB_DATA_PATH) as db:
             if action == "list":
