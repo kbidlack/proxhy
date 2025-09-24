@@ -573,7 +573,9 @@ class StatCheckPlugin(Plugin):
     async def statcheckfull(
         self, ign: str = "", mode: str = "bedwars", window: float = -1.0, *stats
     ):
-        return await self._sc_internal(ign, mode, window, *stats, display_abridged=True)
+        return await self._sc_internal(
+            ign, mode, window, *stats, display_abridged=False
+        )
 
     async def _get_player(self, player: str):
         return self._cached_players.get(player) or await self.hypixel_client.player(
