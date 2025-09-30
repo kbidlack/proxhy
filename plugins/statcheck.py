@@ -4,6 +4,7 @@ import json
 import os
 import re
 import uuid
+from functools import lru_cache
 from pathlib import Path
 from typing import Callable, Optional, TypedDict
 
@@ -41,10 +42,10 @@ from proxhy.settings import ProxhySettings
 ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
 with open(ASSETS_DIR / "bedwars_maps.json", "r", encoding="utf-8") as f:
     BW_MAPS: dict = json.load(f)
-f.close()
 with open(ASSETS_DIR / "rush_mappings.json", "r", encoding="utf-8") as f:
     RUSH_MAPPINGS = json.load(f)
-f.close()
+with open(ASSETS_DIR / "bedwars_chat.json", "r", encoding="utf-8") as file:
+    KILL_MSGS: list[str] = json.load(file)["kill_messages"]
 
 game_start_msgs = [  # block all the game start messages
     "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
@@ -70,6 +71,12 @@ class PlayersWithStats(TypedDict):
     fplayer: FormattedPlayer | Nick
 
 
+class TeamColor(TypedDict):
+    letter: str
+    code: str
+    name: str
+
+
 class StatCheckPlugin(Plugin):
     teams: Teams
     game: Game
@@ -82,6 +89,10 @@ class StatCheckPlugin(Plugin):
         self.players_with_stats: dict[str, PlayersWithStats] = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: set[str] = set()  # players from /who
+
+        self.final_dead: dict[str, str] = {}  # name: display_name
+        self.dead: dict[str, str] = {}
+
         self._cached_players: dict = {}
         # players from packet_player_list_item
         self.players: dict[str, str] = {}
@@ -148,6 +159,10 @@ class StatCheckPlugin(Plugin):
         self.players.clear()
         self.players_with_stats.clear()
         self._cached_players.clear()
+        self.dead.clear()
+        self.final_dead.clear()
+
+        self.get_team_color.cache_clear()
 
         self.received_player_stats.clear()
         self.game_error = None
@@ -159,6 +174,19 @@ class StatCheckPlugin(Plugin):
         # statcheck
         self.keep_player_stats_updated()
 
+    def update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer(
+        self,
+    ):
+        for fdp in self.final_dead:
+            self.client.send_packet(
+                0x38,
+                VarInt.pack(3),
+                VarInt.pack(1),
+                UUID.pack(uuid.UUID(self.get_player_to_uuid_mapping()[fdp])),
+                Boolean.pack(True),
+                Chat.pack(self.get_dead_dn(fdp)),
+            )
+
     @subscribe("setting:bedwars.tablist.show_stats")
     async def bedwars_tablist_show_stats_callback(self, data: list):
         # data = [old_state, new_state]
@@ -169,6 +197,8 @@ class StatCheckPlugin(Plugin):
         elif data == ["ON", "OFF"]:
             await self._reset_stats()
 
+        self.update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer()
+
     @subscribe("setting:bedwars.tablist.is_mode_specific")
     async def bedwars_tablist_is_mode_specific_callback(self, data: list):
         # data = [old_state, new_state]
@@ -177,7 +207,7 @@ class StatCheckPlugin(Plugin):
             for player, (uuid, _, fplayer) in self.players_with_stats.items():
                 if isinstance(fplayer, FormattedPlayer):
                     show_rankname = self.settings.bedwars.tablist.show_rankname.get()
-                    color_code = self.get_team_color_code(fplayer.raw_name)
+                    color_code = self.get_team_color(fplayer.raw_name)["code"]
 
                     if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
                         fkdr = fplayer.bedwars.__getattribute__(
@@ -203,26 +233,25 @@ class StatCheckPlugin(Plugin):
 
             # Update the tab list immediately
             self.keep_player_stats_updated()
+            self.update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer()
 
     async def _reset_stats(self):
         for player in self.players_with_stats:
-            for team in self.teams:
-                if player in team.players:
-                    self.client.send_packet(
-                        0x38,
-                        VarInt(3),
-                        VarInt(1),
-                        UUID(uuid.UUID(str(self.players_with_stats[player]["uuid"]))),
-                        Boolean(True),
-                        Chat(team.prefix + player + team.suffix),
-                    )
+            self.client.send_packet(
+                0x38,
+                VarInt(3),
+                VarInt(1),
+                UUID(uuid.UUID(str(self.players_with_stats[player]["uuid"]))),
+                Boolean(True),
+                Chat(self.get_team_color(player)["code"] + player),
+            )
 
     @subscribe("setting:bedwars.tablist.show_rankname")
     async def bedwars_tablist_show_rankname_callback(self, data: list):
         show_rankname = self.settings.bedwars.tablist.show_rankname.get()
         for player, (_uuid, _dname, fplayer) in self.players_with_stats.items():
             if isinstance(fplayer, FormattedPlayer):
-                color_code = self.get_team_color_code(fplayer.raw_name)
+                color_code = self.get_team_color(fplayer.raw_name)["code"]
                 display_name = " ".join(
                     (
                         f"{fplayer.bedwars.level}{color_code}",
@@ -236,6 +265,7 @@ class StatCheckPlugin(Plugin):
                     "fplayer": fplayer,
                 }
         self.keep_player_stats_updated()
+        self.update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer()
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
@@ -246,8 +276,18 @@ class StatCheckPlugin(Plugin):
             _uuid = buff.unpack(UUID)
             if action == 0:  # add player
                 name = buff.unpack(String)
+                if name in self.players.values() and self.in_bedwars_game:
+                    return
                 self.players[str(_uuid)] = name
             elif action == 4:  # remove player
+                p = self.players.get(str(_uuid))
+                if self.game.gametype == "bedwars":
+                    if (
+                        p in self.players_without_stats
+                        or p in self.players_with_stats.keys()
+                    ):
+                        return
+
                 try:
                     del self.players[str(_uuid)]
                 except KeyError:
@@ -582,25 +622,113 @@ class StatCheckPlugin(Plugin):
             player
         )
 
-    def get_team_color_code(self, player_name: str) -> str:
-        """Return the Minecraft color code (e.g. '§c') for a player, or '' if unknown."""
-        # Nicked player cached color (prefix)
-        if player_name in self.nick_team_colors:
-            m = COLOR_CODE.search(self.nick_team_colors[player_name])
-            return m.group(1) if m else ""
-        team = self.get_team(player_name)
-        if not team or not team.prefix:
-            return ""
-        m = COLOR_CODE.search(team.prefix)
-        return m.group(1) if m else ""
+    @lru_cache()
+    def get_team_color(self, player_name: str) -> TeamColor:
+        """
+        Return comprehensive team color information for a player.
 
-    def get_team_color_name(self, player_name: str) -> str:
-        """Return plain color name (e.g. 'Red') if derivable, else raise ValueError."""
-        team = self.get_team(player_name)
-        if not team:
-            raise ValueError("Provided player is not on a team!")
-        # Team names look like 'Red8'; strip digits
-        return re.sub(r"\d+", "", team.name)
+        Returns a dictionary with:
+        - letter: Single-letter team identifier (R, B, G, Y, A, W, P, S)
+        - code: Minecraft color code (§c, §9, §a, etc.)
+        - name: Full color name (Red, Blue, Green, etc.)
+
+        Special handling for self.username using sidebar "YOU" detection.
+        """
+
+        # Special handling for current user - check sidebar for "YOU"
+        if player_name == self.username:
+            try:
+                # First try normal team detection
+                team = self.get_team(player_name)
+                if team:
+                    team_name = re.sub(r"\d+", "", team.name)
+                    m = COLOR_CODE.search(team.prefix)
+                    color_code = m.group(1) if m else ""
+                else:
+                    raise ValueError("No team found")
+            except (ValueError, AttributeError):
+                # Fall back to sidebar detection
+                sidebar_own_team = next(
+                    (team for team in self.teams if "YOU" in team.suffix), None
+                )
+                if sidebar_own_team is None:
+                    raise ValueError(
+                        "Player is not on a team; cannot determine own team color."
+                    )
+
+                match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
+                if match_:
+                    team_name = match_.group(1)
+                    m = COLOR_CODE.search(sidebar_own_team.prefix)
+                    color_code = m.group(1) if m else ""
+                else:
+                    raise ValueError(
+                        f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
+                    )
+        else:
+            # Handle other players
+            # Check for nicked player cached color first
+            if player_name in self.nick_team_colors:
+                m = COLOR_CODE.search(self.nick_team_colors[player_name])
+                color_code = m.group(1) if m else ""
+                # For nicked players, we can't determine the exact team name
+                # so we'll use a fallback based on color code
+                color_code_to_name = {
+                    "§c": "Red",
+                    "§9": "Blue",
+                    "§a": "Green",
+                    "§e": "Yellow",
+                    "§b": "Aqua",
+                    "§f": "White",
+                    "§d": "Pink",
+                    "§7": "Gray",
+                    "§8": "Gray",
+                }
+                team_name = color_code_to_name.get(color_code, "Unknown")
+            else:
+                team = self.get_team(player_name)
+                if not team:
+                    raise ValueError(f"Provided player {player_name} is not on a team!")
+
+                team_name = re.sub(r"\d+", "", team.name)
+                if team.prefix:
+                    m = COLOR_CODE.search(team.prefix)
+                    color_code = m.group(1) if m else ""
+                else:
+                    color_code = ""
+
+        # Convert team name to letter
+        name_to_letter = {
+            "red": "R",
+            "blue": "B",
+            "green": "G",
+            "yellow": "Y",
+            "aqua": "A",
+            "white": "W",
+            "pink": "P",
+            "gray": "S",
+        }
+        letter = name_to_letter.get(team_name.lower(), "?")
+
+        # Ensure we have a color code - map from letter if needed
+        if not color_code:
+            letter_to_code = {
+                "R": "§c",
+                "B": "§9",
+                "G": "§a",
+                "Y": "§e",
+                "A": "§b",
+                "W": "§f",
+                "P": "§d",
+                "S": "§8",
+            }
+            color_code = letter_to_code.get(letter, "§f")
+
+        return TeamColor(
+            letter=letter,
+            code=color_code,
+            name=team_name.title(),  # Ensure proper capitalization
+        )
 
     async def _update_stats(self):
         """
@@ -720,7 +848,12 @@ class StatCheckPlugin(Plugin):
                             show_rankname = (
                                 self.settings.bedwars.tablist.show_rankname.get()
                             )
-                            color_code = self.get_team_color_code(fplayer.raw_name)
+                            try:
+                                color_code = self.get_team_color(fplayer.raw_name)[
+                                    "code"
+                                ]
+                            except ValueError:
+                                color_code = ""
                             if (
                                 self.settings.bedwars.tablist.is_mode_specific.get()
                                 == "ON"
@@ -761,24 +894,18 @@ class StatCheckPlugin(Plugin):
                         fplayer = player
 
                     # this is where we actually update player stats in tab
-                    prefix, suffix = next(
-                        (
-                            (team.prefix, team.suffix)
-                            for team in self.teams
-                            if player.name in team.players
-                        ),
-                        # if cannot find prefix/suffix
-                        # just return empty strings by default
-                        ("", ""),
-                    )
+                    team_color = self.get_team_color(player.name)
+                    prefix = team_color["code"] + "§l" + team_color["letter"] + "§r"
 
                     self.players_with_stats[player.name] = {
                         "uuid": player.uuid,
-                        "display_name": prefix + display_name + suffix,
+                        "display_name": prefix + " " + display_name,
                         "fplayer": fplayer,
                     }
 
                     if self.settings.bedwars.tablist.show_stats.get() == "ON":
+                        if player.name in self.final_dead:
+                            display_name = self.get_dead_dn(player.name)
                         self.client.send_packet(
                             0x38,
                             VarInt(3),
@@ -926,7 +1053,7 @@ class StatCheckPlugin(Plugin):
         """
         Returns (side_rush, alt_rush) teams
         """
-        team = self.get_own_team_color().lower()
+        team = self.get_team_color(self.username)["name"].lower()
         # will raise valueerror if player is not on a team; handle!
 
         side_rush = RUSH_MAPPINGS["default_mappings"]["side_rushes"][team]
@@ -1005,38 +1132,12 @@ class StatCheckPlugin(Plugin):
             # print(f"Error writing stat log: {e}")
             pass  # TODO: log this
 
-    def get_own_team_color(self) -> str:
-        """Returns stripped team color, like 'green' or 'pink'."""
-        try:
-            own_team = self.get_team_color_name(self.username)  # mostly works
-            if own_team:  # fails if spectator
-                return own_team
-        except ValueError:
-            pass  # nicked player probably
-
-        sidebar_own_team = next(
-            (team for team in self.teams if "YOU" in team.suffix), None
-        )
-        if sidebar_own_team is None:
-            raise ValueError(
-                "Player is not on a team; cannot determine own team color."
-            )
-        else:
-            match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
-            if match_:
-                own_team_color = match_.group(1)
-            else:
-                raise ValueError(
-                    f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
-                )
-        return own_team_color
-
     async def stat_highlights(self):
         """Display top 3 enemy players and nicked players."""
         if not self.players_with_stats:
             return "No stats found!"
 
-        own_team_color = self.get_own_team_color()
+        own_team_color = self.get_team_color(self.username)["name"]
 
         # find team color as str (e.g. Pink, Blue, etc.)
         # TODO: move to method?
@@ -1152,7 +1253,13 @@ class StatCheckPlugin(Plugin):
     def keep_player_stats_updated(self):
         # make sure player stats stays updated
         # hypixel resets sometimes
-        n_players = len(self.players_with_stats.values())
+        n_players = len(
+            [
+                i
+                for i in self.players_with_stats.keys()
+                if (i not in self.dead.keys()) and (i not in self.final_dead.keys())
+            ]
+        )
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
             self.client.send_packet(
                 0x38,
@@ -1162,7 +1269,9 @@ class StatCheckPlugin(Plugin):
                     UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
                     for uuid_, display_name in (
                         (d["uuid"], d["display_name"])
-                        for d in self.players_with_stats.values()
+                        for i, d in self.players_with_stats.items()
+                        if (i not in self.dead.keys())
+                        and (i not in self.final_dead.keys())
                     )
                 ),
             )
@@ -1216,10 +1325,33 @@ class StatCheckPlugin(Plugin):
         "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
     async def on_chat_user_rejoin(self, buff: Buffer):
+        message = buff.unpack(Chat)
+        self.players_without_stats.add(self.username)
+        self.dead[self.username] = self.get_player_to_uuid_mapping()[self.username]
         self.server.send_packet(0x01, String("/who"))
         self.received_who.clear()
         self.client.send_packet(0x02, buff.getvalue())
         self.game.started = True
+        if "spectator" not in message:
+            await self.respawn_timer(self.username, reconnect=True)
+
+    @subscribe("chat:server:Your bed was destroyed so you are a spectator!")
+    async def on_chat_user_rejoin_nobed(self, buff: Buffer):
+        self.players_without_stats.add(self.username)
+        self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
+            self.username
+        ]
+        self.client.send_packet(
+            0x38,
+            VarInt.pack(3),
+            VarInt.pack(1),
+            UUID.pack(uuid.UUID(self.get_player_to_uuid_mapping()[self.username])),
+            Boolean.pack(True),
+            Chat.pack(self.get_dead_dn(self.username)),
+        )
+
+    def in_bedwars_game(self):
+        return self.game.gametype == "bedwars" and self.game.mode
 
     @subscribe(f"chat:server:({'|'.join(game_start_msgs)})")
     async def on_chat_game_start(self, buff: Buffer):
@@ -1277,3 +1409,105 @@ class StatCheckPlugin(Plugin):
         await self._update_stats()
         if not self.stats_highlighted:
             await self.stat_highlights()
+
+    def match_kill_message(self, message):
+        for pattern in KILL_MSGS:
+            match = re.match(pattern, message)
+            if match:
+                return match  # Only 3 groups: victim, killer, final_kill
+        return None
+
+    def get_player_to_uuid_mapping(self):
+        return {v: k for k, v in self.players.items()}
+
+    async def respawn_timer(self, player: str, reconnect=False):
+        t = 10 if reconnect else 5
+
+        for s in range(t, 0, -1):
+            display_name = f"§6§l{s}s {self.get_dead_dn(player)}"
+            self.client.send_packet(
+                0x38,
+                VarInt.pack(3),
+                VarInt.pack(1),
+                UUID.pack(uuid.UUID(self.dead[player])),
+                Boolean.pack(True),
+                Chat.pack(display_name),
+            )
+            await asyncio.sleep(1)
+
+        del self.dead[player]
+        self.keep_player_stats_updated()
+
+    @subscribe(r"chat:server:^(.+?) reconnected\\.$")
+    async def on_player_recon(self, buff: Buffer):
+        message = buff.unpack(Chat)
+        p = message.split(" ")[0]
+        print(f"{p} reconnected.")
+        p_to_u = self.get_player_to_uuid_mapping()
+        while p_to_u.get(p) is None:
+            await asyncio.sleep(0.01)
+        self.dead[p] = p_to_u[p]
+
+    def get_dead_dn(self, p: str):
+        if p != self.username:
+            color = "§7§o"
+        else:
+            color = "§7§l§o"
+        if (
+            p in self.players_with_stats.keys()
+            and self.settings.bedwars.tablist.show_stats.get() == "ON"
+        ):
+            display_name = re.sub(
+                r"§[0-9a-f]", "", str(self.players_with_stats[p]["display_name"])
+            )
+            dn = color + re.sub(r"§r", "§r" + color, display_name)
+        else:
+            dn = color + p
+
+        return dn
+
+    @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
+    async def on_chat_kill_message(self, buff: Buffer):
+        if self.game.gametype != "bedwars":
+            return
+
+        self.client.send_packet(0x02, buff.getvalue())
+        message = buff.unpack(Chat)
+        m = self.match_kill_message(message)
+
+        if not m:
+            return
+
+        killed = m.group(1)
+
+        fk = message.endswith("FINAL KILL!")
+
+        # "there are only two hard things in computer science: cache invalidation and naming things"
+        # or something
+        p = killed
+        p_to_u = self.get_player_to_uuid_mapping()
+        u = p_to_u[p]
+
+        if message.endswith("disconnected."):
+            try:
+                del self.players[p]
+            except KeyError:
+                pass  # SHUT UP
+            self.client.send_packet(
+                0x38, VarInt.pack(4), VarInt.pack(1), UUID.pack(uuid.UUID(u))
+            )
+
+        self.client.send_packet(
+            0x38,
+            VarInt.pack(3),
+            VarInt.pack(1),
+            UUID.pack(uuid.UUID(u)),
+            Boolean.pack(True),
+            Chat.pack(self.get_dead_dn(p)),
+        )
+
+        if fk:
+            self.final_dead[killed] = u
+        else:
+            self.dead[killed] = u
+            asyncio.create_task(self.respawn_timer(p))

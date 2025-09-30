@@ -1,6 +1,3 @@
-# YIPPEEE
-# this is going to be sooooooo fun
-
 import asyncio
 import json
 
