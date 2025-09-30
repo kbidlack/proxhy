@@ -761,11 +761,7 @@ class Chat(DataType[str, str]):
 class String(DataType[str | TextComponent, str]):
     @staticmethod
     def pack(value: str | TextComponent) -> bytes:
-        bvalue = (
-            value.encode("utf-8")
-            if isinstance(value, str)
-            else str(value).encode("utf-8")
-        )
+        bvalue = str(value).encode("utf-8")
         return VarInt(len(bvalue)) + bvalue
 
     @staticmethod
