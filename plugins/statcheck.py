@@ -57,12 +57,48 @@ game_start_msgs = [  # block all the game start messages
     "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
 ]
 
+# Regex patterns
 COLOR_CODE_RE = re.compile(r"§.")
 JOIN_RE = re.compile(
     r"^(?:\[[A-Za-z0-9+]+\]\s*)?"  # optional rank tag like [MVP++]
     r"(?P<ign>[A-Za-z0-9_]{3,16}) has joined (?P<context>.+)!$"
 )
 COLOR_CODE = re.compile(r"(§[0-9a-fk-or])", re.IGNORECASE)
+
+# Team color mappings
+TEAM_NAME_TO_LETTER = {
+    "red": "R",
+    "blue": "B",
+    "green": "G",
+    "yellow": "Y",
+    "aqua": "A",
+    "white": "W",
+    "pink": "P",
+    "gray": "S",
+}
+
+TEAM_LETTER_TO_CODE = {
+    "R": "§c",
+    "B": "§9",
+    "G": "§a",
+    "Y": "§e",
+    "A": "§b",
+    "W": "§f",
+    "P": "§d",
+    "S": "§8",
+}
+
+COLOR_CODE_TO_NAME = {
+    "§c": "Red",
+    "§9": "Blue",
+    "§a": "Green",
+    "§e": "Yellow",
+    "§b": "Aqua",
+    "§f": "White",
+    "§d": "Pink",
+    "§7": "Gray",
+    "§8": "Gray",
+}
 
 
 class PlayersWithStats(TypedDict):
@@ -111,7 +147,6 @@ class StatCheckPlugin(Plugin):
         )
         self._api_key_valid: bool | None = None
         self._api_key_validated_at: float | None = None
-        self._api_key_ttl = 300  # seconds
 
         self.update_stats_complete = asyncio.Event()
 
@@ -128,30 +163,151 @@ class StatCheckPlugin(Plugin):
 
         keyring.set_password("proxhy", "hypixel_api_key", key)
 
-    async def validate_api_key(self, force=False) -> bool:
-        # what the hell is this LMAO
+    async def validate_api_key(self, force: bool = False) -> bool:
+        """Validate the Hypixel API key by making a test request.
+
+        Caches the result for API_KEY_CACHE_TTL seconds unless force=True.
+        """
         now = asyncio.get_event_loop().time()
-        if (
-            not force
-            and self._api_key_valid is not None
-            and self._api_key_validated_at
-            and now - self._api_key_validated_at < self._api_key_ttl
-        ):
-            return self._api_key_valid
+
+        # Return cached result if valid and not expired
+        if not force and self._api_key_valid is not None:
+            if self._api_key_validated_at and (now - self._api_key_validated_at < 300):
+                return self._api_key_valid
+
+        # Test the API key
+        client = None
         try:
             client = hypixel.Client(self.hypixel_api_key)
             await client.player("gamerboy80")
+            self._api_key_valid = True
         except Exception:
             self._api_key_valid = False
-        else:
-            self._api_key_valid = True
         finally:
-            try:
-                await client.close()  # type:ignore
-            except Exception:
-                pass
+            if client:
+                try:
+                    await client.close()
+                except Exception:
+                    pass
+
         self._api_key_validated_at = now
         return self._api_key_valid
+
+    # Helper methods for common operations
+
+    def _send_tablist_update(
+        self, player_uuid: str, display_name: str, listed: bool = True
+    ) -> None:
+        """Send a packet to update a player's display name in the tab list."""
+        self.client.send_packet(
+            0x38,
+            VarInt.pack(3),
+            VarInt.pack(1),
+            UUID.pack(uuid.UUID(player_uuid)),
+            Boolean.pack(listed),
+            Chat.pack(display_name),
+        )
+
+    def _send_bulk_tablist_update(self, updates: list[tuple[str, str]]) -> None:
+        """Send a packet to update multiple players' display names in the tab list.
+
+        Args:
+            updates: List of (player_uuid, display_name) tuples
+        """
+        if not updates:
+            return
+
+        self.client.send_packet(
+            0x38,
+            VarInt(3),
+            VarInt(len(updates)),
+            *(
+                UUID(uuid.UUID(str(player_uuid))) + Boolean(True) + Chat(display_name)
+                for player_uuid, display_name in updates
+            ),
+        )
+
+    def _build_player_display_name(
+        self, player_name: str, fplayer: FormattedPlayer | Nick
+    ) -> str:
+        """Build the display name for a player based on settings and stats.
+
+        Args:
+            player_name: The player's name
+            fplayer: The formatted player object or Nick object
+
+        Returns:
+            The formatted display name string with color codes
+        """
+        if isinstance(fplayer, Nick):
+            return f"§5[NICK] {player_name}"
+
+        # Get team color
+        try:
+            color_code = self.get_team_color(fplayer.raw_name)["code"]
+        except ValueError:
+            color_code = ""
+
+        # Determine which FKDR to display
+        if (
+            self.settings.bedwars.tablist.is_mode_specific.get() == "ON"
+            and self.game.mode
+        ):
+            mode_key = f"{self.game.mode[8:].lower()}_stats"
+            fkdr = fplayer.bedwars.__getattribute__(mode_key)["fkdr"]
+        else:
+            fkdr = fplayer.bedwars.fkdr
+
+        # Determine which name to display
+        show_rankname = self.settings.bedwars.tablist.show_rankname.get()
+        name = fplayer.rankname if show_rankname == "ON" else fplayer.raw_name
+
+        # Build the display name
+        display_name = " ".join(
+            (
+                f"{fplayer.bedwars.level}{color_code}",
+                name,
+                f" §7| {fkdr}",
+            )
+        )
+
+        # Add team prefix
+        team_color = self.get_team_color(player_name)
+        prefix = team_color["code"] + "§l" + team_color["letter"] + "§r"
+        return prefix + " " + display_name
+
+    def _get_dead_display_name(self, player_name: str) -> str:
+        """Get the grayed-out display name for a dead player.
+
+        Args:
+            player_name: The player's name
+
+        Returns:
+            The formatted display name with gray color codes
+        """
+        # Use bold+italic for current user, just italic for others
+        color = "§7§l§o" if player_name == self.username else "§7§o"
+
+        if (
+            player_name in self.players_with_stats
+            and self.settings.bedwars.tablist.show_stats.get() == "ON"
+        ):
+            display_name = re.sub(
+                r"§[0-9a-f]",
+                "",
+                str(self.players_with_stats[player_name]["display_name"]),
+            )
+            return color + re.sub(r"§r", "§r" + color, display_name)
+        else:
+            return color + player_name
+
+    def _update_dead_players_in_tablist(self) -> None:
+        """Update all final dead players in the tab list with grayed-out display names."""
+        for player_name in self.final_dead:
+            player_uuid = self.get_player_to_uuid_mapping().get(player_name)
+            if player_uuid:
+                display_name = self._get_dead_display_name(player_name)
+                self._send_tablist_update(player_uuid, display_name)
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, _):
@@ -174,19 +330,6 @@ class StatCheckPlugin(Plugin):
         # statcheck
         self.keep_player_stats_updated()
 
-    def update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer(
-        self,
-    ):
-        for fdp in self.final_dead:
-            self.client.send_packet(
-                0x38,
-                VarInt.pack(3),
-                VarInt.pack(1),
-                UUID.pack(uuid.UUID(self.get_player_to_uuid_mapping()[fdp])),
-                Boolean.pack(True),
-                Chat.pack(self.get_dead_dn(fdp)),
-            )
-
     @subscribe("setting:bedwars.tablist.show_stats")
     async def bedwars_tablist_show_stats_callback(self, data: list):
         # data = [old_state, new_state]
@@ -197,75 +340,54 @@ class StatCheckPlugin(Plugin):
         elif data == ["ON", "OFF"]:
             await self._reset_stats()
 
-        self.update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer()
+        self._update_dead_players_in_tablist()
 
     @subscribe("setting:bedwars.tablist.is_mode_specific")
-    async def bedwars_tablist_is_mode_specific_callback(self, data: list):
-        # data = [old_state, new_state]
+    async def bedwars_tablist_is_mode_specific_callback(self, data: list) -> None:
+        """Callback when is_mode_specific setting changes - rebuild display names."""
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
             # Recalculate display names with new mode-specific setting
-            for player, (uuid, _, fplayer) in self.players_with_stats.items():
+            for player, player_data in self.players_with_stats.items():
+                fplayer = player_data["fplayer"]
                 if isinstance(fplayer, FormattedPlayer):
-                    show_rankname = self.settings.bedwars.tablist.show_rankname.get()
-                    color_code = self.get_team_color(fplayer.raw_name)["code"]
-
-                    if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
-                        fkdr = fplayer.bedwars.__getattribute__(
-                            f"{self.game.mode[8:].lower()}_stats"
-                        )["fkdr"]
-                    else:
-                        fkdr = fplayer.bedwars.fkdr
-
-                    display_name = " ".join(
-                        (
-                            f"{fplayer.bedwars.level}{color_code}",
-                            fplayer.rankname
-                            if show_rankname == "ON"
-                            else fplayer.raw_name,
-                            f" §7| {fkdr}",
-                        )
-                    )
+                    # Rebuild display name with new setting
+                    display_name = self._build_player_display_name(player, fplayer)
                     self.players_with_stats[player] = {
-                        "uuid": uuid,
+                        "uuid": player_data["uuid"],
                         "display_name": display_name,
                         "fplayer": fplayer,
                     }
 
             # Update the tab list immediately
             self.keep_player_stats_updated()
-            self.update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer()
+            self._update_dead_players_in_tablist()
 
-    async def _reset_stats(self):
-        for player in self.players_with_stats:
-            self.client.send_packet(
-                0x38,
-                VarInt(3),
-                VarInt(1),
-                UUID(uuid.UUID(str(self.players_with_stats[player]["uuid"]))),
-                Boolean(True),
-                Chat(self.get_team_color(player)["code"] + player),
+    async def _reset_stats(self) -> None:
+        """Reset all player display names to default (no stats shown)."""
+        updates = [
+            (
+                str(self.players_with_stats[player]["uuid"]),
+                self.get_team_color(player)["code"] + player,
             )
+            for player in self.players_with_stats
+        ]
+        self._send_bulk_tablist_update(updates)
 
     @subscribe("setting:bedwars.tablist.show_rankname")
-    async def bedwars_tablist_show_rankname_callback(self, data: list):
-        show_rankname = self.settings.bedwars.tablist.show_rankname.get()
-        for player, (_uuid, _dname, fplayer) in self.players_with_stats.items():
+    async def bedwars_tablist_show_rankname_callback(self, data: list) -> None:
+        """Callback when show_rankname setting changes - rebuild display names."""
+        for player, player_data in self.players_with_stats.items():
+            fplayer = player_data["fplayer"]
             if isinstance(fplayer, FormattedPlayer):
-                color_code = self.get_team_color(fplayer.raw_name)["code"]
-                display_name = " ".join(
-                    (
-                        f"{fplayer.bedwars.level}{color_code}",
-                        fplayer.rankname if show_rankname == "ON" else fplayer.raw_name,
-                        f" §7| {fplayer.bedwars.fkdr}",
-                    )
-                )
+                # Rebuild display name with new setting
+                display_name = self._build_player_display_name(player, fplayer)
                 self.players_with_stats[player] = {
-                    "uuid": _uuid,
+                    "uuid": player_data["uuid"],
                     "display_name": display_name,
                     "fplayer": fplayer,
                 }
         self.keep_player_stats_updated()
-        self.update_dead_players_in_tablist_this_method_isnt_long_enough_so_im_making_it_longer()
+        self._update_dead_players_in_tablist()
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
@@ -309,6 +431,216 @@ class StatCheckPlugin(Plugin):
                 await self.hypixel_client.close()
         except AttributeError:
             pass  # TODO: log
+
+    # Helper methods for _sc_internal stat calculation
+
+    def _find_closest_stat_log(
+        self, ign: str, window: float
+    ) -> tuple[dict, datetime.datetime]:
+        """Find the closest stat log entry for a player within the time window.
+
+        Args:
+            ign: Player's username
+            window: Time window in days
+
+        Returns:
+            Tuple of (old_stats_dict, chosen_datetime)
+
+        Raises:
+            CommandException: If no suitable log entry is found
+        """
+        if not os.path.exists(self.log_path):
+            raise CommandException(
+                "No log file found; recent stats unavailable. For lifetime stats, use /sc <player>."
+            )
+
+        now = datetime.datetime.now()
+        target_time = now - datetime.timedelta(days=window)
+
+        # Read and parse the stat log file
+        entries = []
+        with open(self.log_path, "r") as f:
+            for line in f:
+                try:
+                    entry = json.loads(line.strip())
+                    if entry.get(
+                        "player", ""
+                    ).casefold() == ign.casefold() and entry.get("bedwars"):
+                        entry["dt"] = datetime.datetime.fromisoformat(
+                            entry["timestamp"]
+                        )
+                        entries.append(entry)
+                except Exception:
+                    continue
+
+        if not entries:
+            raise CommandException("No logged stats available for this player.")
+
+        # Filter entries: they must be dated at most 3x the given window
+        valid_entries = [
+            entry
+            for entry in entries
+            if now - entry["dt"] <= datetime.timedelta(days=window * 3)
+        ]
+        if not valid_entries:
+            raise CommandException("Insufficient logged data: logged stats too old.")
+
+        # Choose the entry whose timestamp is closest to the target time
+        chosen_entry = min(
+            valid_entries,
+            key=lambda entry: abs((entry["dt"] - target_time).total_seconds()),
+        )
+
+        return chosen_entry["bedwars"], chosen_entry["dt"]
+
+    def _calculate_stat_deltas(
+        self, current_stats: dict, old_stats: dict, required_keys: list[str]
+    ) -> dict:
+        """Calculate the difference between current and old stats.
+
+        Args:
+            current_stats: Current player stats
+            old_stats: Old player stats from log
+            required_keys: List of stat keys to calculate deltas for
+
+        Returns:
+            Dictionary mapping stat keys to their deltas
+
+        Raises:
+            CommandException: If stats are inconsistent (current < old)
+        """
+        diffs = {}
+        for key in required_keys:
+            try:
+                current_val = float(current_stats.get(key, 0))
+                old_val = float(old_stats.get(key, 0))
+                diff = current_val - old_val
+                if diff < 0:
+                    raise CommandException(
+                        "Logged cumulative values are inconsistent (current value lower than logged value)."
+                    )
+                diffs[key] = diff
+            except Exception:
+                diffs[key] = 0
+        return diffs
+
+    def _calculate_ratios(
+        self, kills: float, deaths: float, wins: float, losses: float
+    ) -> tuple[float, float]:
+        """Calculate FKDR and WLR from stat values.
+
+        Args:
+            kills: Final kills or kills
+            deaths: Final deaths or deaths
+            wins: Wins
+            losses: Losses
+
+        Returns:
+            Tuple of (fkdr, wlr) rounded to 2 decimal places
+        """
+        try:
+            fkdr = kills / deaths if deaths > 0 else float(kills)
+        except Exception:
+            fkdr = 0.0
+
+        try:
+            wlr = wins / losses if losses > 0 else float(wins)
+        except Exception:
+            wlr = 0.0
+
+        return round(fkdr, 2), round(wlr, 2)
+
+    def _format_date_with_ordinal(self, dt: datetime.datetime) -> str:
+        """Format a datetime as 'Month Dayth, Year (H:MM AM/PM)'.
+
+        Args:
+            dt: Datetime to format
+
+        Returns:
+            Formatted string like 'January 1st, 2024 (8:42 PM)'
+        """
+
+        def ordinal(n: int) -> str:
+            if 11 <= (n % 100) <= 13:
+                return f"{n}th"
+            last_digit = n % 10
+            if last_digit == 1:
+                return f"{n}st"
+            elif last_digit == 2:
+                return f"{n}nd"
+            elif last_digit == 3:
+                return f"{n}rd"
+            else:
+                return f"{n}th"
+
+        formatted_date = f"{dt.strftime('%B')} {ordinal(dt.day)}, {dt.strftime('%Y')}"
+        formatted_time = dt.strftime("%I:%M %p").lstrip("0")
+        return f"{formatted_date} ({formatted_time})"
+
+    def _calculate_mode_stats(
+        self,
+        mode: str,
+        current_stats: dict,
+        old_stats: dict,
+        non_dream_mapping: dict,
+        dream_mapping: dict,
+    ) -> tuple[float, float]:
+        """Calculate FKDR and WLR for a specific game mode.
+
+        Args:
+            mode: Mode name (e.g., "Solo", "Doubles", "Rush")
+            current_stats: Current player stats
+            old_stats: Old player stats from log
+            non_dream_mapping: Mapping for standard modes
+            dream_mapping: Mapping for dream modes
+
+        Returns:
+            Tuple of (fkdr, wlr) for the mode
+        """
+        if mode in non_dream_mapping:
+            prefix = non_dream_mapping[mode]
+            fk_key = f"{prefix}_final_kills_bedwars"
+            fd_key = f"{prefix}_final_deaths_bedwars"
+            wins_key = f"{prefix}_wins_bedwars"
+            losses_key = f"{prefix}_losses_bedwars"
+
+            diff_fk = float(current_stats.get(fk_key, 0)) - float(
+                old_stats.get(fk_key, 0)
+            )
+            diff_fd = float(current_stats.get(fd_key, 0)) - float(
+                old_stats.get(fd_key, 0)
+            )
+            diff_wins = float(current_stats.get(wins_key, 0)) - float(
+                old_stats.get(wins_key, 0)
+            )
+            diff_losses = float(current_stats.get(losses_key, 0)) - float(
+                old_stats.get(losses_key, 0)
+            )
+        else:
+            # For dream modes, aggregate over any key that includes the dream substring
+            dream_sub = dream_mapping[mode]
+            diff_fk = sum(
+                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                for key in current_stats
+                if key.endswith("_final_kills_bedwars") and f"_{dream_sub}_" in key
+            )
+            diff_fd = sum(
+                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                for key in current_stats
+                if key.endswith("_final_deaths_bedwars") and f"_{dream_sub}_" in key
+            )
+            diff_wins = sum(
+                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                for key in current_stats
+                if key.endswith("_wins_bedwars") and f"_{dream_sub}_" in key
+            )
+            diff_losses = sum(
+                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
+                for key in current_stats
+                if key.endswith("_losses_bedwars") and f"_{dream_sub}_" in key
+            )
+
+        return self._calculate_ratios(diff_fk, diff_fd, diff_wins, diff_losses)
 
     async def _sc_internal(
         self,
@@ -365,11 +697,9 @@ class StatCheckPlugin(Plugin):
         except Exception as e:
             raise CommandException(f"Failed to fetch current stats: {e}")
 
-        fplayer = FormattedPlayer(current_player)
-
-        hover_text = ""
-        if window:  # "unless we are fetching lifetime stats"
-            # Check that necessary cumulative keys exist.
+        # Calculate time-based stats if window is specified
+        if window:
+            # Check that necessary cumulative keys exist
             required_keys = [
                 "final_kills_bedwars",
                 "final_deaths_bedwars",
@@ -381,119 +711,37 @@ class StatCheckPlugin(Plugin):
                     "Current stats are missing required data for stat calculation!"
                 )
 
-            # Determine target timestamp (exactly one week ago).
-            now = datetime.datetime.now()
-            target_time = now - datetime.timedelta(days=window)
+            # Find the closest stat log entry within the time window
+            old_stats, chosen_date = self._find_closest_stat_log(ign, window)
 
-            # Read and parse the stat log file.
-            if not os.path.exists(self.log_path):
-                raise CommandException(
-                    "No log file found; recent stats unavailable. For lifetime stats, use /sc <player>."
-                )
+            # Calculate stat deltas
+            diffs = self._calculate_stat_deltas(current_stats, old_stats, required_keys)
 
-            entries = []
-            with open(self.log_path, "r") as f:
-                for line in f:
-                    try:
-                        entry = json.loads(line.strip())
-                        if entry.get(
-                            "player", ""
-                        ).casefold() == ign.casefold() and entry.get("bedwars"):
-                            entry["dt"] = datetime.datetime.fromisoformat(
-                                entry["timestamp"]
-                            )
-                            entries.append(entry)
-                    except Exception:
-                        continue
-
-            if not entries:
-                raise CommandException("No logged stats available for this player.")
-
-            # Filter entries: they must be dated at most 3x the given window.
-            valid_entries = [
-                entry
-                for entry in entries
-                if now - entry["dt"] <= datetime.timedelta(days=window * 3)
-            ]
-            if not valid_entries:
-                raise CommandException(
-                    "Insufficient logged data: logged stats too old."
-                )
-
-            # Choose the entry whose timestamp is closest to one week ago.
-            chosen_entry = min(
-                valid_entries,
-                key=lambda entry: abs((entry["dt"] - target_time).total_seconds()),
+            # Calculate weekly FKDR and WLR
+            weekly_fkdr, weekly_wlr = self._calculate_ratios(
+                diffs["final_kills_bedwars"],
+                diffs["final_deaths_bedwars"],
+                diffs["wins_bedwars"],
+                diffs["losses_bedwars"],
             )
-            old_stats = chosen_entry["bedwars"]
-            chosen_date = chosen_entry["dt"]
 
-            # Compute weekly differences (deltas) for overall stats.
-            diffs = {}
-            for key in required_keys:
-                try:
-                    current_val = float(current_stats.get(key, 0))
-                    old_val = float(old_stats.get(key, 0))
-                    diff = current_val - old_val
-                    if diff < 0:
-                        raise CommandException(
-                            "Logged cumulative values are inconsistent (current value lower than logged value)."
-                        )
-                    diffs[key] = diff
-                except Exception:
-                    diffs[key] = 0
-
-            # Compute weekly FKDR and WLR.
-            try:
-                weekly_fkdr = (
-                    diffs["final_kills_bedwars"] / diffs["final_deaths_bedwars"]
-                    if diffs["final_deaths_bedwars"] > 0
-                    else float(diffs["final_kills_bedwars"])
-                )
-            except Exception:
-                weekly_fkdr = 0
-            try:
-                weekly_wlr = (
-                    diffs["wins_bedwars"] / diffs["losses_bedwars"]
-                    if diffs["losses_bedwars"] > 0
-                    else float(diffs["wins_bedwars"])
-                )
-            except Exception:
-                weekly_wlr = 0
-
-            weekly_fkdr = round(weekly_fkdr, 2)
-            weekly_wlr = round(weekly_wlr, 2)
-
-            # Override the live FKDR and WLR attributes on the player object.
+            # Override the live FKDR and WLR attributes on the player object
             current_player.bedwars.fkdr = weekly_fkdr
             current_player.bedwars.wlr = weekly_wlr
 
-            fplayer = FormattedPlayer(
-                current_player
-            )  # re-init formattedplayer with the overwritten attributes
+            # Re-initialize FormattedPlayer with the overwritten attributes
+            fplayer = FormattedPlayer(current_player)
 
-            # Format the chosen log entry date as "Month Day, Year" with ordinal day.
-            def ordinal(n: int) -> str:
-                if 11 <= (n % 100) <= 13:
-                    return f"{n}th"
-                last_digit = n % 10
-                if last_digit == 1:
-                    return f"{n}st"
-                elif last_digit == 2:
-                    return f"{n}nd"
-                elif last_digit == 3:
-                    return f"{n}rd"
-                else:
-                    return f"{n}th"
-
-            formatted_date = f"{chosen_date.strftime('%B')} {ordinal(chosen_date.day)}, {chosen_date.strftime('%Y')}"
-            # Format the time as e.g. "8:42 PM" (remove any leading zero)
-            formatted_time = chosen_date.strftime("%I:%M %p").lstrip("0")
-            hover_text = f"Recent stats for {fplayer.rankname}\nCalculated using data from {formatted_date} ({formatted_time})\n"
+            # Build hover text header
+            formatted_date = self._format_date_with_ordinal(chosen_date)
+            hover_text = f"Recent stats for {fplayer.rankname}\nCalculated using data from {formatted_date}\n"
         else:
+            # Lifetime stats
+            fplayer = FormattedPlayer(current_player)
             hover_text = f"Lifetime Stats for {fplayer.rankname}§f:\n"
             old_stats = {}
 
+        # Build per-mode stats for hover text
         non_dream_mapping = {
             "Solo": "eight_one",
             "Doubles": "eight_two",
@@ -510,82 +758,34 @@ class StatCheckPlugin(Plugin):
             "Voidless": "voidless",
         }
 
-        # List of modes in the order to appear.
+        # List of modes in the order to appear
         modes = ["Solo", "Doubles", "3v3v3v3", "4v4v4v4"]
         if not display_abridged:
             modes.extend(
                 ["4v4", "Rush", "Ultimate", "Lucky", "Castle", "Swap", "Voidless"]
             )
+
         mode_lines = []
+        dreams_linebreak_added = False
 
-        dreams_linebreak_init, dreams_linebreak_complete = False, False
         for mode in modes:
-            if mode in non_dream_mapping:
-                prefix = non_dream_mapping[mode]
-                fk_key = f"{prefix}_final_kills_bedwars"
-                fd_key = f"{prefix}_final_deaths_bedwars"
-                wins_key = f"{prefix}_wins_bedwars"
-                losses_key = f"{prefix}_losses_bedwars"
+            # Add linebreak before dream modes (if showing all modes)
+            if (
+                mode in dream_mapping
+                and not dreams_linebreak_added
+                and not display_abridged
+            ):
+                mode_lines.append("\n")
+                dreams_linebreak_added = True
 
-                diff_fk = float(current_stats.get(fk_key, 0)) - float(
-                    old_stats.get(fk_key, 0)
-                )
-                diff_fd = float(current_stats.get(fd_key, 0)) - float(
-                    old_stats.get(fd_key, 0)
-                )
-                diff_wins = float(current_stats.get(wins_key, 0)) - float(
-                    old_stats.get(wins_key, 0)
-                )
-                diff_losses = float(current_stats.get(losses_key, 0)) - float(
-                    old_stats.get(losses_key, 0)
-                )
+            # Calculate mode-specific stats using helper
+            mode_fkdr, mode_wlr = self._calculate_mode_stats(
+                mode, current_stats, old_stats, non_dream_mapping, dream_mapping
+            )
 
-            else:
-                dreams_linebreak_init = True
-                # For dream modes, aggregate over any key that includes the dream substring.
-                dream_sub = dream_mapping[mode]
-                diff_fk = sum(
-                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                    for key in current_stats
-                    if key.endswith("_final_kills_bedwars") and f"_{dream_sub}_" in key
-                )
-                diff_fd = sum(
-                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                    for key in current_stats
-                    if key.endswith("_final_deaths_bedwars") and f"_{dream_sub}_" in key
-                )
-                diff_wins = sum(
-                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                    for key in current_stats
-                    if key.endswith("_wins_bedwars") and f"_{dream_sub}_" in key
-                )
-                diff_losses = sum(
-                    float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                    for key in current_stats
-                    if key.endswith("_losses_bedwars") and f"_{dream_sub}_" in key
-                )
-
-            try:
-                mode_fkdr = diff_fk / diff_fd if diff_fd > 0 else float(diff_fk)
-            except Exception:
-                mode_fkdr = 0
-
-            try:
-                mode_wlr = (
-                    diff_wins / diff_losses if diff_losses > 0 else float(diff_wins)
-                )
-            except Exception:
-                mode_wlr = 0
-
-            # Round the results and apply color formatting for the numeric values.
-            mode_fkdr = round(mode_fkdr, 2)
-            mode_wlr = round(mode_wlr, 2)
+            # Format with color codes
             formatted_mode_fkdr = format_bw_fkdr(mode_fkdr)
             formatted_mode_wlr = format_bw_wlr(mode_wlr)
-
-            if dreams_linebreak_init and not dreams_linebreak_complete:
-                mode_lines.append("\n")
-                dreams_linebreak_complete = True
 
             mode_lines.append(
                 f"\n§c§l[{mode.upper()}]  §r §fFKDR:§r {formatted_mode_fkdr} §fWLR:§r {formatted_mode_wlr}"
@@ -596,7 +796,7 @@ class StatCheckPlugin(Plugin):
         if display_abridged:
             hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
 
-        # Format the hover text and send the chat message.
+        # Format the hover text and send the chat message
         return fplayer.format_stats(gamemode, *stats).hover_text(hover_text)
 
     @command("sc")
@@ -617,7 +817,8 @@ class StatCheckPlugin(Plugin):
             ign, mode, window, *stats, display_abridged=False
         )
 
-    async def _get_player(self, player: str):
+    async def _get_player(self, player: str) -> Player:
+        """Get a player from cache or fetch from API."""
         return self._cached_players.get(player) or await self.hypixel_client.player(
             player
         )
@@ -634,101 +835,85 @@ class StatCheckPlugin(Plugin):
 
         Special handling for self.username using sidebar "YOU" detection.
         """
+        team_name = None
+        color_code = None
 
         # Special handling for current user - check sidebar for "YOU"
         if player_name == self.username:
-            try:
-                # First try normal team detection
-                team = self.get_team(player_name)
-                if team:
-                    team_name = re.sub(r"\d+", "", team.name)
-                    m = COLOR_CODE.search(team.prefix)
-                    color_code = m.group(1) if m else ""
-                else:
-                    raise ValueError("No team found")
-            except (ValueError, AttributeError):
-                # Fall back to sidebar detection
-                sidebar_own_team = next(
-                    (team for team in self.teams if "YOU" in team.suffix), None
-                )
-                if sidebar_own_team is None:
-                    raise ValueError(
-                        "Player is not on a team; cannot determine own team color."
-                    )
-
-                match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
-                if match_:
-                    team_name = match_.group(1)
-                    m = COLOR_CODE.search(sidebar_own_team.prefix)
-                    color_code = m.group(1) if m else ""
-                else:
-                    raise ValueError(
-                        f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
-                    )
+            team_name, color_code = self._get_own_team_info()
+        # Check for nicked player cached color
+        elif player_name in self.nick_team_colors:
+            team_name, color_code = self._get_nicked_player_team_info(player_name)
+        # Handle regular players
         else:
-            # Handle other players
-            # Check for nicked player cached color first
-            if player_name in self.nick_team_colors:
-                m = COLOR_CODE.search(self.nick_team_colors[player_name])
-                color_code = m.group(1) if m else ""
-                # For nicked players, we can't determine the exact team name
-                # so we'll use a fallback based on color code
-                color_code_to_name = {
-                    "§c": "Red",
-                    "§9": "Blue",
-                    "§a": "Green",
-                    "§e": "Yellow",
-                    "§b": "Aqua",
-                    "§f": "White",
-                    "§d": "Pink",
-                    "§7": "Gray",
-                    "§8": "Gray",
-                }
-                team_name = color_code_to_name.get(color_code, "Unknown")
-            else:
-                team = self.get_team(player_name)
-                if not team:
-                    raise ValueError(f"Provided player {player_name} is not on a team!")
+            team_name, color_code = self._get_regular_player_team_info(player_name)
 
-                team_name = re.sub(r"\d+", "", team.name)
-                if team.prefix:
-                    m = COLOR_CODE.search(team.prefix)
-                    color_code = m.group(1) if m else ""
-                else:
-                    color_code = ""
-
-        # Convert team name to letter
-        name_to_letter = {
-            "red": "R",
-            "blue": "B",
-            "green": "G",
-            "yellow": "Y",
-            "aqua": "A",
-            "white": "W",
-            "pink": "P",
-            "gray": "S",
-        }
-        letter = name_to_letter.get(team_name.lower(), "?")
+        # Convert team name to letter using constant mapping
+        letter = TEAM_NAME_TO_LETTER.get(team_name.lower(), "?")
 
         # Ensure we have a color code - map from letter if needed
         if not color_code:
-            letter_to_code = {
-                "R": "§c",
-                "B": "§9",
-                "G": "§a",
-                "Y": "§e",
-                "A": "§b",
-                "W": "§f",
-                "P": "§d",
-                "S": "§8",
-            }
-            color_code = letter_to_code.get(letter, "§f")
+            color_code = TEAM_LETTER_TO_CODE.get(letter, "§f")
 
         return TeamColor(
             letter=letter,
             code=color_code,
-            name=team_name.title(),  # Ensure proper capitalization
+            name=team_name.title(),
         )
+
+    def _get_own_team_info(self) -> tuple[str, str]:
+        """Get team name and color code for the current user."""
+        try:
+            # First try normal team detection
+            team = self.get_team(self.username)
+            if team:
+                team_name = re.sub(r"\d+", "", team.name)
+                m = COLOR_CODE.search(team.prefix)
+                color_code = m.group(1) if m else ""
+                return team_name, color_code
+            raise ValueError("No team found")
+        except (ValueError, AttributeError):
+            # Fall back to sidebar detection
+            sidebar_own_team = next(
+                (team for team in self.teams if "YOU" in team.suffix), None
+            )
+            if sidebar_own_team is None:
+                raise ValueError(
+                    "Player is not on a team; cannot determine own team color."
+                )
+
+            match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
+            if match_:
+                team_name = match_.group(1)
+                m = COLOR_CODE.search(sidebar_own_team.prefix)
+                color_code = m.group(1) if m else ""
+                return team_name, color_code
+            else:
+                raise ValueError(
+                    f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
+                )
+
+    def _get_nicked_player_team_info(self, player_name: str) -> tuple[str, str]:
+        """Get team name and color code for a nicked player."""
+        m = COLOR_CODE.search(self.nick_team_colors[player_name])
+        color_code = m.group(1) if m else ""
+        # Use constant mapping instead of inline dict
+        team_name = COLOR_CODE_TO_NAME.get(color_code, "Unknown")
+        return team_name, color_code
+
+    def _get_regular_player_team_info(self, player_name: str) -> tuple[str, str]:
+        """Get team name and color code for a regular player."""
+        team = self.get_team(player_name)
+        if not team:
+            raise ValueError(f"Provided player {player_name} is not on a team!")
+
+        team_name = re.sub(r"\d+", "", team.name)
+        color_code = ""
+        if team.prefix:
+            m = COLOR_CODE.search(team.prefix)
+            color_code = m.group(1) if m else ""
+
+        return team_name, color_code
 
     async def _update_stats(self):
         """
@@ -839,81 +1024,29 @@ class StatCheckPlugin(Plugin):
                     # Only cache actual Player objects, not Nick objects
                     if not isinstance(player, (PlayerNotFound, Nick)):
                         self._cached_players[player.name] = player
-
                         fplayer = FormattedPlayer(player)
-
-                        # technically we don't need this since only bedwars
-                        # is currently supported. but... futureproofing !!!
-                        if self.game.gametype == "bedwars":
-                            show_rankname = (
-                                self.settings.bedwars.tablist.show_rankname.get()
-                            )
-                            try:
-                                color_code = self.get_team_color(fplayer.raw_name)[
-                                    "code"
-                                ]
-                            except ValueError:
-                                color_code = ""
-                            if (
-                                self.settings.bedwars.tablist.is_mode_specific.get()
-                                == "ON"
-                            ):
-                                fkdr = fplayer.bedwars.__getattribute__(
-                                    f"{self.game.mode[8:].lower()}_stats"
-                                )["fkdr"]
-                            else:
-                                fkdr = fplayer.bedwars.fkdr
-                            display_name = " ".join(
-                                (
-                                    f"{fplayer.bedwars.level}{color_code}",
-                                    fplayer.rankname
-                                    if show_rankname == "ON"
-                                    else fplayer.raw_name,
-                                    f" §7| {fkdr}",
-                                )
-                            )
-                        # elif self.game.gametype == "skywars":
-                        #     display_name = " ".join(
-                        #         (
-                        #             fplayer.skywars.level,
-                        #             fplayer.rankname,
-                        #             f" | {fplayer.skywars.kdr}",
-                        #         )
-                        #     )
-                        else:  # also this shouldn't run because we already
-                            # early return on self.game.gametype not being "bedwars"
-                            display_name = fplayer.rankname
                     else:  # if is a nicked player
                         # get team color for nicked player
                         for team in self.teams:
                             if player.name in team.players:
                                 self.nick_team_colors.update({player.name: team.prefix})
                                 break
-
-                        display_name = f"§5[NICK] {player.name}"
                         fplayer = player
 
-                    # this is where we actually update player stats in tab
-                    team_color = self.get_team_color(player.name)
-                    prefix = team_color["code"] + "§l" + team_color["letter"] + "§r"
+                    # Build display name using helper method
+                    display_name = self._build_player_display_name(player.name, fplayer)
 
                     self.players_with_stats[player.name] = {
                         "uuid": player.uuid,
-                        "display_name": prefix + " " + display_name,
+                        "display_name": display_name,
                         "fplayer": fplayer,
                     }
 
                     if self.settings.bedwars.tablist.show_stats.get() == "ON":
+                        # Use dead display name if player is final dead
                         if player.name in self.final_dead:
-                            display_name = self.get_dead_dn(player.name)
-                        self.client.send_packet(
-                            0x38,
-                            VarInt(3),
-                            VarInt(1),
-                            UUID(uuid.UUID(str(player.uuid))),
-                            Boolean(True),
-                            Chat(display_name),
-                        )
+                            display_name = self._get_dead_display_name(player.name)
+                        self._send_tablist_update(str(player.uuid), display_name)
 
         # if we've gotten everyone from /who, stat highlights can be called
         if self.settings.bedwars.display_top_stats.get() != "OFF":
@@ -1050,11 +1183,16 @@ class StatCheckPlugin(Plugin):
         self.adjacent_teams_highlighted = True
 
     def get_adjacent_teams(self) -> tuple[str, str]:
-        """
-        Returns (side_rush, alt_rush) teams
+        """Get the (side_rush, alt_rush) teams for the current player.
+
+        Returns:
+            Tuple of (side_rush_color, alt_rush_color)
+
+        Raises:
+            ValueError: If player is not on a team
         """
         team = self.get_team_color(self.username)["name"].lower()
-        # will raise valueerror if player is not on a team; handle!
+        # will raise ValueError if player is not on a team; handle!
 
         side_rush = RUSH_MAPPINGS["default_mappings"]["side_rushes"][team]
         alt_rush = RUSH_MAPPINGS["default_mappings"]["alt_rushes"][team]
@@ -1062,19 +1200,14 @@ class StatCheckPlugin(Plugin):
         return (side_rush, alt_rush)
 
     def get_players_on_team(self, color: str) -> list[str]:
-        """
-        Return a de-duplicated list of player names on the given team color
-        Accepts 'green', 'Green', 'GREEN', etc
-        """
-        # target = color.lower()
-        # if not any(t.name == target for t in self.teams):
-        #     raise ValueError(f'Expected a team in self.teams ({self.teams}); got {color} instead.')
-        # players: set[str] = set()
-        # for team in self.teams:
-        #     if team.name == target:
-        #         players.update(team.players)
-        # return list(players)
+        """Get a de-duplicated list of player names on the given team color.
 
+        Args:
+            color: Team color name (case-insensitive: 'green', 'Green', 'GREEN', etc.)
+
+        Returns:
+            List of player names on that team
+        """
         target = color.lower()
         players: set[str] = set()
         for team in self.teams:
@@ -1085,12 +1218,10 @@ class StatCheckPlugin(Plugin):
         return list(players)
 
     async def log_bedwars_stats(self, event: str) -> None:
-        # chatgpt ahh comments
-        """
-        Fetch the current player's Bedwars stats via the API and append a log record only if the
-        Bedwars data is different from the most recent log entry.
-        The record includes a timestamp, the event ("login" or "logout"), the player's username,
-        and the complete Bedwars stats as provided by the API.
+        """Log Bedwars stats to file if they've changed since the last log entry.
+
+        Args:
+            event: Event type ('login' or 'logout')
         """
         try:
             # Fetch the latest player data via the API.
@@ -1146,7 +1277,8 @@ class StatCheckPlugin(Plugin):
         enemy_nicks = []
 
         # Process each player
-        for player_name, (_, display_name, _) in self.players_with_stats.items():
+        for player_name, player_data in self.players_with_stats.items():
+            display_name = player_data["display_name"]
             # Skip the user's own nickname
             if player_name == self.username:
                 continue
@@ -1250,31 +1382,22 @@ class StatCheckPlugin(Plugin):
             None,
         )
 
-    def keep_player_stats_updated(self):
-        # make sure player stats stays updated
-        # hypixel resets sometimes
-        n_players = len(
-            [
-                i
-                for i in self.players_with_stats.keys()
-                if (i not in self.dead.keys()) and (i not in self.final_dead.keys())
-            ]
-        )
-        if self.settings.bedwars.tablist.show_stats.get() == "ON":
-            self.client.send_packet(
-                0x38,
-                VarInt(3),
-                VarInt(n_players),
-                *(
-                    UUID(uuid.UUID(str(uuid_))) + Boolean(True) + Chat(display_name)
-                    for uuid_, display_name in (
-                        (d["uuid"], d["display_name"])
-                        for i, d in self.players_with_stats.items()
-                        if (i not in self.dead.keys())
-                        and (i not in self.final_dead.keys())
-                    )
-                ),
-            )
+    def keep_player_stats_updated(self) -> None:
+        """Update all living players' display names in the tab list.
+
+        This ensures player stats stay updated even when Hypixel resets the tab list.
+        """
+        if self.settings.bedwars.tablist.show_stats.get() != "ON":
+            return
+
+        # Get all living players (not dead or final dead)
+        living_players = [
+            (d["uuid"], d["display_name"])
+            for player_name, d in self.players_with_stats.items()
+            if player_name not in self.dead and player_name not in self.final_dead
+        ]
+
+        self._send_bulk_tablist_update(living_players)
 
     @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
     async def on_queue(self, buff: Buffer):
@@ -1287,7 +1410,7 @@ class StatCheckPlugin(Plugin):
                 now = asyncio.get_event_loop().time()
                 needs_validation = self._api_key_valid is None or (
                     self._api_key_validated_at
-                    and now - self._api_key_validated_at > self._api_key_ttl
+                    and now - self._api_key_validated_at > 300
                 )
                 if needs_validation:
                     await self.validate_api_key()
@@ -1341,13 +1464,9 @@ class StatCheckPlugin(Plugin):
         self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
             self.username
         ]
-        self.client.send_packet(
-            0x38,
-            VarInt.pack(3),
-            VarInt.pack(1),
-            UUID.pack(uuid.UUID(self.get_player_to_uuid_mapping()[self.username])),
-            Boolean.pack(True),
-            Chat.pack(self.get_dead_dn(self.username)),
+        self._send_tablist_update(
+            self.get_player_to_uuid_mapping()[self.username],
+            self._get_dead_display_name(self.username),
         )
 
     def in_bedwars_game(self):
@@ -1410,29 +1529,30 @@ class StatCheckPlugin(Plugin):
         if not self.stats_highlighted:
             await self.stat_highlights()
 
-    def match_kill_message(self, message):
+    def match_kill_message(self, message: str) -> Optional[re.Match]:
+        """Match a kill message against known patterns.
+
+        Returns:
+            Match object if message matches a kill pattern, None otherwise
+        """
         for pattern in KILL_MSGS:
             match = re.match(pattern, message)
             if match:
                 return match  # Only 3 groups: victim, killer, final_kill
         return None
 
-    def get_player_to_uuid_mapping(self):
+    def get_player_to_uuid_mapping(self) -> dict[str, str]:
+        """Get a mapping of player names to UUIDs."""
         return {v: k for k, v in self.players.items()}
 
-    async def respawn_timer(self, player: str, reconnect=False):
-        t = 10 if reconnect else 5
+    async def respawn_timer(self, player: str, reconnect: bool = False) -> None:
+        """Display a countdown timer in the tab list for respawning players."""
+        timer_duration = 10 if reconnect else 5
+        player_uuid = self.dead[player]
 
-        for s in range(t, 0, -1):
-            display_name = f"§6§l{s}s {self.get_dead_dn(player)}"
-            self.client.send_packet(
-                0x38,
-                VarInt.pack(3),
-                VarInt.pack(1),
-                UUID.pack(uuid.UUID(self.dead[player])),
-                Boolean.pack(True),
-                Chat.pack(display_name),
-            )
+        for s in range(timer_duration, 0, -1):
+            display_name = f"§6§l{s}s {self._get_dead_display_name(player)}"
+            self._send_tablist_update(player_uuid, display_name)
             await asyncio.sleep(1)
 
         del self.dead[player]
@@ -1447,24 +1567,6 @@ class StatCheckPlugin(Plugin):
         while p_to_u.get(p) is None:
             await asyncio.sleep(0.01)
         self.dead[p] = p_to_u[p]
-
-    def get_dead_dn(self, p: str):
-        if p != self.username:
-            color = "§7§o"
-        else:
-            color = "§7§l§o"
-        if (
-            p in self.players_with_stats.keys()
-            and self.settings.bedwars.tablist.show_stats.get() == "ON"
-        ):
-            display_name = re.sub(
-                r"§[0-9a-f]", "", str(self.players_with_stats[p]["display_name"])
-            )
-            dn = color + re.sub(r"§r", "§r" + color, display_name)
-        else:
-            dn = color + p
-
-        return dn
 
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
     async def on_chat_kill_message(self, buff: Buffer):
@@ -1492,19 +1594,15 @@ class StatCheckPlugin(Plugin):
             try:
                 del self.players[p]
             except KeyError:
-                pass  # SHUT UP
+                pass  # Player was already removed
             self.client.send_packet(
-                0x38, VarInt.pack(4), VarInt.pack(1), UUID.pack(uuid.UUID(u))
+                0x38,
+                VarInt.pack(4),
+                VarInt.pack(1),
+                UUID.pack(uuid.UUID(u)),
             )
 
-        self.client.send_packet(
-            0x38,
-            VarInt.pack(3),
-            VarInt.pack(1),
-            UUID.pack(uuid.UUID(u)),
-            Boolean.pack(True),
-            Chat.pack(self.get_dead_dn(p)),
-        )
+        self._send_tablist_update(u, self._get_dead_display_name(p))
 
         if fk:
             self.final_dead[killed] = u
