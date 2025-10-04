@@ -311,6 +311,14 @@ class StatCheckPlugin(Plugin):
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, _):
+        for player, _uuid in (self.dead | self.final_dead).items():
+            self.client.send_packet(
+                0x38,
+                VarInt.pack(4),
+                VarInt.pack(1),
+                UUID.pack(uuid.UUID(_uuid)),
+            )
+
         # flush player lists
         self.players.clear()
         self.players_with_stats.clear()
