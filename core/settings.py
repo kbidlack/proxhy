@@ -2,8 +2,6 @@
 Type-safe Settings API with automatic state management and validation.
 """
 
-from __future__ import annotations
-
 import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict

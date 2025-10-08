@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import math
 from textwrap import fill
 from typing import Any
