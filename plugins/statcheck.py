@@ -821,9 +821,7 @@ class StatCheckPlugin(Plugin):
     async def statcheckfull(
         self, ign: str = "", mode: str = "bedwars", window: float = -1.0, *stats
     ):
-        return await self._sc_internal(
-            ign, mode, window, *stats, display_abridged=False
-        )
+        return await self._sc_internal(ign, mode, window, *stats, display_abridged=True)
 
     async def _get_player(self, player: str) -> Player:
         """Get a player from cache or fetch from API."""
