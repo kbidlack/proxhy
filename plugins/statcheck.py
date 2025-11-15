@@ -113,6 +113,14 @@ class TeamColor(TypedDict):
     name: str
 
 
+def minecraft_uuid_v2():
+    u: int = uuid.uuid4().int  # pyright:ignore[reportAssignmentType]
+    # Set version bits (4 bits starting at bit 76) to 2
+    u &= ~(0xF << 76)  # clear version bits
+    u |= 0x2 << 76  # set version=2
+    return uuid.UUID(int=u)
+
+
 class StatCheckPlugin(Plugin):
     teams: Teams
     game: Game
@@ -126,8 +134,8 @@ class StatCheckPlugin(Plugin):
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: set[str] = set()  # players from /who
 
-        self.final_dead: dict[str, str] = {}  # name: display_name
-        self.dead: dict[str, str] = {}
+        self.final_dead: dict[str, str] = {}  # name: uuid
+        self.dead: dict[str, str] = {}  # name: uuid
 
         self._cached_players: dict = {}
         # players from packet_player_list_item
@@ -239,14 +247,15 @@ class StatCheckPlugin(Plugin):
         Returns:
             The formatted display name string with color codes
         """
-        if isinstance(fplayer, Nick):
-            return f"§5[NICK] {player_name}"
 
         # Get team color
         try:
-            color_code = self.get_team_color(fplayer.raw_name)["code"]
+            color = self.get_team_color(player_name)
         except ValueError:
-            color_code = ""
+            color = {"code": "", "letter": "", "name": ""}
+
+        if isinstance(fplayer, Nick):
+            return f"{color['code']}{color['letter']} §5[NICK] {player_name}"
 
         # Determine which FKDR to display
         if (
@@ -265,15 +274,14 @@ class StatCheckPlugin(Plugin):
         # Build the display name
         display_name = " ".join(
             (
-                f"{fplayer.bedwars.level}{color_code}",
+                f"{fplayer.bedwars.level}{color['code']}",
                 name,
                 f" §7| {fkdr}",
             )
         )
 
         # Add team prefix
-        team_color = self.get_team_color(player_name)
-        prefix = team_color["code"] + "§l" + team_color["letter"] + "§r"
+        prefix = color["code"] + "§l" + color["letter"] + "§r"
         return prefix + " " + display_name
 
     def _get_dead_display_name(self, player_name: str) -> str:
@@ -303,11 +311,9 @@ class StatCheckPlugin(Plugin):
 
     def _update_dead_players_in_tablist(self) -> None:
         """Update all final dead players in the tab list with grayed-out display names."""
-        for player_name in self.final_dead:
-            player_uuid = self.get_player_to_uuid_mapping().get(player_name)
-            if player_uuid:
-                display_name = self._get_dead_display_name(player_name)
-                self._send_tablist_update(player_uuid, display_name)
+        for name, u in self.final_dead.items():
+            display_name = self._get_dead_display_name(name)
+            self._send_tablist_update(u, display_name)
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self, _):
@@ -332,11 +338,6 @@ class StatCheckPlugin(Plugin):
         self.game_error = None
         self.stats_highlighted = False
         self.adjacent_teams_highlighted = False
-
-    @subscribe("update_teams")
-    async def statcheck_event_update_teams(self, _):
-        # statcheck
-        self.keep_player_stats_updated()
 
     @subscribe("setting:bedwars.tablist.show_stats")
     async def bedwars_tablist_show_stats_callback(self, data: list):
@@ -380,6 +381,7 @@ class StatCheckPlugin(Plugin):
             for player in self.players_with_stats
         ]
         self._send_bulk_tablist_update(updates)
+        self._update_dead_players_in_tablist()
 
     @subscribe("setting:bedwars.tablist.show_rankname")
     async def bedwars_tablist_show_rankname_callback(self, data: list) -> None:
@@ -397,6 +399,10 @@ class StatCheckPlugin(Plugin):
         self.keep_player_stats_updated()
         self._update_dead_players_in_tablist()
 
+    @subscribe("update_teams")
+    async def on_update_teams(self, _):
+        self.keep_player_stats_updated()
+
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
         action = buff.unpack(VarInt)
@@ -406,25 +412,36 @@ class StatCheckPlugin(Plugin):
             _uuid = buff.unpack(UUID)
             if action == 0:  # add player
                 name = buff.unpack(String)
-                if name in self.players.values() and self.in_bedwars_game:
-                    return
                 self.players[str(_uuid)] = name
-            elif action == 4:  # remove player
-                p = self.players.get(str(_uuid))
-                if self.game.gametype == "bedwars":
-                    if (
-                        p in self.players_without_stats
-                        or p in self.players_with_stats.keys()
-                    ):
-                        return
 
+                # read past properties
+                num_properties = buff.unpack(VarInt)
+                for _ in range(num_properties):
+                    buff.unpack(String)  # name
+                    buff.unpack(String)  # value
+                    has_signature = buff.unpack(Boolean)
+                    if has_signature:
+                        buff.unpack(String)  # signature
+
+                buff.unpack(VarInt)  # gamemode
+                buff.unpack(VarInt)  # ping
+                has_display_name = buff.unpack(Boolean)
+                if has_display_name:
+                    # replace display name with stats if available
+                    if name in self.players_with_stats:
+                        display_name = self.players_with_stats[name]["display_name"]
+                        # get buffer up to this point + pack new display name
+                        Buffer(buff.getvalue()[: buff.tell()]).write(
+                            Chat.pack(display_name)
+                        )
+
+            elif action == 4:  # remove player
                 try:
                     del self.players[str(_uuid)]
                 except KeyError:
-                    pass  # some things fail idk
+                    pass  # hypixel likes to remove players that aren't there
 
         self.client.send_packet(0x38, buff.getvalue())
-        self.keep_player_stats_updated()
 
     @subscribe("login_success")
     async def log_stats_on_login(self, _):
@@ -1049,8 +1066,8 @@ class StatCheckPlugin(Plugin):
                     }
 
                     if self.settings.bedwars.tablist.show_stats.get() == "ON":
-                        # Use dead display name if player is final dead
-                        if player.name in self.final_dead:
+                        if player.name in self.dead | self.final_dead:
+                            # dead players get grayed-out names
                             display_name = self._get_dead_display_name(player.name)
                         self._send_tablist_update(str(player.uuid), display_name)
 
@@ -1450,6 +1467,10 @@ class StatCheckPlugin(Plugin):
         )
         return await self._update_stats()
 
+    def get_player_to_uuid_mapping(self) -> dict[str, str]:
+        """Get a mapping of player names to UUIDs."""
+        return {v: k for k, v in self.players.items()}
+
     @subscribe(
         "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
@@ -1463,17 +1484,25 @@ class StatCheckPlugin(Plugin):
         self.game.started = True
         if "spectator" not in message:
             await self.respawn_timer(self.username, reconnect=True)
+        else:
+            self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
+                self.username
+            ]
+            self._send_tablist_update(
+                self.get_player_to_uuid_mapping()[self.username],
+                self._get_dead_display_name(self.username),
+            )
 
-    @subscribe("chat:server:Your bed was destroyed so you are a spectator!")
-    async def on_chat_user_rejoin_nobed(self, buff: Buffer):
-        self.players_without_stats.add(self.username)
-        self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
-            self.username
-        ]
-        self._send_tablist_update(
-            self.get_player_to_uuid_mapping()[self.username],
-            self._get_dead_display_name(self.username),
-        )
+    # @subscribe("chat:server:Your bed was destroyed so you are a spectator!")
+    # async def on_chat_user_rejoin_nobed(self, buff: Buffer):
+    #     self.players_without_stats.add(self.username)
+    #     self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
+    #         self.username
+    #     ]
+    #     self._send_tablist_update(
+    #         self.get_player_to_uuid_mapping()[self.username],
+    #         self._get_dead_display_name(self.username),
+    #     )
 
     def in_bedwars_game(self):
         return self.game.gametype == "bedwars" and self.game.mode
@@ -1547,10 +1576,6 @@ class StatCheckPlugin(Plugin):
                 return match  # Only 3 groups: victim, killer, final_kill
         return None
 
-    def get_player_to_uuid_mapping(self) -> dict[str, str]:
-        """Get a mapping of player names to UUIDs."""
-        return {v: k for k, v in self.players.items()}
-
     async def respawn_timer(self, player: str, reconnect: bool = False) -> None:
         """Display a countdown timer in the tab list for respawning players."""
         timer_duration = 10 if reconnect else 5
@@ -1561,14 +1586,22 @@ class StatCheckPlugin(Plugin):
             self._send_tablist_update(player_uuid, display_name)
             await asyncio.sleep(1)
 
-        del self.dead[player]
-        self.keep_player_stats_updated()
+        try:
+            del self.dead[player]
+        except KeyError:
+            pass  # already removed; e.g. self.dead was cleared on new game join
+
+        self.client.send_packet(
+            0x38,
+            VarInt(4),
+            VarInt(1),
+            UUID.pack(uuid.UUID(player_uuid)),
+        )
 
     @subscribe(r"chat:server:^(.+?) reconnected\\.$")
     async def on_player_recon(self, buff: Buffer):
         message = buff.unpack(Chat)
         p = message.split(" ")[0]
-        print(f"{p} reconnected.")
         p_to_u = self.get_player_to_uuid_mapping()
         while p_to_u.get(p) is None:
             await asyncio.sleep(0.01)
@@ -1582,36 +1615,44 @@ class StatCheckPlugin(Plugin):
         self.client.send_packet(0x02, buff.getvalue())
         message = buff.unpack(Chat)
         m = self.match_kill_message(message)
-
         if not m:
             return
-
         killed = m.group(1)
-
         fk = message.endswith("FINAL KILL!")
 
         # "there are only two hard things in computer science: cache invalidation and naming things"
         # or something
-        p = killed
-        p_to_u = self.get_player_to_uuid_mapping()
-        u = p_to_u[p]
+        u = minecraft_uuid_v2()
 
         if message.endswith("disconnected."):
-            try:
-                del self.players[p]
-            except KeyError:
-                pass  # Player was already removed
+            return  # TODO: what to do here?
+
+        # remove player from tablist
+        # hypixel already does this for other players
+        # but not for the user themselves
+        real_u = self.get_player_to_uuid_mapping().get(killed)
+        if real_u:
             self.client.send_packet(
                 0x38,
-                VarInt.pack(4),
-                VarInt.pack(1),
-                UUID.pack(uuid.UUID(u)),
+                VarInt(4),
+                VarInt(1),
+                UUID.pack(uuid.UUID(real_u)),
             )
-
-        self._send_tablist_update(u, self._get_dead_display_name(p))
+        self.client.send_packet(
+            0x38,
+            VarInt(0),  # remove player
+            VarInt(1),  # number of players
+            UUID.pack(u),
+            String(killed),
+            VarInt(0),
+            VarInt(3),  # gamemode; spectator
+            VarInt(0),  # ping
+            Boolean(True),
+            Chat.pack(self._get_dead_display_name(killed)),
+        )
 
         if fk:
-            self.final_dead[killed] = u
+            self.final_dead[killed] = str(u)
         else:
-            self.dead[killed] = u
-            asyncio.create_task(self.respawn_timer(p))
+            self.dead[killed] = str(u)
+            asyncio.create_task(self.respawn_timer(killed))
