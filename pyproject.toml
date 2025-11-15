@@ -17,9 +17,6 @@ dependencies = [
     "numpy>=2.3.3",
 ]
 
-[project.scripts]
-proxhy = "proxhy.__main__:main"
-
 [tool.setuptools]
 packages = ["proxhy"]
 
