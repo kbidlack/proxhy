@@ -1614,6 +1614,11 @@ class StatCheckPlugin(Plugin):
 
         self.client.send_packet(0x02, buff.getvalue())
         message = buff.unpack(Chat)
+
+        if message.startswith("BED DESTRUCTION >"):
+            # some kill messages match bed destroy messages
+            return
+
         m = self.match_kill_message(message)
         if not m:
             return
