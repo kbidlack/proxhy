@@ -1610,7 +1610,7 @@ class StatCheckPlugin(Plugin):
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
     async def on_chat_kill_message(self, buff: Buffer):
         if self.game.gametype != "bedwars":
-            return
+            return self.client.send_packet(0x02, buff.getvalue())
 
         self.client.send_packet(0x02, buff.getvalue())
         message = buff.unpack(Chat)
