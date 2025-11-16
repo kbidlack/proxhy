@@ -1482,9 +1482,8 @@ class StatCheckPlugin(Plugin):
         self.received_who.clear()
         self.client.send_packet(0x02, buff.getvalue())
         self.game.started = True
-        if "spectator" not in message:
-            await self.respawn_timer(self.username, reconnect=True)
-        else:
+
+        if "spectator" in message:
             self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
                 self.username
             ]
@@ -1493,26 +1492,15 @@ class StatCheckPlugin(Plugin):
                 self._get_dead_display_name(self.username),
             )
 
-    # @subscribe("chat:server:Your bed was destroyed so you are a spectator!")
-    # async def on_chat_user_rejoin_nobed(self, buff: Buffer):
-    #     self.players_without_stats.add(self.username)
-    #     self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
-    #         self.username
-    #     ]
-    #     self._send_tablist_update(
-    #         self.get_player_to_uuid_mapping()[self.username],
-    #         self._get_dead_display_name(self.username),
-    #     )
-
     def in_bedwars_game(self):
         return self.game.gametype == "bedwars" and self.game.mode
 
     @subscribe(f"chat:server:({'|'.join(game_start_msgs)})")
     async def on_chat_game_start(self, buff: Buffer):
-        message = buff.unpack(Chat)
-
         if self.game.gametype != "bedwars" or self.stats_highlighted:
             return self.client.send_packet(0x02, buff.getvalue())
+
+        message = buff.unpack(Chat)
 
         if self.settings.bedwars.display_top_stats.get() == "OFF":
             self.client.send_packet(0x02, buff.getvalue())
@@ -1598,18 +1586,51 @@ class StatCheckPlugin(Plugin):
             UUID.pack(uuid.UUID(player_uuid)),
         )
 
-    @subscribe(r"chat:server:^(.+?) reconnected\\.$")
+    @subscribe(r"chat:server:(.+?) reconnected\.$")
     async def on_player_recon(self, buff: Buffer):
+        self.client.send_packet(0x02, buff.getvalue())
+
+        await self.received_locraw.wait()
+
+        if not self.in_bedwars_game():
+            return
+
         message = buff.unpack(Chat)
-        p = message.split(" ")[0]
-        p_to_u = self.get_player_to_uuid_mapping()
-        while p_to_u.get(p) is None:
-            await asyncio.sleep(0.01)
-        self.dead[p] = p_to_u[p]
+        player = message.split(" ")[0]
+        self.dead[player] = str(minecraft_uuid_v2())
+
+        while player not in self.get_player_to_uuid_mapping():
+            await asyncio.sleep(0.1)
+
+        real_u = self.get_player_to_uuid_mapping().get(player)
+
+        # remove player
+        self.client.send_packet(
+            0x38,
+            VarInt(4),
+            VarInt(1),
+            UUID.pack(uuid.UUID(real_u)),
+        )
+
+        # spawn player
+        self.client.send_packet(
+            0x38,
+            VarInt(0),
+            VarInt(1),
+            UUID.pack(uuid.UUID(self.dead[player])),
+            String(player),
+            VarInt(0),  # 0 properties
+            VarInt(3),  # gamemode
+            VarInt(0),  # ping
+            Boolean(True),
+            Chat.pack(player),
+        )
+
+        asyncio.create_task(self.respawn_timer(player, reconnect=True))
 
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
     async def on_chat_kill_message(self, buff: Buffer):
-        if self.game.gametype != "bedwars":
+        if not self.in_bedwars_game():
             return self.client.send_packet(0x02, buff.getvalue())
 
         self.client.send_packet(0x02, buff.getvalue())
@@ -1645,7 +1666,7 @@ class StatCheckPlugin(Plugin):
             )
         self.client.send_packet(
             0x38,
-            VarInt(0),  # remove player
+            VarInt(0),  # spawn player
             VarInt(1),  # number of players
             UUID.pack(u),
             String(killed),
