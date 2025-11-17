@@ -1475,15 +1475,18 @@ class StatCheckPlugin(Plugin):
         "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
     async def on_chat_user_rejoin(self, buff: Buffer):
+        self.client.send_packet(0x02, buff.getvalue())
+
         message = buff.unpack(Chat)
-        self.players_without_stats.add(self.username)
-        self.dead[self.username] = self.get_player_to_uuid_mapping()[self.username]
+        # refresh stats
+        self.players_without_stats.add(self.username)  # TODO: does not work with nicks
         self.server.send_packet(0x01, String("/who"))
         self.received_who.clear()
-        self.client.send_packet(0x02, buff.getvalue())
+
         self.game.started = True
 
         if "spectator" in message:
+            # TODO: does not work with nicks
             self.final_dead[self.username] = self.get_player_to_uuid_mapping()[
                 self.username
             ]
@@ -1566,6 +1569,39 @@ class StatCheckPlugin(Plugin):
 
     async def respawn_timer(self, player: str, reconnect: bool = False) -> None:
         """Display a countdown timer in the tab list for respawning players."""
+        if not self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
+            return
+
+        # "there are only two hard things in computer science: cache invalidation and naming things"
+        u = minecraft_uuid_v2()
+        self.dead[player] = str(u)
+
+        # remove player from tablist
+        # hypixel already does this for other players
+        # but not for the user themselves
+        real_u = self.get_player_to_uuid_mapping().get(player) or ""
+        if real_u:
+            self.client.send_packet(
+                0x38,
+                VarInt(4),
+                VarInt(1),
+                UUID.pack(uuid.UUID(real_u)),
+            )
+
+        # spawn player
+        self.client.send_packet(
+            0x38,
+            VarInt(0),
+            VarInt(1),
+            UUID.pack(uuid.UUID(self.dead[player])),
+            String(player),
+            VarInt(0),  # 0 properties
+            VarInt(3),  # gamemode
+            VarInt(0),  # ping
+            Boolean(True),
+            Chat.pack(self._get_dead_display_name(player)),
+        )
+
         timer_duration = 10 if reconnect else 5
         player_uuid = self.dead[player]
 
@@ -1590,41 +1626,20 @@ class StatCheckPlugin(Plugin):
     async def on_player_recon(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
 
-        await self.received_locraw.wait()
-
+        await self.received_locraw.wait()  # so that we can run the next check
         if not self.in_bedwars_game():
             return
 
         message = buff.unpack(Chat)
         player = message.split(" ")[0]
-        self.dead[player] = str(minecraft_uuid_v2())
 
+        retries = 0
         while player not in self.get_player_to_uuid_mapping():
+            if retries >= 50:
+                return  # give up after 5 seconds
+                # i don't *think* this should ever happen, but just in case
             await asyncio.sleep(0.1)
-
-        real_u = self.get_player_to_uuid_mapping().get(player)
-
-        # remove player
-        self.client.send_packet(
-            0x38,
-            VarInt(4),
-            VarInt(1),
-            UUID.pack(uuid.UUID(real_u)),
-        )
-
-        # spawn player
-        self.client.send_packet(
-            0x38,
-            VarInt(0),
-            VarInt(1),
-            UUID.pack(uuid.UUID(self.dead[player])),
-            String(player),
-            VarInt(0),  # 0 properties
-            VarInt(3),  # gamemode
-            VarInt(0),  # ping
-            Boolean(True),
-            Chat.pack(player),
-        )
+            retries += 1
 
         asyncio.create_task(self.respawn_timer(player, reconnect=True))
 
@@ -1646,39 +1661,22 @@ class StatCheckPlugin(Plugin):
         killed = m.group(1)
         fk = message.endswith("FINAL KILL!")
 
-        # "there are only two hard things in computer science: cache invalidation and naming things"
-        # or something
-        u = minecraft_uuid_v2()
-
         if message.endswith("disconnected."):
             return  # TODO: what to do here?
 
-        # remove player from tablist
-        # hypixel already does this for other players
-        # but not for the user themselves
-        real_u = self.get_player_to_uuid_mapping().get(killed)
-        if real_u:
+        if fk:
+            self.final_dead[killed] = str(u := minecraft_uuid_v2())
             self.client.send_packet(
                 0x38,
-                VarInt(4),
-                VarInt(1),
-                UUID.pack(uuid.UUID(real_u)),
+                VarInt(0),  # spawn player
+                VarInt(1),  # number of players
+                UUID.pack(u),
+                String(killed),
+                VarInt(0),
+                VarInt(3),  # gamemode; spectator
+                VarInt(0),  # ping
+                Boolean(True),
+                Chat.pack(self._get_dead_display_name(killed)),
             )
-        self.client.send_packet(
-            0x38,
-            VarInt(0),  # spawn player
-            VarInt(1),  # number of players
-            UUID.pack(u),
-            String(killed),
-            VarInt(0),
-            VarInt(3),  # gamemode; spectator
-            VarInt(0),  # ping
-            Boolean(True),
-            Chat.pack(self._get_dead_display_name(killed)),
-        )
-
-        if fk:
-            self.final_dead[killed] = str(u)
         else:
-            self.dead[killed] = str(u)
             asyncio.create_task(self.respawn_timer(killed))
