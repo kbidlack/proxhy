@@ -50,6 +50,16 @@ class TablistGroup(SettingGroup):
             storage=storage,
         )
 
+        self.show_respawn_timer: Setting[Literal["OFF", "ON"]] = create_setting(
+            key="bedwars.tablist.show_respawn_timer",
+            display_name="Show Respawn Timer",
+            description="In Bedwars, shows a timer next to players' names showing how long until they respawn.",
+            item="minecraft:clock",
+            states={"OFF": "red", "ON": "green"},
+            default_state="OFF",
+            storage=storage,
+        )
+
 
 class VisualGroup(SettingGroup):
     def __init__(self, storage: SettingsStorage):
