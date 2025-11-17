@@ -399,6 +399,36 @@ class StatCheckPlugin(Plugin):
         self.keep_player_stats_updated()
         self._update_dead_players_in_tablist()
 
+    @subscribe("setting:bedwars.tablist.show_eliminated_players")
+    async def bedwars_tablist_show_eliminated_players_callback(
+        self, data: list
+    ) -> None:
+        # remove self from final_dead
+        final_dead_no_self = self.final_dead.copy()
+        if self.username in final_dead_no_self:
+            # TODO: does not work with nicks
+            del final_dead_no_self[self.username]
+
+        if data == ["OFF", "ON"]:
+            packet = VarInt.pack(0) + VarInt.pack(len(final_dead_no_self))
+            for player, u in final_dead_no_self.items():
+                print(player, self.username, player == self.username)
+                packet += UUID.pack(uuid.UUID(u))
+                packet += String.pack(player)
+                packet += VarInt(0)  # properties
+                packet += VarInt(3)  # gamemode; spectator
+                packet += VarInt(0)  # ping
+                packet += Boolean(True)  # has display name
+                packet += Chat.pack(self._get_dead_display_name(player))
+
+            self.client.send_packet(0x38, packet)
+        elif data == ["ON", "OFF"]:
+            packet = VarInt.pack(4) + VarInt.pack(len(final_dead_no_self))
+            for _, u in final_dead_no_self.items():
+                packet += UUID.pack(uuid.UUID(u))
+
+            self.client.send_packet(0x38, packet)
+
     @subscribe("update_teams")
     async def on_update_teams(self, _):
         self.keep_player_stats_updated()
@@ -1666,17 +1696,18 @@ class StatCheckPlugin(Plugin):
 
         if fk:
             self.final_dead[killed] = str(u := minecraft_uuid_v2())
-            self.client.send_packet(
-                0x38,
-                VarInt(0),  # spawn player
-                VarInt(1),  # number of players
-                UUID.pack(u),
-                String(killed),
-                VarInt(0),
-                VarInt(3),  # gamemode; spectator
-                VarInt(0),  # ping
-                Boolean(True),
-                Chat.pack(self._get_dead_display_name(killed)),
-            )
+            if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
+                self.client.send_packet(
+                    0x38,
+                    VarInt(0),  # spawn player
+                    VarInt(1),  # number of players
+                    UUID.pack(u),
+                    String(killed),
+                    VarInt(0),
+                    VarInt(3),  # gamemode; spectator
+                    VarInt(0),  # ping
+                    Boolean(True),
+                    Chat.pack(self._get_dead_display_name(killed)),
+                )
         else:
             asyncio.create_task(self.respawn_timer(killed))
