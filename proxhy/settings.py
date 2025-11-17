@@ -56,7 +56,17 @@ class TablistGroup(SettingGroup):
             description="In Bedwars, shows a timer next to players' names showing how long until they respawn.",
             item="minecraft:clock",
             states={"OFF": "red", "ON": "green"},
-            default_state="OFF",
+            default_state="ON",
+            storage=storage,
+        )
+
+        self.show_eliminated_players: Setting[Literal["OFF", "ON"]] = create_setting(
+            key="bedwars.tablist.show_eliminated_players",
+            display_name="Show Eliminated Players",
+            description="In Bedwars, shows eliminated players in the tablist, grayed out.",
+            item="minecraft:bone",
+            states={"OFF": "red", "ON": "green"},
+            default_state="ON",
             storage=storage,
         )
 
