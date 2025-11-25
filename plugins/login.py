@@ -3,6 +3,7 @@ import base64
 import json
 import random
 import uuid
+from importlib.resources import files
 from pathlib import Path
 from secrets import token_bytes
 from typing import Literal, Optional
@@ -45,8 +46,8 @@ class LoginPlugin(Plugin):
 
         # load favicon
         # https://github.com/barneygale/quarry/blob/master/quarry/net/server.py/#L356-L357
-        favicon_path = Path(__file__).parent.parent / "assets" / "favicon.png"
-        with open(favicon_path, "rb") as file:
+        favicon_path = files("proxhy").joinpath("assets/favicon.png")
+        with favicon_path.open("rb") as file:
             b64_favicon = (
                 base64.encodebytes(file.read()).decode("ascii").replace("\n", "")
             )

@@ -4,7 +4,7 @@ from pathlib import Path
 
 from platformdirs import user_cache_dir
 
-user_cache_file = Path(user_cache_dir()) / "cache.pkl"
+user_cache_file = Path(user_cache_dir("proxhy")) / "cache.pkl"
 
 
 class Cache:
