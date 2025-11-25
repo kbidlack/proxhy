@@ -24,10 +24,7 @@ class Pos:
     z: int = 0
 
 
-# TODO: fix this and others
-# im_path = files("proxhy.assets").joinpath("item_mappings.json")
-
-im_path = Path(__file__).parent.parent / "assets/item_mappings.json"
+im_path = files("proxhy").joinpath("assets/item_mappings.json")
 
 with im_path.open("r") as file:
     item_mapping = json.load(file)

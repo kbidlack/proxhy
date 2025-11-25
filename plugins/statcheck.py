@@ -5,6 +5,7 @@ import os
 import re
 import uuid
 from functools import lru_cache
+from importlib.resources import files
 from pathlib import Path
 from typing import Callable, Optional, TypedDict
 
@@ -39,12 +40,11 @@ from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from proxhy.mcmodels import Game, Nick, Team, Teams
 from proxhy.settings import ProxhySettings
 
-ASSETS_DIR = Path(__file__).resolve().parent.parent / "assets"
-with open(ASSETS_DIR / "bedwars_maps.json", "r", encoding="utf-8") as f:
+with files("proxhy").joinpath("assets/bedwars_maps.json").open("r", encoding="utf-8") as f:
     BW_MAPS: dict = json.load(f)
-with open(ASSETS_DIR / "rush_mappings.json", "r", encoding="utf-8") as f:
+with files("proxhy").joinpath("assets/rush_mappings.json").open("r", encoding="utf-8") as f:
     RUSH_MAPPINGS = json.load(f)
-with open(ASSETS_DIR / "bedwars_chat.json", "r", encoding="utf-8") as file:
+with files("proxhy").joinpath("assets/bedwars_chat.json").open("r", encoding="utf-8") as file:
     KILL_MSGS: list[str] = json.load(file)["kill_messages"]
 
 game_start_msgs = [  # block all the game start messages
@@ -412,7 +412,6 @@ class StatCheckPlugin(Plugin):
         if data == ["OFF", "ON"]:
             packet = VarInt.pack(0) + VarInt.pack(len(final_dead_no_self))
             for player, u in final_dead_no_self.items():
-                print(player, self.username, player == self.username)
                 packet += UUID.pack(uuid.UUID(u))
                 packet += String.pack(player)
                 packet += VarInt(0)  # properties

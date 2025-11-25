@@ -1,6 +1,6 @@
 import json
 from dataclasses import dataclass, field
-from pathlib import Path
+from importlib.resources import files
 from typing import Literal, Optional
 
 
@@ -32,7 +32,7 @@ class Teams(list[Team]):
             self.remove(team)
 
 
-bw_maps_path = Path(__file__).parent.parent / "assets/bedwars_maps.json"
+bw_maps_path = files("proxhy").joinpath("assets/bedwars_maps.json")
 
 with bw_maps_path.open("r") as file:
     bw_maps: dict = json.load(file)
