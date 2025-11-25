@@ -17,8 +17,15 @@ dependencies = [
     "numpy>=2.3.3",
 ]
 
+[project.scripts]
+proxhy = "proxhy.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
 [tool.setuptools]
-packages = ["proxhy"]
+packages = ["proxhy", "core", "plugins", "auth", "protocol"]
 
 [tool.setuptools.package-data]
 "proxhy" = ["assets/*"]
