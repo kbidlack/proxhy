@@ -33,10 +33,14 @@ def parse_args():
         help="Port to bind the server to (default: 41223)",
     )
     parser.add_argument(
-        "-d",
-        "--dev",
+        "--local",
         action="store_true",
         help="Shorthand to bind remote to localhost:25565 for development",
+    )
+    parser.add_argument(
+        "--dev",
+        action="store_true",
+        help="Shorthand to bind proxhy to localhost:41224 to develop on a separate instance"
     )
     parser.add_argument(
         "-fh",
@@ -56,9 +60,12 @@ def parse_args():
 
 args = parse_args()  # ew
 
-if args.dev:
+if args.local:
     args.remote_host = "localhost"
     args.remote_port = 25565
+
+if args.dev:
+    args.port = 41224
 
 if not args.fake_host:
     args.fake_host = args.remote_host
