@@ -1,0 +1,189 @@
+<player2> was yelled at by <player1>.
+<player2> was thrown off the lawn by <player1>.
+<player2> was accidentally spit on by <player1>.
+<player2> slipped on the fake teeth of <player1>.
+<player2> was chased away by <player1>'s Golem.
+<Color> Bed was sold in a garage sale by <player1>!
+<player2> was wrapped up by <player1>.
+<player2> was tied into a bow by <player1>.
+<player2> was glued up by <player1>.
+<player2> tripped over a present placed by <player1>.
+<player2> was taped together by <player1>'s Golem.
+<Color> Bed was stuffed with tissue paper by <player1>!
+<player2> was wrapped into a gift by <player1>.
+<player2> hit the hard-wood floor because of <player1>.
+<player2> was put on the naughty list by <player1>.
+<player2> was pushed down a slope by <player1>.
+<player2> was turned to gingerbread by <player1>'s Golem.
+<Color> Bed was traded in for milk and cookies by <player1>!
+<player2> was whacked with a party balloon by <player1>.
+<player2> was popped into the void by <player1>.
+<player2> was shot with a roman candle by <player1>.
+<player2> was launched like a firework by <player1>.
+<player2> was lit up by <player1>'s Golem.
+<Color> Bed exploded from a firework by <player1>!
+<player2> was trampled by <player1>.
+<player2> was back kicked into the void by <player1>.
+<player2> was impaled from a distance by <player1>.
+<player2> was headbutted off a cliff by <player1>.
+<player2> was trampled by <player1>'s Golem.
+<Color> Bed was impaled by <player1>!
+<player2> was tragically backstabbed by <player1>.
+<player2> was heartlessly let go by <player1>.
+<player2>'s heart was pierced by <player1>.
+<player2> was delivered into nothingness by <player1>.
+<player2> was dismembered by <player1>'s Golem.
+<Color> Bed was dreadfully corrupted by <player1>!
+<player2> was too shy to meet <player1>.
+<player2> didn't distance themselves properly from <player1>.
+<player2> was coughed at by <player1>.
+<player2> tripped while trying to run away from <player1>.
+<player2> got too close to <player1>'s Golem.
+<Color> Bed was contaminated by <player1>!
+<player2> was struck down by <player1>.
+<player2> was turned to dust <player1>.
+<player2> was melted by <player1>.
+<player2> was turned to ash by <player1>.
+<player2> was fried by <player1>'s Golem.
+<Color> Bed was incinerated by <player1>!
+<player2> was stomped by <player1>.
+<player2> was <player1>'s final #<#>.
+<player2> was thrown down a pit by <player1>.
+<player2> was shot by <player1>.
+<player2> was thrown to the ground by <player1>.
+<player2> was outclassed by <player1>'s Golem.
+<Color> Bed was bed #<#> destroyed by <player1>!
+<player2> was spooked by <player1>.
+<player2> was spooked off the map by <player1>.
+<player2> was remotely spooked by <player1>.
+<player2> was totally spooked by <player1>.
+<player2> was spooked by <player1>'s Golem.
+<Color> Bed was spooked by <player1>!
+<player2> was smothered in holiday cheer by <player1>.
+<player2> was banished into the ether by <player1>'s holiday spirit.
+<player2> was sniped by a missile of festivity by <player1>.
+<player2> was pushed by <player1>'s holiday spirit.
+<player2> was sung holiday tunes to by <player1>'s Golem.
+<Color> Bed was melted by <player1>'s holiday spirit!
+<player2> was sent to limbo by <player1>.
+<player2> was pushed into limbo by <player1>.
+<player2> was shot into limbo by <player1>.
+<player2> was pushed into limbo by <player1>.
+<player2> was launched into limbo by <player1>'s Golem.
+<Color> Bed was sent to limbo by <player1>.
+<player2> was ripped to shreds by <player1>.
+<player2> was charged by <player1>.
+<player2> was pounced on by <player1>.
+<player2> was ripped and thrown by <player1>.
+<player2> was ripped to shreds by <player1>'s Golem.
+<Color> Bed was ripped to shreds by <player1>!
+<player2> was painted pretty by <player1>.
+<player2> was deviled into the void by <player1>.
+<player2> slipped into a pan placed by <player1>.
+<player2> was flipped off the edge by <player1>.
+<player2> was made sunny side up by <player1>'s Golem.
+<Color> Bed was scrambled by <player1>!
+<player2> was oinked by <player1>.
+<player2> slipped into void for <player1>.
+<player2> got attacked by a carrot from <player1>.
+<player2> was distracted by a piglet from <player1>.
+<player2> was oinked by <player1>'s Golem.
+<Color> Bed was gulped by <player1>!
+<player2> was locked outside during a snow storm by <player1>.
+<player2> was pushed into a snowbank by <player1>.
+<player2> was hit with a snowball from <player1>.
+<player2> was shoved down an icy slope by <player1>.
+<player2> got snowed in by <player1>'s Golem.
+<Color> Bed was made into a snowman by <player1>!
+<player2> was hunted down by <player1>.
+<player2> stumbled on a trap set by <player1>.
+<player2> got skewered by <player1>.
+<player2> was thrown into a volcano by <player1>.
+<player2> was mauled by <player1>'s Golem.
+<Color> Bed was sacrificed by <player1>!
+<player2> was glazed in BBQ sauce by <player1>.
+<player2> slipped in BBQ sauce off the edge spilled by <player1>.
+<player2> was thrown chili powder at by <player1>.
+<player2> was not spicy enough for <player1>.
+<player2> was sliced up by <player1>'s Golem.
+<Color> Bed was deep fried by <player1>!
+<player2> was given the cold shoulder by <player1>.
+<player2> was hit off by a love bomb from <player1>.
+<player2> was struck with Cupid's arrow by <player1>.
+<player2> was out of the league of <player1>.
+<player2> was no match for <player1>'s Golem.
+<Color> Bed was dismantled by <player1>!
+<player2> was filled full of lead by <player1>.
+<player2> met their end by <player1>.
+<player2> was killed with dynamite by <player1>.
+<player2> lost a drinking contest with <player1>.
+<player2> lost the draw to <player1>'s Golem.
+<Color> Bed was iced by <player1>!
+<player2> was distorted by <player1>.
+<player2> was thrown into the singularity by <player1>.
+<player2> was shot into another dimension by <player1>.
+<player2> was thrown into a black hole by <player1>.
+<player2> was launched into a wormhole by <player1>'s Golem.
+<Color> Bed was sucked into a black hole by <player1>.
+<player2> was crushed into moon dust by <player1>.
+<player2> was sent the wrong way by <player1>.
+<player2> was hit by an asteroid from <player1>.
+<player2> was blasted to the moon by <player1>.
+<player2> was blown up by <player1>'s Golem.
+<Color> Bed was blasted to dust by <player1>!
+<player2> was crushed by <player1>.
+<player2> was <player1>'s final #<#>.
+<player2> was dominated by <player1>.
+<player2> was assassinated by <player1>.
+<player2> was thrown off their high horse by <player1>.
+<player2> was degraded by <player1>'s Golem.
+<Color> Bed was bed #<#> destroyed by <player1>!
+<player2> was chewed up by <player1>.
+<player2> was scared into the void by <player1>.
+<player2> stepped in a mouse trap placed by <player1>.
+<player2> was distracted by a rat dragging pizza from <player1>.
+<player2> squeaked around with <player1>'s Golem.
+<Color> Bed was squeaked apart by <player1>!
+<player2> was buzzed to death by <player1>.
+<player2> was bzzz'd into the void by <player1>.
+<player2> was startled by <player1>.
+<player2> was stung off the edge by <player1>.
+<player2> was bee'd by <player1>'s Golem.
+<Color> Bed was stung by <player1>!
+<player2> was bitten by <player1>.
+<player2> howled into the void for <player1>.
+<player2> caught the ball thrown by <player1>.
+<player2> was distracted by a puppy placed by <player1>.
+<player2> played too rough with <player1>'s Golem.
+<Color> Bed was ripped apart by <player1>!
+<player2> was bested by <player1>.
+<player2> was <player1>'s final #<#>.
+<player2> was knocked into the void by <player1>.
+<player2> was shot by <player1>.
+<player2> was knocked off an edge by <player1>.
+<player2> was bested by <player1>'s Golem.
+<Color> Bed was bed #<#> destroyed by <player1>!
+<player2> had a small brain moment while fighting <player1>.
+<player2> was not able to block clutch against <player1>.
+<player2> got 360 no-scoped by <player1>.
+<player2> forgot how many blocks they had left while fighting <player1>.
+<player2> got absolutely destroyed by <player1>'s Golem.
+<Color> Bed has left the game after seeing <player1>!
+<player2> got rekt by <player1>.
+<player2> took the L to <player1>.
+<player2> got smacked by <player1>.
+<player2> got roasted by <player1>.
+<player2> got bamboozled by <player1>'s Golem.
+<Color> Bed got memed by <player1>!
+<player2> died in close combat to <player1>.
+<player2> fought to the edge with <player1>.
+<player2> fell to the great marksmanship of <player1>.
+<player2> stumbled off a ledge with help by <player1>.
+<player2> tangoed with <player1>'s Golem.
+<Color> Bed had to raise the white flag to <player1>!
+<player2> be sent to Davy Jones' locker by <player1>.
+<player2> be cannonballed to death by <player1>.
+<player2> be shot and killed by <player1>.
+<player2> be killed with magic by <player1>.
+<player2> be killed with metal by <player1>'s Golem.
+<Color> Bed be shot with cannon by <player1>!

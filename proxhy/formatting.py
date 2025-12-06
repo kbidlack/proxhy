@@ -1,7 +1,13 @@
+# nearly 500 lines of fake code
+# credit for most of the busywork goes to someone other than me
 from copy import deepcopy
+from dataclasses import dataclass, field
 from math import floor
+from typing import Literal
 
 from hypixel import Player
+
+from protocol.datatypes import TextComponent
 
 
 def get_rank(player: Player):
@@ -25,11 +31,7 @@ def get_rank(player: Player):
         return "§c[§fYOUTUBE§c]"
     elif player.rank == "PIG+++":
         return "§d[PIG§b+++§d]"
-    if player.name == "Perlence":
-        return "§4[COOL]"
-    elif player.name == "KyngK":
-        return "§2[§eS§2T§eI§2N§eK§2Y§e]§2"
-    return "§7"  # if there are any other weird ranks because you never know ig, also nons lmfao
+    return "§7"  # if there are any other weird ranks because you never know ig, also nons lol
 
 
 def return_plus_color(player: Player):
@@ -44,21 +46,19 @@ def format_bw_fkdr(fkdr):
     if fkdr < 1:
         return "§7" + str(fkdr)
     elif fkdr < 2.5:
-        return "§e" + str(fkdr)
+        return "§f" + str(fkdr)
     elif fkdr < 5:
-        return "§2" + str(fkdr)
+        return "§e" + str(fkdr)
     elif fkdr < 10:
         return "§b" + str(fkdr)
     elif fkdr < 20:
-        return "§4" + str(fkdr)
+        return "§a" + str(fkdr)
     elif fkdr < 50:
-        return "§5" + str(fkdr)
+        return "§3" + str(fkdr)
     elif fkdr < 100:
         return "§c" + str(fkdr)
-    elif fkdr < 300:
-        return "§d" + str(fkdr)
     elif fkdr < 1000:
-        return "§9" + str(fkdr)
+        return "§5" + str(fkdr)
     else:
         return "§0" + str(fkdr)
 
@@ -67,61 +67,69 @@ def format_bw_wins(wins):
     if wins < 250:
         return "§7" + str(wins)
     elif wins < 1000:
+        return "§f" + str(wins)
+    elif wins < 3000:
         return "§e" + str(wins)
-    elif wins < 2500:
-        return "§2" + str(wins)
-    elif wins < 8000:
+    elif wins < 5000:
         return "§b" + str(wins)
-    elif wins < 15000:
-        return "§4" + str(wins)
-    elif wins < 40000:
+    elif wins < 10000:
+        return "§a" + str(wins)
+    elif wins < 25000:
+        return "§3" + str(wins)
+    elif wins < 50000:
+        return "§c" + str(wins)
+    elif wins < 100000:
         return "§5" + str(wins)
     else:
-        return "§d" + str(wins)
+        return "§0" + str(wins)
 
 
 def format_bw_finals(finals):
-    if finals < 1000:
+    if finals < 250:
         return "§7" + str(finals)
-    elif finals < 4000:
+    elif finals < 1000:
+        return "§f" + str(finals)
+    elif finals < 3000:
         return "§e" + str(finals)
-    elif finals < 10000:
-        return "§2" + str(finals)
-    elif finals < 25000:
+    elif finals < 5000:
         return "§b" + str(finals)
+    elif finals < 10000:
+        return "§a" + str(finals)
+    elif finals < 25000:
+        return "§3" + str(finals)
     elif finals < 50000:
-        return "§4" + str(finals)
+        return "§c" + str(finals)
     elif finals < 100000:
         return "§5" + str(finals)
     else:
-        return "§d" + str(finals)
+        return "§0" + str(finals)
 
 
 def format_bw_wlr(wlr):
     if wlr < 0.5:
         return "§7" + str(wlr)
     elif wlr < 1:
-        return "§e" + str(wlr)
+        return "§f" + str(wlr)
     elif wlr < 2.5:
-        return "§2" + str(wlr)
+        return "§e" + str(wlr)
     elif wlr < 5:
         return "§b" + str(wlr)
     elif wlr < 10:
-        return "§4" + str(wlr)
+        return "§a" + str(wlr)
     elif wlr < 25:
-        return "§5" + str(wlr)
+        return "§3" + str(wlr)
     elif wlr < 100:
         return "§c" + str(wlr)
-    elif wlr < 300:
-        return "§d" + str(wlr)
     elif wlr < 1000:
-        return "§9" + str(wlr)
+        return "§5" + str(wlr)
     else:
-        return "§d" + str(wlr)
+        return "§0" + str(wlr)
 
 
 def format_bw_star(level):
     # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors up to 3000
+    # ^ I can't find this post but here's one with up to 2000:
+    # https://hypixel.net/threads/tool-bedwars-prestige-colors-in-minecraft-color-code-and-hex-code-high-effort-post.3841719/
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
 
@@ -246,6 +254,8 @@ def format_bw_star(level):
 
 
 # SKYWARS
+# ironically skywars stats don't even work in _update_stats yet
+# TODO fix these colors
 def format_sw_kills(kills):
     if kills < 1000:
         return "§7" + str(kills)
@@ -386,7 +396,7 @@ def sw_icon(player: Player):
     }
     try:
         return icons[player._data["stats"]["SkyWars"]["selected_prestige_icon"]]
-    except KeyError:  # Occasionally there are errors with the default icon
+    except KeyError:  # occasionally there are errors with the default icon
         return "⋆"
 
 
@@ -443,52 +453,284 @@ def format_sw_star(level, player: Player):
     return stars
 
 
+@dataclass
+class BedwarsStats:
+    level: str = ""
+    final_kills: str = ""
+    fkdr: str = ""
+    wins: str = ""
+    wlr: str = ""
+
+    raw_level: int = 0
+    raw_final_kills: int = 0
+    raw_fkdr: float = 0.0
+    raw_wins: int = 0
+    raw_wlr: float = 0.0
+
+    eight_one_stats: dict = field(default_factory=dict)
+    eight_two_stats: dict = field(default_factory=dict)
+    four_three_stats: dict = field(default_factory=dict)
+    four_four_stats: dict = field(default_factory=dict)
+    two_four_stats: dict = field(default_factory=dict)
+    rush_stats: dict = field(default_factory=dict)
+    ultimate_stats: dict = field(default_factory=dict)
+    lucky_stats: dict = field(default_factory=dict)
+    castle_stats: dict = field(default_factory=dict)
+    swap_stats: dict = field(default_factory=dict)
+    voidless_stats: dict = field(default_factory=dict)
+
+    raw_eight_one_stats: dict = field(default_factory=dict)
+    raw_eight_two_stats: dict = field(default_factory=dict)
+    raw_four_three_stats: dict = field(default_factory=dict)
+    raw_four_four_stats: dict = field(default_factory=dict)
+    raw_two_four_stats: dict = field(default_factory=dict)
+    raw_rush_stats: dict = field(default_factory=dict)
+    raw_ultimate_stats: dict = field(default_factory=dict)
+    raw_lucky_stats: dict = field(default_factory=dict)
+    raw_castle_stats: dict = field(default_factory=dict)
+    raw_swap_stats: dict = field(default_factory=dict)
+    raw_voidless_stats: dict = field(default_factory=dict)
+
+    finals: str = ""  # alias for final_kills
+
+
+@dataclass
+class SkywarsStats:
+    level: str = ""
+    kills: str = ""
+    kdr: str = ""
+    wins: str = ""
+    wlr: str = ""
+    raw_level: float = 0.0
+    raw_kills: int = 0
+    raw_kdr: float = 0.0
+    raw_wins: int = 0
+    raw_wlr: float = 0.0
+
+
+@dataclass
 class FormattedPlayer:
-    def __new__(cls, original_player: Player):
-        player: cls = deepcopy(original_player)
-        player.__class__ = cls
+    original_player: Player = field(repr=False)
+    rank: str = field(init=False)
+    name: str = field(init=False)
+    raw_rank: str = field(init=False)
+    raw_name: str = field(init=False)
+    rank_color: str = field(init=False)
+    rankname: str = field(init=False)
+    bedwars: BedwarsStats = field(default_factory=BedwarsStats, init=False)
+    skywars: SkywarsStats = field(default_factory=SkywarsStats, init=False)
 
-        player.rank = get_rank(player)
-        player.name = player.name
+    def __post_init__(self):
+        # Copy all attributes from original player
+        for attr_name in dir(self.original_player):
+            if not attr_name.startswith("_") and not callable(
+                getattr(self.original_player, attr_name)
+            ):
+                setattr(
+                    self, attr_name, deepcopy(getattr(self.original_player, attr_name))
+                )
 
-        player.raw_rank = player.rank
-        player.raw_name = player.name
+        # Format player attributes
+        self.rank = get_rank(self.original_player)
+        self.name = self.original_player.name
+        self.raw_rank = self.original_player.rank or ""
+        self.raw_name = self.original_player.name
 
-        player.bedwars.level = format_bw_star(player.bedwars.level)
-        player.bedwars.final_kills = format_bw_finals(player.bedwars.final_kills)
-        player.bedwars.fkdr = format_bw_fkdr(player.bedwars.fkdr)
-        player.bedwars.wins = format_bw_wins(player.bedwars.wins)
-        player.bedwars.wlr = format_bw_wlr(player.bedwars.wlr)
+        # Format bedwars stats
+        self.bedwars.level = format_bw_star(self.original_player.bedwars.level)
+        self.bedwars.final_kills = format_bw_finals(
+            self.original_player.bedwars.final_kills
+        )
+        self.bedwars.fkdr = format_bw_fkdr(self.original_player.bedwars.fkdr)
+        self.bedwars.wins = format_bw_wins(self.original_player.bedwars.wins)
+        self.bedwars.wlr = format_bw_wlr(self.original_player.bedwars.wlr)
 
-        player.bedwars.raw_level = player.bedwars.level
-        player.bedwars.raw_final_kills = player.bedwars.final_kills
-        player.bedwars.raw_fkdr = player.bedwars.fkdr
-        player.bedwars.raw_wins = player.bedwars.wins
-        player.bedwars.raw_wlr = player.bedwars.wlr
+        self.bedwars.raw_level = self.original_player.bedwars.level
+        self.bedwars.raw_final_kills = self.original_player.bedwars.final_kills
+        self.bedwars.raw_fkdr = self.original_player.bedwars.fkdr
+        self.bedwars.raw_wins = self.original_player.bedwars.wins
+        self.bedwars.raw_wlr = self.original_player.bedwars.wlr
 
-        player.skywars.level = format_sw_star(player.skywars.level, player)
-        player.skywars.kills = format_sw_kills(player.skywars.kills)
-        player.skywars.kdr = format_sw_kdr(player.skywars.kdr)
-        player.skywars.wins = format_sw_wins(player.skywars.wins)
-        player.skywars.wlr = format_sw_wlr(player.skywars.wlr)
+        self.bedwars.eight_one_stats = self.get_bedwars_mode_stats("eight_one", True)
+        self.bedwars.eight_two_stats = self.get_bedwars_mode_stats("eight_two", True)
+        self.bedwars.four_three_stats = self.get_bedwars_mode_stats("four_three", True)
+        self.bedwars.four_four_stats = self.get_bedwars_mode_stats("four_four", True)
+        self.bedwars.two_four_stats = self.get_bedwars_mode_stats("two_four", True)
+        self.bedwars.rush_stats = self.get_bedwars_mode_stats("rush", True)
+        self.bedwars.ultimate_stats = self.get_bedwars_mode_stats("ultimate", True)
+        self.bedwars.lucky_stats = self.get_bedwars_mode_stats("lucky", True)
+        self.bedwars.castle_stats = self.get_bedwars_mode_stats("castle", True)
+        self.bedwars.swap_stats = self.get_bedwars_mode_stats("swap", True)
+        self.bedwars.voidless_stats = self.get_bedwars_mode_stats("voidless", True)
 
-        player.skywars.raw_level = player.skywars.level
-        player.skywars.raw_kills = player.skywars.kills
-        player.skywars.raw_kdr = player.skywars.kdr
-        player.skywars.raw_wins = player.skywars.wins
-        player.skywars.raw_wlr = player.skywars.wlr
+        self.bedwars.raw_eight_one_stats = self.get_bedwars_mode_stats(
+            "eight_one", False
+        )
+        self.bedwars.raw_eight_two_stats = self.get_bedwars_mode_stats(
+            "eight_two", False
+        )
+        self.bedwars.raw_four_three_stats = self.get_bedwars_mode_stats(
+            "four_three", False
+        )
+        self.bedwars.raw_four_four_stats = self.get_bedwars_mode_stats(
+            "four_four", False
+        )
+        self.bedwars.raw_two_four_stats = self.get_bedwars_mode_stats("two_four", False)
+        self.bedwars.raw_rush_stats = self.get_bedwars_mode_stats("rush", False)
+        self.bedwars.raw_ultimate_stats = self.get_bedwars_mode_stats("ultimate", False)
+        self.bedwars.raw_lucky_stats = self.get_bedwars_mode_stats("lucky", False)
+        self.bedwars.raw_castle_stats = self.get_bedwars_mode_stats("castle", False)
+        self.bedwars.raw_swap_stats = self.get_bedwars_mode_stats("swap", False)
+        self.bedwars.raw_voidless_stats = self.get_bedwars_mode_stats("voidless", False)
+
+        # Format skywars stats
+        self.skywars.level = format_sw_star(
+            self.original_player.skywars.level, self.original_player
+        )
+        self.skywars.kills = format_sw_kills(self.original_player.skywars.kills)
+        self.skywars.kdr = format_sw_kdr(self.original_player.skywars.kdr)
+        self.skywars.wins = format_sw_wins(self.original_player.skywars.wins)
+        self.skywars.wlr = format_sw_wlr(self.original_player.skywars.wlr)
+
+        self.skywars.raw_level = self.original_player.skywars.level
+        self.skywars.raw_kills = self.original_player.skywars.kills
+        self.skywars.raw_kdr = self.original_player.skywars.kdr
+        self.skywars.raw_wins = self.original_player.skywars.wins
+        self.skywars.raw_wlr = self.original_player.skywars.wlr
 
         # aliases
-        player.bedwars.finals = player.bedwars.final_kills
+        self.bedwars.finals = self.bedwars.final_kills
 
         # other utils
-        player.rank_color = player.rank[:2]
-        sep: str = "" if player.rank == "§7" else " "  # no space for non
-        player.rankname = sep.join((f"{player.rank}", f"{player.name}"))
+        self.rank_color = self.rank[:2]
+        sep: str = "" if self.rank == "§7" else " "  # no space for non
+        self.rankname = sep.join((f"{self.rank}", f"{self.name}"))
 
-        return player
+    def get_bedwars_mode_stats(
+        self,
+        mode: Literal[
+            "eight_one",
+            "eight_two",
+            "four_three",
+            "four_four",
+            "two_four",
+            "rush",
+            "ultimate",
+            "lucky",
+            "castle",
+            "swap",
+            "voidless",
+        ],
+        formatted: bool,
+    ) -> dict[str, str | float | int]:
+        non_dream_m = {"eight_one", "eight_two", "four_three", "four_four", "two_four"}
+        dream_m = {"rush", "ultimate", "lucky", "castle", "swap", "voidless"}
+        stats = self.original_player._data.get("stats", {}).get("Bedwars", {})
 
-    def format_stats(self, mode: str, *stats: str, sep=" ", name: bool = True) -> str:
+        if mode in non_dream_m:
+            fk_key = f"{mode}_final_kills_bedwars"
+            fd_key = f"{mode}_final_deaths_bedwars"
+            kills_key = f"{mode}_kills_bedwars"
+            deaths_key = f"{mode}_deaths_bedwars"
+            wins_key = f"{mode}_wins_bedwars"
+            losses_key = f"{mode}_losses_bedwars"
+
+            fk = float(stats.get(fk_key, 0))
+            fd = float(stats.get(fd_key, 0))
+            kills = float(stats.get(kills_key, 0))
+            deaths = float(stats.get(deaths_key, 0))
+            wins = float(stats.get(wins_key, 0))
+            losses = float(stats.get(losses_key, 0))
+
+        elif mode in dream_m:
+            # For dream modes, aggregate over any key that includes the dream substring.
+            fk = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_final_kills_bedwars") and f"_{mode}_" in key
+            )
+            fd = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_final_deaths_bedwars") and f"_{mode}_" in key
+            )
+            kills = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_kills_bedwars") and f"_{mode}_" in key
+            )
+            deaths = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_deaths_bedwars") and f"_{mode}_" in key
+            )
+            wins = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_wins_bedwars") and f"_{mode}_" in key
+            )
+            losses = sum(
+                float(stats.get(key, 0))
+                for key in stats
+                if key.endswith("_losses_bedwars") and f"_{mode}_" in key
+            )
+        else:
+            raise ValueError(f"Unknown mode '{mode}'")
+
+        try:
+            mode_fkdr = fk / fd if fd > 0 else float(fk)
+        except Exception:
+            mode_fkdr = 0
+
+        try:
+            mode_kdr = kills / deaths if deaths > 0 else float(kills)
+        except Exception:
+            mode_kdr = 0
+
+        try:
+            mode_wlr = wins / losses if losses > 0 else float(wins)
+        except Exception:
+            mode_wlr = 0
+
+        # Round the results and apply color formatting for the numeric values.
+        mode_fkdr = round(mode_fkdr, 2)
+        mode_wlr = round(mode_wlr, 2)
+
+        if formatted:
+            formatted_fk = format_bw_finals(fk)
+            formatted_wins = format_bw_wins(wins)
+            formatted_fkdr = format_bw_fkdr(mode_fkdr)
+            formatted_wlr = format_bw_wlr(mode_wlr)
+
+            return {
+                "final_kills": formatted_fk,
+                "final_deaths": str(fd),
+                "kills": str(kills),
+                "deaths": str(deaths),
+                "wins": formatted_wins,
+                "losses": str(losses),
+                "fkdr": formatted_fkdr,
+                "kdr": str(mode_kdr),
+                "wlr": formatted_wlr,
+            }
+        else:
+            return {
+                "final_kills": fk,
+                "final_deaths": fd,
+                "kills": kills,
+                "deaths": deaths,
+                "wins": wins,
+                "losses": losses,
+                "fkdr": mode_fkdr,
+                "kdr": mode_kdr,
+                "wlr": mode_wlr,
+            }
+
+    def format_stats(
+        self, mode: str, *stats: str, sep=" ", name: bool = True
+    ) -> TextComponent:
+        # i swear i knew what i was doing when i wrote this but i don't anymore
+        # hopefully i dont have to touch it again...
         formatted_stats = [f"{getattr(getattr(self, mode), 'level')} {self.rankname}"]
         if name:
             formatted_stats += [
@@ -501,4 +743,4 @@ class FormattedPlayer:
             ]
         stats_message = f"§f{sep}".join(formatted_stats)
 
-        return stats_message
+        return TextComponent.from_legacy(stats_message)
