@@ -1,12 +1,31 @@
 [project]
 name = "proxhy"
-version = "1.0.0"
-description = "A Hypixel Proxy"
-readme = "README.md"
-requires-python = ">=3.13"
-dependencies = [
-    "aiohttp>=3.10.10",
-    "appdirs>=1.4.4",
-    "cryptography>=43.0.3",
-    "hypixel-py[speed]>=0.4.2",
+version = "2025.11.25.post1"
+description = "A Hypixel proxy with various different features"
+license = "MIT"
+authors = [
+    {name = "Kavi Bidlack"},
+    {name = "Manu Jhawar"}
 ]
+requires-python = ">=3.14"
+dependencies = [
+    "hypixel.py>=0.4",
+    "cryptography>=45.0",
+    "keyring>=25.6",
+    "pyjwt>=2.10",
+    "platformdirs>=4.3",
+    "numpy>=2.3.3",
+]
+
+[project.scripts]
+proxhy = "proxhy.main:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["proxhy", "core", "plugins", "auth", "protocol"]
+
+[tool.setuptools.package-data]
+"proxhy" = ["assets/*"]
