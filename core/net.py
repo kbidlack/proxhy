@@ -64,8 +64,8 @@ class Stream:
         return self.decryptor.update(data) if self.encrypted else data
 
     def write(self, data):
-        # AHHHH ITS FIXED !!!
-        if self.writer.transport._conn_lost:  # type:ignore
+        # check if transport is closing/closed (works with both asyncio & uvloop)
+        if self.writer.transport.is_closing():
             # socket.send() raised exception can die
             return self.close()
 
