@@ -1,10 +1,15 @@
 import inspect
-from collections.abc import Awaitable
-from typing import Literal, get_args, get_origin
+from typing import (
+    Any,
+    Awaitable,
+    Callable,
+    Literal,
+    get_args,
+    get_origin,
+)
 
-from .errors import CommandException
-
-commands: dict[str, Awaitable[str | None]] = {}
+from protocol.datatypes import TextComponent
+from proxhy.errors import CommandException
 
 
 class Parameter:
@@ -49,41 +54,60 @@ class Command:
         ]
 
         self.aliases = aliases
-        commands.update({self.name: self})
-        for alias in self.aliases:
-            commands.update({alias: self})
 
-    # decorator
     async def __call__(self, proxy, message: str):
         segments = message.split()
         args = segments[1:]
         if not self.parameters and args:
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> takes no arguments!"
+                TextComponent("Command")
+                .appends(TextComponent(f"{segments[0]}").color("gold"))
+                .appends("takes no arguments!")
             )
         elif (len(args) > len(self.parameters)) and not any(
             p.infinite for p in self.parameters
         ):
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> takes at most "
-                f"{len(self.parameters)} argument(s)!"
+                TextComponent("Command")
+                .appends(TextComponent(segments[0]).color("gold"))
+                .appends("takes at most")
+                .appends(TextComponent(f"{len(self.parameters)}").color("dark_aqua"))
+                .appends("argument(s)!")
             )
         elif len(args) < len(self.required_parameters):
             names = ", ".join([param.name for param in self.required_parameters])
             raise CommandException(
-                f"§9§l∎ §4Command <{segments[0]}> needs at least "
-                f"{len(self.required_parameters)} argument(s)! ({names})"
+                TextComponent("Command")
+                .appends(TextComponent(segments[0]).color("gold"))
+                .appends("needs at least")
+                .appends(
+                    TextComponent(f"{len(self.required_parameters)}").color("dark_aqua")
+                )
+                .appends("argument(s)! (")
+                .append(TextComponent(f"{names}").color("dark_aqua"))
+                .append(")")
             )
         else:
             for index, param in self.restricted_parameters:
                 if param.options and args[index].lower() not in param.options:
                     raise CommandException(
-                        f"§9§l∎ §4Invalid option '{args[index]}'. "
-                        f"Please choose a correct argument! ({', '.join(param.options)})"
+                        TextComponent("Invalid option '")
+                        .append(TextComponent(f"{args[index]}").color("gold"))
+                        .append("'. Please choose a correct argument! (")
+                        .append(
+                            TextComponent(f"{', '.join(param.options)}").color(
+                                "dark_aqua"
+                            )
+                        )
+                        .append(")")
                     )
 
             return await self.function(proxy, *args)
 
 
-def command(*aliases):
-    return lambda func: Command(func, *aliases)
+def command[**P](*aliases):
+    def wrapper(func: Callable[P, Awaitable[Any]]):
+        setattr(func, "_command", Command(func, *(func.__name__, *aliases)))
+        return func
+
+    return wrapper

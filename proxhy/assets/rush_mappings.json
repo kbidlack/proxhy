@@ -1,0 +1,24 @@
+{
+    "default_mappings": {
+        "side_rushes": {
+            "red": "blue",
+            "blue": "red",
+            "green": "yellow",
+            "yellow": "green",
+            "white": "aqua",
+            "aqua": "white",
+            "pink": "gray",
+            "gray": "pink"
+        },
+        "alt_rushes": {
+            "red": "gray",
+            "gray": "red",
+            "blue": "green",
+            "green": "blue",
+            "yellow": "aqua",
+            "aqua": "yellow",
+            "pink": "white",
+            "white": "pink"
+        }
+    }
+}
