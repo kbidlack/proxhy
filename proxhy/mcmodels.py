@@ -32,13 +32,6 @@ class Teams(list[Team]):
             self.remove(team)
 
 
-bw_maps_path = files("proxhy").joinpath("assets/bedwars_maps.json")
-
-with bw_maps_path.open("r") as file:
-    bw_maps: dict = json.load(file)
-maps = []
-
-
 @dataclass
 class BedwarsMap:
     name: str
@@ -46,29 +39,38 @@ class BedwarsMap:
     max_height: Optional[int] = None
     min_height: Optional[int] = None
 
-    @classmethod
-    def get(cls, name: str) -> BedwarsMap:
-        """Get any BedwarsMap obj from a map name"""
-        name = name.lower()
-        for m in maps:
-            if m.name == name:
-                return m
-        if name not in bw_maps.keys():
-            raise ValueError(f"Unknown map {name}.")
-        map_dict: dict = bw_maps[name]
-        new = BedwarsMap(
-            name=name,
-            rush_direction=map_dict.get("rush_direction"),
-            max_height=map_dict.get("max_height"),
-            min_height=map_dict.get("min_height"),
-        )
-        maps.append(new)
-        return new
-
     def __eq__(self, other: object):
         if not isinstance(other, BedwarsMap):
-            return NotImplemented  # i was gonna do False but apparently this is more correct
+            return NotImplemented
         return self.name == other.name
+
+
+_MAPS: dict[str, BedwarsMap] = {}
+
+
+def _load_bedwars_maps():
+    bw_maps_path = files("proxhy").joinpath("assets/bedwars_maps.json")
+
+    with bw_maps_path.open("r") as file:
+        bw_maps_data: dict = json.load(file)
+
+    for map_name, map_data in bw_maps_data.items():
+        _MAPS[map_name] = BedwarsMap(
+            name=map_name,
+            rush_direction=map_data.get("rush_direction"),
+            max_height=map_data.get("max_height"),
+            min_height=map_data.get("min_height"),
+        )
+
+
+def get_bedwars_map(name: str) -> BedwarsMap:
+    name = name.lower()
+    if name not in _MAPS:
+        raise ValueError(f"Unknown map: {name}")
+    return _MAPS[name]
+
+
+_load_bedwars_maps()
 
 
 @dataclass
@@ -98,7 +100,7 @@ class Game:
             if key != "map":
                 setattr(self, key, value)
             else:
-                self.map = BedwarsMap(name=value)
+                self.map = get_bedwars_map(value)
 
 
 @dataclass
