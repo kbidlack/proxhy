@@ -10,8 +10,6 @@ from proxhy.proxhy import Proxhy
 
 instances: list[Proxhy] = []
 
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
-
 
 def parse_args():
     """Parse command line arguments."""
@@ -189,7 +187,7 @@ async def _main():
 
 def main():
     try:
-        asyncio.run(_main())
+        uvloop.run(_main())
     except RuntimeError:  # forced shutdown
         sys.exit()
 
