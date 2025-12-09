@@ -1,30 +1,17 @@
+import asyncio
 import re
-import shelve
-from pathlib import Path
-from typing import Literal
 
-import hypixel
-from platformdirs import user_config_dir
-
-from core.events import listen_client, subscribe
+from core.events import listen_client, listen_server, subscribe
 from core.plugin import Plugin
-from protocol.datatypes import Buffer, Chat, Item, SlotData, String, TextComponent
-from protocol.nbt import dumps, from_dict
-from proxhy.command import Command, command
+from protocol.datatypes import Buffer, String, TextComponent, VarInt
+from proxhy.command import Command
 from proxhy.errors import CommandException
-from proxhy.formatting import FormattedPlayer
-from proxhy.mcmodels import Game
-
-from .window import Window, get_trigger
 
 
 class CommandsPlugin(Plugin):
-    rq_game: Game
-    hypixel_client: hypixel.Client
-
     def _init_commands(self):
         self.commands: dict[str, Command] = {}
-        self.AB_DATA_PATH = Path(user_config_dir("proxhy")) / "autoboop.db"
+        self.suggestions: asyncio.Queue[list[str]] = asyncio.Queue()
 
         for item in dir(self):
             try:
@@ -79,165 +66,51 @@ class CommandsPlugin(Plugin):
     @listen_client(0x14)
     async def packet_tab_complete(self, buff: Buffer):
         text = buff.unpack(String)
-        if text.startswith("//"):
-            self.server.send_packet(0x14, String(text[1:]), buff.read())
+
+        precommand = None
+
+        suggestions: list[str] = []
+
+        # generate autocomplete suggestions
+        if text.startswith("/"):
+            precommand = text.split()[0].removeprefix("/")
+        elif text.startswith("//"):
+            precommand = text.split()[0].removeprefix("//")
         else:
-            self.server.send_packet(0x14, buff.getvalue())
+            ...  # TODO: add dead players if setting is on
 
-    @command("rq")
-    async def requeue(self):
-        if not self.rq_game.mode:
-            raise CommandException("No game to requeue!")
-        else:
-            self.server.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
+        if precommand is not None:
+            if " " in text:
+                # typed space; indicating starting to type parameters
+                # TODO: add parameter completion logic
+                suggestions = []
+            else:
+                # still typing command name
+                suggestions = [
+                    f"/{command}"
+                    for command in self.commands.keys()
+                    if command.startswith(precommand)
+                ]
 
-    @command()  # Mmm, garlic bread.
-    async def garlicbread(self):  # Mmm, garlic bread.
-        return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
+        # technically we can await put() here since maxsize is inf but whatever
+        self.suggestions.put_nowait(suggestions)
 
-    @command("ab")
-    async def autoboop(
-        self, action: Literal["add", "remove", "list"], player: str = ""
-    ):
-        if action in {"add", "remove"} and not player:
-            raise CommandException(f"Please specify a player to {action}!")
+        return self.server.send_packet(0x14, buff.getvalue())
 
-        if action in {"list"} and player:
-            raise CommandException(
-                TextComponent("/autoboop list")
-                .color("gold")
-                .appends("takes no arguments!")
-            )
+    @listen_server(0x3A)
+    async def packet_server_tab_complete(self, buff: Buffer):
+        n_suggestions = buff.unpack(VarInt)
+        suggestions: list[str] = []
+        for _ in range(n_suggestions):
+            suggestions.append(buff.unpack(String))
 
         try:
-            fplayer = FormattedPlayer
-            if player:
-                fplayer = FormattedPlayer(await self.hypixel_client.player(player))
-        except hypixel.PlayerNotFound:
-            raise CommandException(
-                TextComponent("Player '")
-                .appends(TextComponent(player).color("blue"))
-                .appends("' was not found!")
-            )
-        except hypixel.InvalidApiKey:
-            raise CommandException("Invalid API Key!")
+            suggestions.extend(self.suggestions.get_nowait())
+        except asyncio.QueueEmpty:
+            pass  # this should not happen
+            # since every case where we receive a tab complete packet
+            # from the server should have a corresponding one from the client
 
-        with shelve.open(self.AB_DATA_PATH) as db:
-            if action == "list":
-                players = sorted(db.keys())
-                if not players:
-                    return self.client.chat(
-                        TextComponent("No players in autoboop!").color("green")
-                    )
-                self.client.chat(TextComponent("Players in autoboop:").color("green"))
-                msg = TextComponent("> ").color("green")
-                for i, player in enumerate(players):
-                    if i != 0:
-                        msg.append(TextComponent(", ").color("green"))
-                    msg.append(TextComponent(db.get(player)).color("aqua"))
-                self.client.chat(msg)
-            elif action == "add":
-                if db.get(fplayer.name):
-                    raise CommandException(
-                        TextComponent("Player")
-                        .appends(fplayer.rankname)
-                        .appends("is already in autoboop!")
-                    )
-                db[fplayer.name] = fplayer.rankname
-                self.client.chat(
-                    TextComponent("Added")
-                    .color("green")
-                    .appends(
-                        TextComponent(fplayer.rankname).appends(
-                            TextComponent("to autoboop!").color("green")
-                        )
-                    )
-                )
-            else:  # remove
-                if not db.get(fplayer.name):
-                    raise CommandException(
-                        TextComponent("Player")
-                        .appends(fplayer.rankname)
-                        .appends("is not in autoboop!")
-                    )
-                del db[fplayer.name]
-                self.client.chat(
-                    TextComponent("Removed")
-                    .color("green")
-                    .appends(
-                        TextComponent(fplayer.rankname).appends(
-                            TextComponent("from autoboop!").color("green")
-                        )
-                    )
-                )
-
-    @subscribe(r"chat:server:(Guild|Friend) > ([A-Za-z0-9_]+) joined.$")
-    async def on_guild_join(self, buff: Buffer):
-        player = re.match(
-            r"^(Guild|Friend) > ([A-Za-z0-9_]+) joined\.$", buff.unpack(Chat)
+        self.client.send_packet(
+            0x3A, VarInt.pack(len(suggestions)), *(String.pack(s) for s in suggestions)
         )
-
-        if (not player) or (not player.group(2)):
-            return
-
-        player = str(player.group(2))
-
-        with shelve.open(self.AB_DATA_PATH) as db:
-            if db.get(player):
-                self.server.chat(f"/boop {player}")
-
-        self.client.send_packet(0x02, buff.getvalue())
-
-    @command()
-    async def fribidiskigma(self):
-        async def grass_callback(
-            window: Window,
-            slot: int,
-            button: int,
-            action_num: int,
-            mode: int,
-            clicked_item: SlotData,
-        ):
-            if clicked_item.item is not None:
-                self.client.chat(
-                    TextComponent("You clicked")
-                    .color("green")
-                    .appends(
-                        TextComponent(f"{clicked_item.item.display_name}").color("blue")
-                    )
-                    .appends(TextComponent("in slot").color("green"))
-                    .appends(TextComponent(f"{slot}").color("yellow"))
-                    .appends(TextComponent("with action #").color("green"))
-                    .append(TextComponent(f"{action_num}").color("yellow"))
-                    .appends(TextComponent("with trigger").color("green"))
-                    .appends(
-                        TextComponent(f" {get_trigger(mode, button, slot)}").color(
-                            "yellow"
-                        )
-                    )
-                )
-
-            lambda: window  # do something with window
-
-        # example window usage
-        self.settings_window = Window(self, "Settings", num_slots=18)
-
-        self.settings_window.set_slot(3, SlotData(Item.from_name("minecraft:stone")))
-
-        self.settings_window.open()
-
-        self.settings_window.set_slot(
-            4,
-            SlotData(
-                Item.from_name("minecraft:grass"),
-                nbt=dumps(from_dict({"display": {"Name": "§aFribidi Skigma"}})),
-            ),
-            callback=grass_callback,
-        )
-        self.settings_window.set_slot(
-            5,
-            SlotData(Item.from_name("minecraft:grass")),
-            callback=grass_callback,
-        )
-
-        return

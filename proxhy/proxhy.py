@@ -4,6 +4,7 @@ from plugins.commands import CommandsPlugin
 from plugins.debug import DebugPlugin
 from plugins.hypixelstate import HypixelStatePlugin
 from plugins.login import LoginPlugin
+from plugins.misc import MiscPlugin
 from plugins.settings import SettingsPlugin
 from plugins.spatial import SpatialPlugin
 from plugins.statcheck import StatCheckPlugin
@@ -19,6 +20,7 @@ plugins: tuple[type, ...] = (
     WindowPlugin,
     SettingsPlugin,
     SpatialPlugin,
+    MiscPlugin,
 )
 
 Proxhy = type("Proxhy", (*plugins, Proxy), {})
