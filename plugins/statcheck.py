@@ -40,11 +40,23 @@ from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from proxhy.mcmodels import Game, Nick, Team, Teams
 from proxhy.settings import ProxhySettings
 
-with files("proxhy").joinpath("assets/bedwars_maps.json").open("r", encoding="utf-8") as f:
+with (
+    files("proxhy")
+    .joinpath("assets/bedwars_maps.json")
+    .open("r", encoding="utf-8") as f
+):
     BW_MAPS: dict = json.load(f)
-with files("proxhy").joinpath("assets/rush_mappings.json").open("r", encoding="utf-8") as f:
+with (
+    files("proxhy")
+    .joinpath("assets/rush_mappings.json")
+    .open("r", encoding="utf-8") as f
+):
     RUSH_MAPPINGS = json.load(f)
-with files("proxhy").joinpath("assets/bedwars_chat.json").open("r", encoding="utf-8") as file:
+with (
+    files("proxhy")
+    .joinpath("assets/bedwars_chat.json")
+    .open("r", encoding="utf-8") as file
+):
     KILL_MSGS: list[str] = json.load(file)["kill_messages"]
 
 game_start_msgs = [  # block all the game start messages
@@ -1582,7 +1594,8 @@ class StatCheckPlugin(Plugin):
 
         await self._update_stats()
         if not self.stats_highlighted:
-            await self.stat_highlights()
+            if self.settings.bedwars.display_top_stats.get() != "OFF":
+                await self.stat_highlights()
 
     def match_kill_message(self, message: str) -> Optional[re.Match]:
         """Match a kill message against known patterns.

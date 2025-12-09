@@ -1,6 +1,6 @@
 [project]
 name = "proxhy"
-version = "2025.12.06"
+version = "2025.12.08"
 description = "A Hypixel proxy with various different features"
 license = "MIT"
 authors = [
@@ -15,6 +15,7 @@ dependencies = [
     "pyjwt>=2.10",
     "platformdirs>=4.3",
     "numpy>=2.3.3",
+    "uvloop>=0.22.1",
 ]
 
 [project.scripts]

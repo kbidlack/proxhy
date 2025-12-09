@@ -4,7 +4,6 @@ import json
 import random
 import uuid
 from importlib.resources import files
-from pathlib import Path
 from secrets import token_bytes
 from typing import Literal, Optional
 from unittest.mock import Mock
@@ -86,6 +85,16 @@ class LoginPlugin(Plugin):
         if self.logging_in:
             self.logging_in = False
 
+            # removes weird bugs when you join
+            self.client.send_packet(
+                0x07,
+                Int(-1),  # dimension: nether
+                UnsignedByte.pack(0),  # difficulty: peaceful
+                UnsignedByte.pack(3),  # gamemode: spectator
+                String.pack("default"),  # level type
+            )
+            self.client.send_packet(0x01, buff.getvalue())
+
             _ = buff.unpack(Int)  # entity id
             gamemode = buff.unpack(UnsignedByte)
             dimension = buff.unpack(Byte)
@@ -112,6 +121,7 @@ class LoginPlugin(Plugin):
 
         if auth.token_needs_refresh(self.username):
             return await self.login(reason="regen")
+
         reader, writer = await asyncio.open_connection(
             self.CONNECT_HOST[0], self.CONNECT_HOST[1]
         )
@@ -211,7 +221,7 @@ class LoginPlugin(Plugin):
         # fake server stream
         self.server = Mock()
 
-        async with (c := hypixel.Client()):
+        async with hypixel.Client() as c:
             uuid_ = await c._get_uuid(self.username)
 
         self.client.send_packet(
