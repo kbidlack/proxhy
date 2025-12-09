@@ -4,7 +4,6 @@ import numpy as np
 
 from core.events import listen_client, listen_server, subscribe
 from core.plugin import Plugin
-from plugins.statcheck import BW_MAPS
 from protocol.datatypes import (
     Boolean,
     Buffer,
@@ -85,7 +84,7 @@ class SpatialPlugin(Plugin):
         min_height: int = self.game.map.max_height or 0
 
         if abs(min_height - y) <= 3 or abs(max_height - y) <= 5:
-            limit_dist = round(max(min(y - min_height, max_height - y), 0))
+            limit_dist = round(max(min(abs(y - min_height), abs(max_height - y)), 0))
             color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
             self.client.set_actionbar_text(
                 f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"

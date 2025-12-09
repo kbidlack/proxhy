@@ -4,9 +4,13 @@ import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
+import uvloop
+
 from proxhy.proxhy import Proxhy
 
 instances: list[Proxhy] = []
+
+asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
 
 
 def parse_args():
@@ -40,7 +44,7 @@ def parse_args():
     parser.add_argument(
         "--dev",
         action="store_true",
-        help="Shorthand to bind proxhy to localhost:41224 to develop on a separate instance"
+        help="Shorthand to bind proxhy to localhost:41224 to develop on a separate instance",
     )
     parser.add_argument(
         "-fh",
@@ -74,7 +78,7 @@ if args.fake_port == -1:
     args.fake_port = args.remote_port
 
 
-class ProxhyServer(asyncio.Server):
+class ProxhyServer:
     """A custom server class that tracks the number of cancels."""
 
     __slots__ = ("_srv", "num_cancels")
@@ -83,6 +87,15 @@ class ProxhyServer(asyncio.Server):
     def __init__(self, srv: asyncio.Server) -> None:
         self._srv = srv
         self.num_cancels = 0
+
+    def close(self):
+        return self._srv.close()
+
+    def wait_closed(self):
+        return self._srv.wait_closed()
+
+    async def serve_forever(self):
+        return await self._srv.serve_forever()
 
     def __getattr__(self, name: str):
         # delegate everything else back to the real server
@@ -123,15 +136,17 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
         print("\nForcing shutdown...", end=" ", flush=True)
         for instance in instances:
             await instance.close()
-        loop.stop()
         print("done!")
+        loop.stop()
         return
 
     if instances:
         print("Waiting for all clients to disconnect...", end="", flush=True)
         for instance in instances:
             await instance.closed.wait()
-        print("done!")
+        # only print if not interrupted by forced shutdown
+        if server.num_cancels == 1:
+            print("done!")
     else:
         print("Shutting down...", end=" ", flush=True)
         server.close()
