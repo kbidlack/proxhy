@@ -267,7 +267,7 @@ class StatCheckPlugin(Plugin):
             color = {"code": "", "letter": "", "name": ""}
 
         if isinstance(fplayer, Nick):
-            return f"{color['code']}{color['letter']} §5[NICK] {player_name}"
+            return f"{color['code']}§l{color['letter']}§r §5[NICK] {player_name}"
 
         # Determine which FKDR to display
         if (
