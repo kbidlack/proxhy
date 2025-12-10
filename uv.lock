@@ -436,8 +436,8 @@ dependencies = [
     { name = "numpy" },
     { name = "platformdirs" },
     { name = "pyjwt" },
-    { name = "uvloop", marker = "sys_platform != 'win32'" },
-    { name = "winloop", marker = "sys_platform == 'win32'" },
+    { name = "uvloop" },
+    { name = "winloop" },
 ]
 
 [package.metadata]
@@ -448,8 +448,8 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.3.3" },
     { name = "platformdirs", specifier = ">=4.3" },
     { name = "pyjwt", specifier = ">=2.10" },
-    { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
-    { name = "winloop", marker = "sys_platform == 'win32'", specifier = ">=0.4.0" },
+    { name = "uvloop", specifier = ">=0.22.1" },
+    { name = "winloop", specifier = ">=0.4.0" },
 ]
 
 [[package]]

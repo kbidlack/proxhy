@@ -15,8 +15,8 @@ dependencies = [
     "pyjwt>=2.10",
     "platformdirs>=4.3",
     "numpy>=2.3.3",
-    "uvloop>=0.22.1; platform_system != 'Windows'",
-    "winloop>=0.4.0; platform_system == 'Windows'"
+    "uvloop>=0.22.1",
+    "winloop>=0.4.0"
 ]
 
 [project.scripts]
