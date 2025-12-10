@@ -1,16 +1,17 @@
-from core.events import listen_server, subscribe
 from core.plugin import Plugin
-from protocol.datatypes import (
-    UUID,
-    Boolean,
-    Buffer,
-    Chat,
-    String,
-    TextComponent,
-    VarInt,
-)
+from protocol.datatypes import TextComponent
 from proxhy.command import command
 from proxhy.mcmodels import Game, Teams
+
+# from core.events import listen_server, subscribe
+# from protocol.datatypes import (
+#     UUID,
+#     Boolean,
+#     Buffer,
+#     Chat,
+#     String,
+#     VarInt,
+# )
 
 
 class DebugPlugin(Plugin):
