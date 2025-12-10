@@ -1,12 +1,18 @@
 import argparse
 import asyncio
+import platform
 import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
-import uvloop
-
 from proxhy.proxhy import Proxhy
+
+if platform.system() == "Windows":
+    import winloop as loop_impl
+else:
+    import uvloop as loop_impl
+
+loop_impl.install()
 
 instances: list[Proxhy] = []
 
@@ -187,7 +193,7 @@ async def _main():
 
 def main():
     try:
-        uvloop.run(_main())
+        asyncio.run(_main())
     except RuntimeError:  # forced shutdown
         sys.exit()
 
