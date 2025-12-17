@@ -1,16 +1,20 @@
 import argparse
 import asyncio
+import platform
 import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
-import uvloop
-
 from proxhy.proxhy import Proxhy
 
-instances: list[Proxhy] = []
+if platform.system() == "Windows":
+    import winloop as loop_impl
+else:
+    import uvloop as loop_impl
 
-asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
+loop_impl.install()
+
+instances: list[Proxhy] = []
 
 
 def parse_args():

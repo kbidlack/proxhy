@@ -63,13 +63,6 @@ def _load_bedwars_maps():
         )
 
 
-def get_bedwars_map(name: str) -> BedwarsMap:
-    name = name.lower()
-    if name not in _MAPS:
-        raise ValueError(f"Unknown map: {name}")
-    return _MAPS[name]
-
-
 _load_bedwars_maps()
 
 
@@ -100,7 +93,7 @@ class Game:
             if key != "map":
                 setattr(self, key, value)
             else:
-                self.map = get_bedwars_map(value)
+                self.map = _MAPS.get(value.lower())
 
 
 @dataclass

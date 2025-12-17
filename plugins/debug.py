@@ -1,16 +1,17 @@
-from core.events import listen_server, subscribe
 from core.plugin import Plugin
-from protocol.datatypes import (
-    UUID,
-    Boolean,
-    Buffer,
-    Chat,
-    String,
-    TextComponent,
-    VarInt,
-)
+from protocol.datatypes import TextComponent
 from proxhy.command import command
 from proxhy.mcmodels import Game, Teams
+
+# from core.events import listen_server, subscribe
+# from protocol.datatypes import (
+#     UUID,
+#     Boolean,
+#     Buffer,
+#     Chat,
+#     String,
+#     VarInt,
+# )
 
 
 class DebugPlugin(Plugin):
@@ -36,7 +37,7 @@ class DebugPlugin(Plugin):
     async def _rqgame(self):
         rq_game_msg = TextComponent("Requeue Game:").color("green")
         self.client.chat(rq_game_msg)
-        for key in self.rq_game.__annotations__:
+        for key in type(self.rq_game).__annotations__:
             if value := getattr(self.rq_game, key):
                 key_value_msg = (
                     TextComponent(f"{key.capitalize()}: ")
