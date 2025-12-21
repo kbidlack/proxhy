@@ -6,16 +6,16 @@ A Hypixel proxy.
 
 The preferred method of installation is to use a Python package manager like `pipx` or `uv`:
 ```bash
-pipx install proxhy
+pipx install git+https://github.com/kbidlack/proxhy
 ```
 or
 ```bash
-uv tool install proxhy
+uv tool install git+https://github.com/kbidlack/proxhy
 ```
 
 Alternatively, you can install it using `pip`.
 ```bash
-pip install proxhy
+pip install git+https://github.com/kbidlack/proxhy
 ```
 
 ## Upgrading
@@ -27,7 +27,7 @@ pipx upgrade proxhy  # or: uv tool upgrade proxhy
 
 With pip:
 ```bash
-pip install --upgrade proxhy
+pip install --upgrade git+https://github.com/kbidlack/proxhy
 ```
 
 ## Usage
