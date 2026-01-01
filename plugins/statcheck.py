@@ -881,11 +881,12 @@ class StatCheckPlugin(Plugin):
     ):
         return await self._sc_internal(ign, mode, window, *stats, display_abridged=True)
 
-    async def _get_player(self, player: str) -> Player:
+    async def _get_player(self, player: str) -> dict[str, Player]:
         """Get a player from cache or fetch from API."""
-        return self._cached_players.get(player) or await self.hypixel_client.player(
-            player
-        )
+        return {
+            player: self._cached_players.get(player)
+            or await self.hypixel_client.player(player)
+        }
 
     @lru_cache()
     def get_team_color(self, player_name: str) -> TeamColor:
@@ -1019,8 +1020,9 @@ class StatCheckPlugin(Plugin):
             # -----------
             # the rest of this for loop gets player display names
             for result in player_stats:
+                expected_name = ""
                 try:
-                    player_result = await result
+                    expected_name, player_result = await result
                 except PlayerNotFound as player:  # assume nick
                     # I don't actually know if we can assume this is a string
                     # but I want the type checker to be friendly to me
@@ -1083,6 +1085,14 @@ class StatCheckPlugin(Plugin):
                     # TODO log this -- also why does this occur?
                     # supposedly session is closed (?)
                     continue
+
+                if expected_name and (expected_name != player.name):
+                    # assume nick -- TODO: should we assume this?
+                    # no I am NOT chat gpt despite the em dash ):
+                    player = Nick(player.name)
+                    # i really hope this owrks because I am NOT testing ts
+                    # btw this diff is made by kavi but i am too lazy to
+                    # change hte commiter btw 👍🏻
 
                 if player.name in self.players.values():
                     # Only cache actual Player objects, not Nick objects
