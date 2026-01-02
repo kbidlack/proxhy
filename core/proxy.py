@@ -60,6 +60,14 @@ class Proxy:
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
 
+        # create new dictionaries for each subclass so that
+        # packet listeners are not duplicated across subclasses
+        cls._packet_listeners = {
+            "client": defaultdict(list),
+            "server": defaultdict(list),
+        }
+        cls._event_listeners = defaultdict(list)
+
         listeners: list[tuple[Callable, PacketListener | str]] = []
 
         for base in reversed(cls.__mro__):
@@ -137,6 +145,11 @@ class Proxy:
         for e in self._event_listeners:
             if re.fullmatch(e, event):
                 for handler in self._event_listeners[e]:
+                    if isinstance(data, Buffer):
+                        # emit reuses data across handlers
+                        # but we don't want buffers to be messed up
+                        # by one handler, and then sent to another
+                        data = data.clone()
                     results.append(await handler(self, data))
 
         return results

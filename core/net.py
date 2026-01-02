@@ -1,6 +1,6 @@
 import asyncio
 import zlib
-from asyncio import StreamReader, StreamWriter
+from asyncio import Queue, StreamReader, StreamWriter
 from enum import Enum
 
 from cryptography.hazmat.backends import default_backend
@@ -38,6 +38,8 @@ class Stream:
         self.paused = False
         self._pause_event = asyncio.Event()
         self._pause_event.set()  # Initially not paused
+
+        self.pqueue: Queue[tuple[int, *tuple[bytes, ...]]] = Queue()
 
     @property
     def key(self):
@@ -157,6 +159,7 @@ class Stream:
                 packet_length = VarInt(len(packet))
 
         self.write(packet_length + packet)
+        self.pqueue.put_nowait((id, *data))
 
 
 class Client(Stream):

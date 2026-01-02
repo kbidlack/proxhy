@@ -1,4 +1,5 @@
 from core.proxy import Proxy
+from plugins.broadcast import BroadcastPlugin
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
 from plugins.debug import DebugPlugin
@@ -11,6 +12,7 @@ from plugins.statcheck import StatCheckPlugin
 from plugins.window import WindowPlugin
 
 plugins: tuple[type, ...] = (
+    BroadcastPlugin,
     ChatPlugin,
     CommandsPlugin,
     DebugPlugin,
@@ -22,5 +24,6 @@ plugins: tuple[type, ...] = (
     SpatialPlugin,
     MiscPlugin,
 )
+
 
 Proxhy = type("Proxhy", (*plugins, Proxy), {})

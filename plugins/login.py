@@ -73,8 +73,15 @@ class LoginPlugin(Plugin):
         self.state = State.PLAY
         self.logged_in = True
 
+        # parse and store uuid from login success packet
+        # for localhost/offline mode when uuid isnt set during auth
+        uuid_str = buff.unpack(String)
+        username = buff.unpack(String)
+        if not self.uuid:
+            self.uuid = uuid_str
+
         if not self.logging_in:
-            self.client.send_packet(0x02, buff.read())
+            self.client.send_packet(0x02, String.pack(uuid_str), String.pack(username))
 
         await self.emit("login_success")
 
