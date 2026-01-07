@@ -1,14 +1,18 @@
 import asyncio
 import zlib
-from asyncio import Queue, StreamReader, StreamWriter
+from asyncio import Queue
 from enum import Enum
 
+import pyroh
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.ciphers import Cipher
 from cryptography.hazmat.primitives.ciphers.algorithms import AES
 from cryptography.hazmat.primitives.ciphers.modes import CFB8
 
 from protocol.datatypes import Chat, Int, String, TextComponent, VarInt
+
+type StreamReader = asyncio.StreamReader | pyroh.StreamReader
+type StreamWriter = asyncio.StreamWriter | pyroh.StreamWriter
 
 
 class State(Enum):
@@ -67,9 +71,10 @@ class Stream:
 
     def write(self, data):
         # check if transport is closing/closed (works with both asyncio & uvloop)
-        if self.writer.transport.is_closing():
-            # socket.send() raised exception can die
-            return self.close()
+        if transport := getattr(self.writer, "transport", None):  # pyroh
+            if transport.is_closing():
+                # socket.send() raised exception can die
+                return self.close()
 
         if self.open:
             return self.writer.write(

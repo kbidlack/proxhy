@@ -5,6 +5,7 @@ import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
+from core.proxy import Proxy
 from proxhy.proxhy import Proxhy
 
 if platform.system() == "Windows":
@@ -14,8 +15,7 @@ else:
 
 loop_impl.install()
 
-instances: list[Proxhy] = []
-
+instances: list[Proxy] = []
 
 def parse_args():
     """Parse command line arguments."""
@@ -107,18 +107,34 @@ class ProxhyServer:
 
 
 async def handle_client(reader: StreamReader, writer: StreamWriter):
-    instances.append(
-        Proxhy(
-            reader,
-            writer,
-            connect_host=(
-                args.remote_host,
-                args.remote_port,
-                args.fake_host,
-                args.fake_port,
-            ),
-        )
+    proxy = Proxhy(
+        reader,
+        writer,
+        connect_host=(
+            args.remote_host,
+            args.remote_port,
+            args.fake_host,
+            args.fake_port,
+        ),
+        autostart=False,
     )
+    instances.append(proxy)
+
+    while proxy:
+        next_proxy = await proxy.run()
+        if next_proxy:
+            try:
+                idx = instances.index(proxy)
+                instances[idx] = next_proxy
+            except ValueError:
+                instances.append(next_proxy)
+            proxy = next_proxy
+        else:
+            try:
+                instances.remove(proxy)
+            except ValueError:
+                pass
+            proxy = None
 
 
 async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
@@ -139,7 +155,10 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
     if server.num_cancels > 1:
         print("\nForcing shutdown...", end=" ", flush=True)
         for instance in instances:
-            await instance.close()
+            try:
+                await instance.close()
+            except Exception as e:
+                print(f"Error while trying to close instance: {e}")
         print("done!")
         loop.stop()
         return

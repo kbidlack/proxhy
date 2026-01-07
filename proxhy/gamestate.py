@@ -2993,8 +2993,8 @@ class GameState:
             packets.append(self._build_resource_pack())
 
         # 32. Camera (0x43) - If spectating another entity
-        if self.camera_entity_id and self.camera_entity_id != self.player_entity_id:
-            packets.append(self._build_camera())
+        # if self.camera_entity_id and self.camera_entity_id != self.player_entity_id:
+        #     packets.append(self._build_camera())
 
         # 33. Block Break Animations (0x25)
         packets.extend(self._build_block_break_animations())

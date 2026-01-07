@@ -1,9 +1,10 @@
 import json
 import uuid
-from typing import TYPE_CHECKING, Optional, cast
+from typing import TYPE_CHECKING, Optional
 from unittest.mock import Mock
 
 import hypixel
+import pyroh
 
 from core.events import listen_client as listen
 from core.events import subscribe
@@ -12,8 +13,13 @@ from core.proxy import State
 from plugins.commands import CommandsPlugin
 from protocol.datatypes import (
     Buffer,
+    Byte,
+    Double,
+    Float,
+    Int,
     String,
     TextComponent,
+    UnsignedByte,
     UnsignedShort,
     VarInt,
 )
@@ -41,6 +47,7 @@ class BCCommandsPlugin(CommandsPlugin):
 
 class BasePlugin(BCPlugin):
     username: str
+    writer: pyroh.StreamWriter
     # base functionality
 
     def _init_base(self):
@@ -59,6 +66,8 @@ class BasePlugin(BCPlugin):
         # remove this client
         if self in self.proxy.clients:
             self.proxy.clients.remove(self)  # pyright: ignore[reportArgumentType]
+
+        await self.writer.aclose()
 
         try:
             self.username
@@ -157,20 +166,69 @@ class LoginPlugin(BCPlugin):
             self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
 
         # send login success packet
+        # TODO: support server support. this + login encryption will come back then
+        # self.client.send_packet(
+        #     0x02, String.pack(self.uuid), String.pack(self.username)
+        # )
+
+        self.state = State.PLAY
+
+        # send respawn to a different dimension first,
+        # then join, then respawn back. this forces the client to properly
+        # clear its state and reinitialize. idk why man. its stupid
+        current_dim = self.proxy.gamestate.dimension.value
+        # use end as fake dimension if in overworld/nether, otherwise use overworld
+        # so we always switch to a different dimension
+        # ts so complicated bruh
+        fake_dim = 1 if current_dim in (0, -1) else 0
+
         self.client.send_packet(
-            0x02, String.pack(self.uuid), String.pack(self.username)
+            0x07,  # respawn
+            Int(fake_dim),
+            UnsignedByte.pack(self.proxy.gamestate.difficulty.value),
+            UnsignedByte.pack(3),  # gamemode: spectator
+            String.pack(self.proxy.gamestate.level_type),
         )
+
+        # includes join game
+        packets = self.proxy.gamestate.sync_spectator(self.eid)
+        for packet_id, packet_data in packets:
+            self.client.send_packet(packet_id, packet_data)
+            await self.client.drain()
+
+        # respawn back to actual dimension
+        self.client.send_packet(
+            0x07,
+            Int(current_dim),
+            UnsignedByte.pack(self.proxy.gamestate.difficulty.value),
+            UnsignedByte.pack(3),  # gamemode: spectator
+            String.pack(self.proxy.gamestate.level_type),
+        )
+
+        # send player pos and look again after respawn to set correct pos
+        # ig respawn can reset player's position
+        pos = self.proxy.gamestate.position
+        rot = self.proxy.gamestate.rotation
+        self.client.send_packet(
+            0x08,
+            Double.pack(pos.x),
+            Double.pack(pos.y),
+            Double.pack(pos.z),
+            Float.pack(rot.yaw),
+            Float.pack(rot.pitch),
+            Byte.pack(0),  # flags: all absolute
+        )
+
+        await self.client.drain()
+
+        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
+        await self.client.drain()
+
+        # now add to clients list - sync is complete, safe to send packets
+        self.proxy.clients.append(self)  # type: ignore[arg-type]
 
         self.proxy.client.chat(
             TextComponent(self.username)
             .color("aqua")
             .appends(TextComponent("joined the broadcast!").color("green"))
         )
-
-        self.state = State.PLAY
-
-        packets = self.proxy.gamestate.sync_spectator(self.eid)
-        for packet_id, packet_data in packets:
-            self.client.send_packet(packet_id, packet_data)
-
-        self.proxy._spawn_player_for_client(self)  # type: ignore

@@ -1,23 +1,33 @@
 import asyncio
 import random
 import uuid as uuid_mod
-from asyncio import StreamReader, StreamWriter
-from typing import Literal, Optional
+from typing import Awaitable, Callable, Literal, Optional
 
+import compass
+import hypixel
+import pyroh
+from compass import CompassClient, ConnectionRequest
+
+import auth
 from core.events import subscribe
-from core.net import State
+from core.net import Server, State
 from core.plugin import Plugin
 from core.proxy import Proxy
 from plugins.chat import ChatPlugin
+from plugins.commands import CommandsPlugin
+from plugins.settings import SettingsPlugin
+from plugins.window import WindowPlugin
 from protocol.datatypes import (
     Angle,
     Chat,
     Int,
     Short,
     Slot,
+    String,
     TextComponent,
     VarInt,
 )
+from proxhy import utils
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.gamestate import GameState
@@ -42,7 +52,17 @@ plugin_list: tuple[type, ...] = (
 # this is named plugin_list because my type checker is complaining
 # that it clashes with from .plugins import ... above -_-
 
-type BC_ACTION = Literal["start", "stop", "status", "chat"]
+bc_proxy_plugin_list: tuple[type, ...] = (
+    ChatPlugin,
+    CommandsPlugin,
+    SettingsPlugin,
+    WindowPlugin,
+)
+
+COMPASS_SERVER_NODE_ID = "76eeec77bd4aa6a45a449cce220ff58f2edbde29ff4c80a839d4021bbb21b134"
+compass_client = CompassClient(server_node_id=COMPASS_SERVER_NODE_ID)
+
+type BC_ACTION = Literal["invite", "request", "chat", "list", "join", "leave"]
 
 
 class BaseClient:
@@ -56,10 +76,14 @@ ClientProxy = type("ClientProxy", (*plugin_list, Proxy, BaseClient), {})
 class BroadcastPlugin(Plugin):
     username: str
     uuid: str
+    access_token: str
+    logged_in: bool
+    transfer_to: Callable[[Proxy], Awaitable[None]]
 
     def _init_broadcasting(self):
-        self.broadcast_server: Optional[asyncio.Server] = None
         self.clients: list[ClientProxy] = []
+
+        self.conn_requests: dict[int, compass.ConnectionRequest] = {}
 
         self.gamestate = GameState()
         self.gamestate_task = asyncio.create_task(self._update_gamestate())
@@ -72,79 +96,270 @@ class BroadcastPlugin(Plugin):
             announce_player_func=self._announce_player_entity,
         )
 
-    @property
-    def broadcasting(self):
-        return self.broadcast_server is not None
+    @subscribe("login_success")
+    async def on_login_success(self, _):
+        asyncio.create_task(self.initialize_cc())
 
-    @command("bc")
-    async def broadcast(self, action: BC_ACTION, *args):
-        self._verify_broadcast_action(action, *args)
-
-        if action == "start":
-            await self._start_broadcasting()
-        elif action == "stop":
-            await self._stop_broadcasting()
-        elif action == "status":
-            self.client.chat(
-                TextComponent(
-                    f"You are currently{' ' if self.broadcasting else ' not '} broadcasting!"
-                ).color("green")
-            )
-        elif action == "chat":
-            self.bc_chat(self.username, " ".join(args))
-
-    async def _start_broadcasting(self):
         # Initialize transformer with current player state
         self._transformer.init_from_gamestate(self.uuid)
 
         # Start listening to serverbound packets for player movement/actions
+        # (must be after login when server connection exists)
         if self.serverbound_task is None or self.serverbound_task.done():
             self.serverbound_task = asyncio.create_task(self._update_serverbound())
 
-        self.broadcast_server = await asyncio.start_server(
-            self._handle_bc_client, "localhost", 41222
+    async def initialize_cc(self):
+        # TODO: wait for compass client initialization
+        self.broadcast_pyroh_server = await pyroh.serve(
+            self.on_peer, alpn=b"proxhy.broadcast/1"
         )
-        self.client.chat(
-            TextComponent("Started broadcasting on localhost:41222").color("green")
-        )
+        self.bps_t = asyncio.create_task(self.broadcast_pyroh_server.serve_forever())
 
-    async def _stop_broadcasting(self, reason: str = "The broadcast was stopped!"):
+        self.compass_client = CompassClient(
+            COMPASS_SERVER_NODE_ID, node=self.broadcast_pyroh_server.node
+        )
+        await self.compass_client.connect()
+
+        self.access_token, self.username, self.uuid = await auth.load_auth_info(
+            self.username
+        )  # this doesn't load if we are connecting to localhost
+        # TODO: fix above (access token should be loaded even when connecting to localhost)
+        await self.compass_client.register(self.uuid, self.username, self.access_token)
+
+        await self.compass_client.set_discoverable()
+        self.compass_client.start_listening(self.on_request)
+
+    async def on_peer(self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter):
+        client = ClientProxy(
+            reader, writer, ("localhost", 41222, "localhost", 41222), autostart=False
+        )
+        client.proxy = self
+        client.writer = writer  # store for closing later
+        # TODO: check for eid clashes on server
+        client.eid = random.getrandbits(31)
+
+        # don't add to self.clients yet - wait until sync_spectator completes
+        # in packet_login_start to avoid live packets mixing with sync packets
+
+        # start processing packets from this client (runs until client disconnects)
+        await client.handle_client()
+        # ^ this is await since we need to keep this method alive
+        # so that pyroh doesn't slime out the reader and writer
+
+    @subscribe("close")
+    async def bc_on_close(self, _):  # _: reason (str); unused (for now?)
+        if self.logged_in:
+            self.bps_t.cancel()
+
+            await self.disconnect_clients(reason="The broadcast owner disconnected!")
+            try:
+                self.compass_client.stop_listening()
+                await self.compass_client.set_undiscoverable()
+            except compass.ProtocolError, compass.ConnectionError:
+                pass  # probably not registered
+
+            self._transformer.reset()
+
+            if self.serverbound_task and not self.serverbound_task.done():
+                self.serverbound_task.cancel()
+
+    async def on_request(self, request: ConnectionRequest):
+        try:
+            request_id = max(self.conn_requests.keys())
+        except ValueError:
+            request_id = 0
+
+        self.conn_requests.update({request_id: request})
+
+        if request.reason == "proxhy.broadcast":
+            self.client.chat(
+                TextComponent("")
+                .append(TextComponent(f"{request.username}").color("aqua").bold())
+                .append(
+                    TextComponent(" has invited you to join their broadcast!").color(
+                        "gold"
+                    )
+                )
+                .appends(TextComponent("[").color("dark_gray"))
+                .append(
+                    TextComponent("Join")
+                    .color("green")
+                    .bold()
+                    .click_event("run_command", f"/bc join {request_id}")
+                    .hover_text(
+                        TextComponent("Join")
+                        .color("green")
+                        .appends(TextComponent(request.username).color("aqua"))
+                        .append("'s broadcast")
+                    )
+                )
+                .append(TextComponent("]").color("dark_gray"))
+            )
+        else:
+            # TODO: support this...how?
+            self.client.chat(
+                TextComponent("")
+                .append(TextComponent(f"{request.username}").color("aqua").bold())
+                .append(
+                    TextComponent(" has requested to connect to you! (reason: ").color(
+                        "gold"
+                    )
+                )
+                .append(
+                    TextComponent(request.reason or "No reason provided").color("white")
+                )
+                .append(TextComponent(") ").color("gold"))
+                .append(TextComponent("[").color("dark_gray"))
+                .append(
+                    TextComponent("Accept")
+                    .color("green")
+                    .bold()
+                    .click_event("run_command", f"/connection accept {request_id}")
+                    .hover_text(
+                        TextComponent("Accept the connection from")
+                        .color("green")
+                        .appends(TextComponent(request.username).color("aqua"))
+                    )
+                )
+                .append(TextComponent("]").color("dark_gray"))
+            )
+
+    @command("bc")
+    async def broadcast(self, action: BC_ACTION, *args: str):
+        def _verify_one_args(*args: str):
+            if len(args) > 1:
+                raise CommandException(
+                    "Broadcast invite only accepts one parameter: player!"
+                )
+            elif len(args) < 1:
+                raise CommandException(
+                    "Broadcast invite requires one parameter: player!"
+                )
+
+        if action == "chat":
+            self.bc_chat(self.username, " ".join(args))
+        elif action == "list":
+            if not self.clients:
+                return self.client.chat(
+                    TextComponent("No players are currently connected.").color("gold")
+                )
+
+            players = [c.username for c in self.clients]
+            tc = TextComponent("Player: ").color("yellow")
+            for i, name in enumerate(players):
+                tc.append(TextComponent(name).color("aqua"))
+                if i != len(players) - 1:
+                    tc.append(TextComponent(", ").color("green"))
+            self.client.chat(tc)
+
+        elif action == "join":
+            if not self.compass_client.is_registered:
+                raise CommandException(
+                    "The compass client is not connected yet! (wait a second?)"
+                )
+
+            _verify_one_args(*args)
+
+            request_id = int(args[0])
+            request = self.conn_requests[request_id]
+            del self.conn_requests[request_id]
+
+            peer_info = await request.accept()
+
+            # TODO: handle errors properly
+            reader, writer = await pyroh.connect(
+                pyroh.node_addr(peer_info.node_id),
+                alpn="proxhy.broadcast/1",
+                node=self.broadcast_pyroh_server.node,
+            )
+
+            BCProxy = type(
+                "BCProxy",
+                (*bc_proxy_plugin_list, Proxy),
+                {"username": self.username, "uuid": self.uuid},
+                # ^ keep username & uuid for bc proxy
+            )
+
+            new_proxy = BCProxy(
+                self.client.reader,
+                self.client.writer,
+                autostart=False,
+            )
+
+            new_proxy.state = State.LOGIN
+            new_proxy.server = Server(reader, writer)
+
+            asyncio.create_task(new_proxy.handle_server())
+
+            new_proxy.server.send_packet(
+                0x00,
+                VarInt.pack(47),
+                String.pack(peer_info.node_id),
+                Short.pack(25565),  # technically wrong but whatever
+                VarInt.pack(State.LOGIN.value),
+            )
+            new_proxy.server.send_packet(0x00, String.pack(self.username))
+
+            await new_proxy.server.drain()
+
+            new_proxy.state = State.PLAY
+
+            await self.transfer_to(new_proxy)
+
+        elif action == "invite":
+            if not self.compass_client.is_registered:
+                raise CommandException(
+                    "The compass client is not connected yet! (wait a second?)"
+                )
+
+            _verify_one_args(*args)
+            async with utils._Client() as client:
+                try:
+                    player_info = await client.get_profile(args[0])
+                except hypixel.PlayerNotFound:
+                    raise CommandException(
+                        TextComponent("Player '")
+                        .appends(TextComponent(args[0]).color("blue"))
+                        .appends("' was not found!")
+                    )
+
+            name = player_info.name
+            uuid_ = player_info.uuid
+
+            self.client.chat(
+                f"Invited {name} to the broadcast! Waiting for them to accept..."
+            )
+
+            try:
+                peer_info = await self.compass_client.request_peer(
+                    uuid_, request_reason="proxhy.broadcast"
+                )
+            except compass.ProtocolError:
+                raise CommandException(
+                    TextComponent("Unable to connect to '")
+                    .appends(TextComponent(name).color("blue"))
+                    .appends("' !")
+                )
+            except asyncio.TimeoutError:
+                raise CommandException(
+                    TextComponent("Broadcast invite to '")
+                    .appends(TextComponent(name).color("blue"))
+                    .appends("' expired!")
+                )
+            except compass.PeerUnavailableError:
+                raise CommandException(
+                    TextComponent(name)
+                    .color("blue")
+                    .appends("is currently unavailable !")
+                    .color("red")
+                )
+
+    async def disconnect_clients(self, reason: str = "The broadcast was stopped!"):
         for client in self.clients:
             client.client.send_packet(
                 0x40,
                 Chat.pack(TextComponent(reason).color("red")),
             )
-
-        if self.broadcast_server:
-            self.broadcast_server.close()
-            await self.broadcast_server.wait_closed()
-
-        self.broadcast_server = None
-        self._transformer.reset()
-
-        if self.serverbound_task and not self.serverbound_task.done():
-            self.serverbound_task.cancel()
-
-        self.client.chat(TextComponent("Stopped broadcasting!").color("green"))
-
-    async def _handle_bc_client(self, reader: StreamReader, writer: StreamWriter):
-        client = ClientProxy(reader, writer, ("localhost", 41222, "localhost", 41222))
-        client.proxy = self
-        # TODO: check for eid clashes on server
-        client.eid = random.getrandbits(31)
-
-        self.clients.append(client)
-
-    def _verify_broadcast_action(self, action: BC_ACTION, *args):
-        match action, self.broadcasting:
-            case "start", True:
-                raise CommandException("You are already broadcasting!")
-            case "stop", False:
-                raise CommandException("You are not broadcasting!")
-            case "status", False:
-                raise CommandException("You are not broadcasting!")
-            case "chat", False:
-                raise CommandException("You are not broadcasting!")
 
     def bc_chat(self, username: str, msg: str):
         self.client.chat(
@@ -171,10 +386,6 @@ class BroadcastPlugin(Plugin):
             ):
                 client.client.send_packet(packet_id, data)
 
-    @subscribe("close")
-    async def bc_on_close(self, _):  # _: reason (str); unused (for now?)
-        await self._stop_broadcasting(reason="The broadcast owner disconnected!")
-
     async def _update_gamestate(self):
         while self.open:
             id, *data = await self.client.pqueue.get()
@@ -195,7 +406,6 @@ class BroadcastPlugin(Plugin):
         """Forward a clientbound packet to spectators with appropriate transformations."""
         if not self.clients:
             return
-
         # Handle Join Game specially to update EID per client
         if id == 0x01:
             buff_data = b"".join(data)
