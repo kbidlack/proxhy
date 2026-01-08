@@ -136,10 +136,15 @@ class BroadcastPlugin(Plugin):
         # in packet_login_start to avoid live packets mixing with sync packets
 
         # start processing packets from this client (runs until client disconnects)
+        # we await here to keep this method alive so pyroh doesn't close the reader/writer
         client.handle_client_task = asyncio.create_task(client.handle_client())
-        await client.handle_client_task
-        # ^ this is await since we need to keep this method alive
-        # so that pyroh doesn't slime out the reader and writer
+        try:
+            await client.handle_client_task
+        except asyncio.CancelledError:
+            pass
+        finally:
+            if client.open:
+                await client.close()
 
     @subscribe("close")
     async def _close_broadcast(self, _):  # _: reason (str); unused (for now?)

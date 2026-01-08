@@ -97,7 +97,11 @@ class Proxy:
         """
         Run the proxy until it closes or transfers to another proxy
         """
-        await self.handle_client()
+        self.handle_client_task = asyncio.create_task(self.handle_client())
+        try:
+            await self.handle_client_task
+        except asyncio.CancelledError:
+            pass
         return self._next_proxy
 
     async def transfer_to(self, new_proxy: "Proxy") -> None:
