@@ -151,6 +151,8 @@ class BroadcastPlugin(Plugin):
         self.compass_client.start_listening(self.on_request)
 
         self.compass_client_initialized = True
+        # no this is not ai i put the ✓ there myself
+        self.client.chat(TextComponent("✓ Compass client initialized!").color("green"))
 
     async def on_broadcast_peer(
         self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
