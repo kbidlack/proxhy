@@ -167,16 +167,11 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
 
-        async with hypixel.Client() as c:
-            self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
-
         # send login success packet
         # TODO: support server support. this + login encryption will come back then
         # self.client.send_packet(
         #     0x02, String.pack(self.uuid), String.pack(self.username)
         # )
-
-        self.state = State.PLAY
 
         # send respawn to a different dimension first,
         # then join, then respawn back. this forces the client to properly
@@ -197,9 +192,18 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         # includes join game
         packets = self.proxy.gamestate.sync_spectator(self.eid)
-        for packet_id, packet_data in packets:
+        self.client.send_packet(*packets[0])  # join game
+        await self.client.drain()
+
+        async with hypixel.Client() as c:
+            self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
+
+        self.state = State.PLAY
+
+        for packet_id, packet_data in packets[1:]:
             self.client.send_packet(packet_id, packet_data)
-            await self.client.drain()
+
+        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
 
         # respawn back to actual dimension
         self.client.send_packet(
@@ -224,9 +228,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Byte.pack(0),  # flags: all absolute
         )
 
-        await self.client.drain()
-
-        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
         await self.client.drain()
 
         # now add to clients list - sync is complete, safe to send packets
