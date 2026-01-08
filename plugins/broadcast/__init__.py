@@ -1,5 +1,6 @@
 import asyncio
 import random
+import typing
 import uuid as uuid_mod
 from typing import Awaitable, Callable, Literal, Optional
 
@@ -39,7 +40,17 @@ from .transform import (
     build_spawn_player_packet,
 )
 
+
+class BCClientClosePlugin(Plugin):
+    @subscribe("close")
+    async def _close_bc_client_proxy(self, _):
+        typing.cast(pyroh.StreamWriter, self.server.writer)
+        await self.server.writer.drain()
+        await self.server.writer.write_eof()  # type: ignore
+
+
 bc_client_plugin_list: tuple[type, ...] = (
+    BCClientClosePlugin,
     ChatPlugin,
     CommandsPlugin,
     SettingsPlugin,

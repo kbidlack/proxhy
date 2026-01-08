@@ -83,7 +83,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.proxy.client.chat(
             TextComponent(self.username)
             .color("aqua")
-            .appends(TextComponent("left the broadcast!").color("green"))
+            .appends(TextComponent("left the broadcast!").color("red"))
         )
 
     @command("spec")
@@ -250,4 +250,4 @@ broadcast_peer_plugins: tuple[type, ...] = (
     BroadcastPeerCommandsPlugin,
 )
 
-BroadcastPeerProxy = type("ClientProxy", (*broadcast_peer_plugins, Proxy), {})
+BroadcastPeerProxy = type("BroadcastPeerProxy", (*broadcast_peer_plugins, Proxy), {})
