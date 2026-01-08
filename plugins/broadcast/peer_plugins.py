@@ -9,7 +9,8 @@ import pyroh
 from core.events import listen_client as listen
 from core.events import subscribe
 from core.plugin import Plugin
-from core.proxy import State
+from core.proxy import Proxy, State
+from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
 from protocol.datatypes import (
     Buffer,
@@ -27,15 +28,15 @@ from proxhy.command import command
 from proxhy.errors import CommandException
 
 if TYPE_CHECKING:
-    from . import BroadcastPlugin
+    from proxhy.proxhy import Proxhy
 
 
-class BCPlugin(Plugin):
-    proxy: BroadcastPlugin
+class BroadcastPeerPlugin(Plugin):
+    proxy: Proxhy
     eid: int
 
 
-class BCCommandsPlugin(CommandsPlugin):
+class BroadcastPeerCommandsPlugin(CommandsPlugin):
     @listen(0x14)
     async def packet_tab_complete(self, buff: Buffer):
         # reuse packet tab complete logic, but fake server response
@@ -45,7 +46,7 @@ class BCCommandsPlugin(CommandsPlugin):
         await super().packet_server_tab_complete(Buffer(VarInt(0)))
 
 
-class BasePlugin(BCPlugin):
+class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
     username: str
     writer: pyroh.StreamWriter
     # base functionality
@@ -121,7 +122,7 @@ class BasePlugin(BCPlugin):
         self.client.send_packet(0x43, VarInt.pack(eid))
 
 
-class LoginPlugin(BCPlugin):
+class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     def _init_login(self):
         self.server = Mock()  # HACK
 
@@ -232,3 +233,17 @@ class LoginPlugin(BCPlugin):
             .color("aqua")
             .appends(TextComponent("joined the broadcast!").color("green"))
         )
+
+
+# "proxy" for any connected broadcast clients
+# we are just reusing proxy code and then omitting the server
+# to be able to take advantage of all the prebuilt plugins
+# and packet handling stuff from proxy, just for a client connection
+broadcast_peer_plugins: tuple[type, ...] = (
+    ChatPlugin,
+    BroadcastPeerLoginPlugin,
+    BroadcastPeerBasePlugin,
+    BroadcastPeerCommandsPlugin,
+)
+
+BroadcastPeerProxy = type("ClientProxy", (*broadcast_peer_plugins, Proxy), {})

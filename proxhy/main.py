@@ -17,6 +17,7 @@ loop_impl.install()
 
 instances: list[Proxy] = []
 
+
 def parse_args():
     """Parse command line arguments."""
     parser = argparse.ArgumentParser()
