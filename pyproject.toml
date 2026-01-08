@@ -9,14 +9,16 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "hypixel.py>=0.4",
     "cryptography>=45.0",
     "keyring>=25.6",
     "pyjwt>=2.10",
     "platformdirs>=4.3",
     "numpy>=2.3.3",
-    "uvloop>=0.22.1",
-    "winloop>=0.4.0"
+    "pyroh",
+    "compass",
+    "hypixel-py>=0.4.2",
+    "uvloop>=0.22.1; platform_system != 'Windows'",
+    "winloop>=0.4.1",
 ]
 
 [project.scripts]
@@ -27,7 +29,11 @@ requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["proxhy", "core", "plugins", "auth", "protocol"]
+packages = ["proxhy", "core", "plugins", "auth", "protocol", "broadcasting"]
 
 [tool.setuptools.package-data]
 "proxhy" = ["assets/*"]
+
+[tool.uv.sources]
+pyroh = { git = "https://github.com/kbidlack/pyroh" }
+compass = { git = "https://github.com/kbidlack/compass.git", subdirectory = "client-python" }

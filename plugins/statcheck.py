@@ -490,11 +490,19 @@ class StatCheckPlugin(Plugin):
         asyncio.create_task(self.log_bedwars_stats("login"))
 
     @subscribe("close")
-    async def statcheck_on_close(self, _):
+    async def _close_statcheck(self, _):
         try:
             if self.hypixel_client:
-                await self.log_bedwars_stats("logout")
-                await self.hypixel_client.close()
+                try:
+                    await asyncio.wait_for(
+                        self.log_bedwars_stats("logout"), timeout=2.0
+                    )
+                except asyncio.TimeoutError:
+                    pass
+                try:
+                    await asyncio.wait_for(self.hypixel_client.close(), timeout=1.0)
+                except asyncio.TimeoutError:
+                    pass  # force close anyways
         except AttributeError:
             pass  # TODO: log
 

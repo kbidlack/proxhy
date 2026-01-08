@@ -14,7 +14,7 @@ import hypixel
 import auth
 from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
-from core.events import listen_client, listen_server
+from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from core.plugin import Plugin
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
@@ -73,8 +73,15 @@ class LoginPlugin(Plugin):
         self.state = State.PLAY
         self.logged_in = True
 
+        # parse and store uuid from login success packet
+        # for localhost/offline mode when uuid isnt set during auth
+        uuid_str = buff.unpack(String)
+        username = buff.unpack(String)
+        if not self.uuid:
+            self.uuid = uuid_str
+
         if not self.logging_in:
-            self.client.send_packet(0x02, buff.read())
+            self.client.send_packet(0x02, String.pack(uuid_str), String.pack(username))
 
         await self.emit("login_success")
 
@@ -126,7 +133,7 @@ class LoginPlugin(Plugin):
             self.CONNECT_HOST[0], self.CONNECT_HOST[1]
         )
         self.server = Server(reader, writer)
-        asyncio.create_task(self.handle_server())
+        self.handle_server_task = asyncio.create_task(self.handle_server())
 
         if self.keep_alive_task:
             self.keep_alive_task.cancel()
@@ -200,6 +207,15 @@ class LoginPlugin(Plugin):
             else:
                 await self.close()
                 break
+
+    @subscribe("close")
+    async def _close_login(self, _):
+        if self.keep_alive_task and not self.keep_alive_task.done():
+            self.keep_alive_task.cancel()
+            try:
+                await self.keep_alive_task
+            except asyncio.CancelledError:
+                pass
 
     @listen_client(0x00, State.HANDSHAKING, blocking=True, override=True)
     async def packet_handshake(self, buff: Buffer):

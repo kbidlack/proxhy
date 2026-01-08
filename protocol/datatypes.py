@@ -6,8 +6,9 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from importlib.resources import files  # noqa: F401
 from io import BytesIO
-from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
+
+from . import nbt
 
 if TYPE_CHECKING:
 
@@ -885,7 +886,46 @@ class Slot(DataType[SlotData, SlotData]):
         count = buff.unpack(Byte)
         damage = buff.unpack(Short)
 
-        rest_of_data = buff.read()
-        nbt = b"" if not rest_of_data[0] else rest_of_data
+        nbt_data = Slot._read_nbt(buff)
 
-        return SlotData(Item.from_id(item_id), count, damage, nbt)
+        return SlotData(Item.from_id(item_id), count, damage, nbt_data)
+
+    @staticmethod
+    def _read_nbt(buff: Buffer) -> bytes:
+        """Read NBT data from buffer and return the raw bytes"""
+        start_pos = buff.tell()
+
+        # Peek at tag type
+        tag_type_byte = buff.read(1)
+        if not tag_type_byte or tag_type_byte[0] == 0:
+            # TAG_End or empty - no NBT data
+            return b""
+
+        # Reset to start and read the full NBT structure using the nbt library
+        buff.seek(start_pos)
+
+        # Read enough bytes to parse the NBT - we'll use the NBTReader to determine the size
+        # First, get all remaining bytes from current position
+        remaining_data = buff.read()
+        buff.seek(start_pos)
+
+        if not remaining_data:
+            return b""
+
+        try:
+            # Use NBTReader to parse and determine exact size
+            reader = nbt.NBTReader(remaining_data)
+            reader.read_root()  # This will parse the NBT structure
+
+            # The reader's internal BytesIO position tells us how many bytes were consumed
+            bytes_consumed = reader.data.tell()
+
+            # Now read exactly that many bytes from the original buffer
+            nbt_data = buff.read(bytes_consumed)
+            return nbt_data
+
+        except (nbt.NBTError, Exception):
+            # If parsing fails, assume no NBT data
+            buff.seek(start_pos)
+            buff.read(1)  # Consume the tag type byte we already read
+            return b""
