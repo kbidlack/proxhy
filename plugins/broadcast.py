@@ -10,11 +10,16 @@ import pyroh
 from compass import CompassClient, ConnectionRequest
 
 import auth
+from broadcasting.peer_plugins import BroadcastPeerProxy
+from broadcasting.transform import (
+    PlayerTransformer,
+    build_player_list_add_packet,
+    build_spawn_player_packet,
+)
 from core.events import subscribe
 from core.net import Server, State
 from core.plugin import Plugin
 from core.proxy import Proxy
-from plugins.broadcast.peer_plugins import BroadcastPeerProxy
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
 from plugins.settings import SettingsPlugin
@@ -33,12 +38,6 @@ from proxhy import utils
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.gamestate import GameState
-
-from .transform import (
-    PlayerTransformer,
-    build_player_list_add_packet,
-    build_spawn_player_packet,
-)
 
 
 class BCClientClosePlugin(Plugin):

@@ -140,7 +140,7 @@ wheels = [
 [[package]]
 name = "compass"
 version = "0.1.0"
-source = { git = "https://github.com/kbidlack/compass.git?subdirectory=client-python#1bb6ce80ab6514999ec088af6518502fe3e93448" }
+source = { git = "https://github.com/kbidlack/compass.git?subdirectory=client-python#0bc420854f3ec786aabcf45a1f9af3e021d4bd62" }
 dependencies = [
     { name = "httpx" },
     { name = "pyroh" },
@@ -516,7 +516,7 @@ dependencies = [
     { name = "platformdirs" },
     { name = "pyjwt" },
     { name = "pyroh" },
-    { name = "uvloop" },
+    { name = "uvloop", marker = "sys_platform != 'win32'" },
     { name = "winloop" },
 ]
 
@@ -530,7 +530,7 @@ requires-dist = [
     { name = "platformdirs", specifier = ">=4.3" },
     { name = "pyjwt", specifier = ">=2.10" },
     { name = "pyroh", git = "https://github.com/kbidlack/pyroh" },
-    { name = "uvloop", specifier = ">=0.22.1" },
+    { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
     { name = "winloop", specifier = ">=0.4.1" },
 ]
 
