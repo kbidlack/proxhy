@@ -416,6 +416,34 @@ class BroadcastPlugin(Plugin):
                     .appends("has already joined the broadcast!")
                 )
 
+            # start and see if it immediately fails; if it does
+            # the peer may be offline and there is no point
+            # in sending the invite success message
+            req_task = asyncio.create_task(
+                self.compass_client.request_peer(
+                    uuid_, request_reason="proxhy.broadcast", timeout=60
+                )
+            )
+
+            done, _ = await asyncio.wait({req_task}, timeout=0.5)
+
+            if req_task in done:
+                try:
+                    await req_task
+                except compass.ProtocolError:
+                    raise CommandException(
+                        TextComponent("Unable to connect to")
+                        .appends(TextComponent(name).color("blue"))
+                        .append("due to a compass protocol error ):")
+                    )
+                except compass.PeerUnavailableError:
+                    raise CommandException(
+                        TextComponent(name)
+                        .color("blue")
+                        .appends("is currently unavailable!")
+                        .color("red")
+                    )
+
             self.client.chat(
                 TextComponent("Invited")
                 .color("green")
@@ -430,9 +458,7 @@ class BroadcastPlugin(Plugin):
             self.broadcast_requests.add(name)
 
             try:
-                await self.compass_client.request_peer(
-                    uuid_, request_reason="proxhy.broadcast", timeout=60
-                )
+                await req_task
             except compass.ProtocolError:
                 raise CommandException(
                     TextComponent("Unable to connect to")
@@ -446,8 +472,6 @@ class BroadcastPlugin(Plugin):
                     .appends("expired!")
                 )
             except compass.PeerUnavailableError:
-                # TODO: check if this ever happens
-                # if not, remove it
                 raise CommandException(
                     TextComponent(name)
                     .color("blue")
