@@ -14,8 +14,11 @@ from core.proxy import Proxy, State
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
 from protocol.datatypes import (
+    UUID,
+    Boolean,
     Buffer,
     Byte,
+    Chat,
     Double,
     Float,
     Int,
@@ -52,7 +55,8 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
     writer: pyroh.StreamWriter
     # base functionality
 
-    def _init_base(self):
+    def _init_broadcast_peer(self):
+        self.uuid = ""
         self.spec_eid: Optional[int] = None
 
     @subscribe("chat:client:.*")
@@ -84,6 +88,13 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             TextComponent(self.username)
             .color("aqua")
             .appends(TextComponent("left the broadcast!").color("red"))
+        )
+
+        self.proxy.client.send_packet(
+            0x38,
+            VarInt.pack(4),  # action: remove player
+            VarInt.pack(1),  # number of players
+            UUID.pack(uuid.UUID(self.uuid)),
         )
 
     @command("spec")
@@ -237,6 +248,25 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             TextComponent(self.username)
             .color("aqua")
             .appends(TextComponent("joined the broadcast!").color("green"))
+        )
+        display_name = (
+            TextComponent("[")
+            .color("dark_gray")
+            .append(TextComponent("BROADCAST").color("red"))
+            .append(TextComponent("]").color("dark_gray"))
+            .appends(TextComponent(f"{self.username}").color("aqua"))
+        )
+        self.proxy.client.send_packet(
+            0x38,
+            VarInt.pack(0),  # action: add player
+            VarInt.pack(1),  # number of players
+            UUID.pack(uuid.UUID(self.uuid)),
+            String.pack(self.username),  # player name with prefix
+            VarInt.pack(0),  # properties count
+            VarInt.pack(3),  # gamemode: spectator
+            VarInt.pack(0),  # ping
+            Boolean.pack(True),  # has display name
+            Chat.pack(display_name),
         )
 
 
