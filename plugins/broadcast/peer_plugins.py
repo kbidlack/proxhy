@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from typing import TYPE_CHECKING, Optional
@@ -63,12 +64,15 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.proxy.bc_chat(self.username, msg)
 
     @subscribe("close")
-    async def on_close(self, _):
+    async def _close_broadcast_peer(self, _):
         # remove this client
         if self in self.proxy.clients:
             self.proxy.clients.remove(self)  # pyright: ignore[reportArgumentType]
 
-        await self.writer.aclose()
+        try:
+            await asyncio.wait_for(self.writer.aclose(), timeout=0.5)
+        except asyncio.TimeoutError:
+            pass
 
         try:
             self.username

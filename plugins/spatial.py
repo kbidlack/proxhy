@@ -30,6 +30,10 @@ class SpatialPlugin(Plugin):
     @subscribe("close")
     async def _close_spatial(self, _):
         self.check_height_task.cancel()
+        try:
+            await self.check_height_task
+        except asyncio.CancelledError:
+            pass
 
     # =========================
     #   TRACK PLAYER POSITION

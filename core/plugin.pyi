@@ -1,4 +1,5 @@
-from typing import Any, Literal
+import asyncio
+from typing import Any, Literal, Optional
 
 from protocol.datatypes import Buffer
 
@@ -14,6 +15,9 @@ class Plugin:
 
     CONNECT_HOST: tuple[str, int, str, int]
 
+    handle_client_task: Optional[asyncio.Task]
+    handle_server_task: Optional[asyncio.Task]
+
     _packet_listeners: dict[
         Literal["client", "server"],
         dict[tuple[int, State], ListenerList[Buffer]],
@@ -23,4 +27,4 @@ class Plugin:
     async def handle_client(self) -> None: ...
     async def handle_server(self) -> None: ...
     async def emit(self, event: str, data: Any = None) -> list: ...
-    async def close(self, reason: str = "") -> None: ...
+    async def close(self, reason: str = "", force: bool = False) -> None: ...

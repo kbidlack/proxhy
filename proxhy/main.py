@@ -155,22 +155,82 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
     if server.num_cancels > 1:
         print("\nForcing shutdown...", end=" ", flush=True)
-        for instance in instances:
+        close_tasks = [instance.close(force=True) for instance in instances]
+        if close_tasks:
             try:
-                await instance.close()
-            except Exception as e:
-                print(f"Error while trying to close instance: {e}")
+                await asyncio.wait_for(
+                    asyncio.gather(*close_tasks, return_exceptions=True),
+                    timeout=1.0,
+                )
+            except asyncio.TimeoutError:
+                pass  # continue anyway
+
+        pending = [
+            t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()
+        ]
+        for task in pending:
+            task.cancel()
+
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
         print("done!")
         loop.stop()
         return
 
     if instances:
-        print("Waiting for all clients to disconnect...", end="", flush=True)
-        for instance in instances:
-            await instance.closed.wait()
-        # only print if not interrupted by forced shutdown
-        if server.num_cancels == 1:
-            print("done!")
+        logged_in_instances = []
+        non_logged_in_instances = []
+        for i, instance in enumerate(instances):
+            if getattr(instance, "logged_in", False):
+                logged_in_instances.append(instance)
+            else:
+                non_logged_in_instances.append(instance)
+
+        # force non logged in instances to close immediately
+        # these are ones probably just created to check server status
+        # TODO: time these out so we don't always have to close them here?
+        # ^ and so that they don't clutter the instances list
+        if non_logged_in_instances:
+            print(
+                f"\nClosing {len(non_logged_in_instances)} non-logged-in connection(s)..."
+            )
+            await asyncio.gather(
+                *(inst.close(force=True) for inst in non_logged_in_instances),
+                return_exceptions=True,
+            )
+
+        if logged_in_instances:
+            print(f"Waiting for {len(logged_in_instances)} client(s) to disconnect...")
+
+            instance_info = []
+            for i, instance in enumerate(logged_in_instances):
+                username = getattr(instance, "username", None) or f"instance_{i}"
+                pending_tasks = [
+                    attr
+                    for attr in dir(instance)
+                    if isinstance(getattr(instance, attr, None), asyncio.Task)
+                    and not getattr(instance, attr).done()
+                ]
+                instance_info.append((instance, username, pending_tasks))
+                print(
+                    f"  - {username} (open={instance.open}, closed={instance.closed.is_set()})"
+                )
+                if pending_tasks:
+                    print(f"    Pending tasks: {pending_tasks}")
+
+            async def wait_for_disconnect(instance, username):
+                await instance.closed.wait()
+                print(f"  - {username} disconnected!")
+
+            print("Waiting...")
+            await asyncio.gather(
+                *(wait_for_disconnect(inst, uname) for inst, uname, _ in instance_info)
+            )
+
+            # only print if not interrupted by forced shutdown
+            if server.num_cancels == 1:
+                print("All clients disconnected!")
     else:
         print("Shutting down...", end=" ", flush=True)
         server.close()

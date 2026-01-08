@@ -47,6 +47,10 @@ class Proxy:
         self._next_proxy: Optional[Proxy] = None
         self._should_stop = False
 
+        # Tasks for handling client/server packets
+        self.handle_client_task: Optional[asyncio.Task] = None
+        self.handle_server_task: Optional[asyncio.Task] = None
+
         self.initialize_plugins()
 
         if autostart:
@@ -204,13 +208,27 @@ class Proxy:
 
         return results
 
-    async def close(self, reason=""):
+    async def close(self, reason="", force=False):
         if not self.open:
             return
 
-        await self.emit("close", reason)
-
         self.open = False
+
+        for task in (self.handle_client_task, self.handle_server_task):
+            if task and not task.done():
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
+
+        if force:
+            try:
+                await asyncio.wait_for(self.emit("close", reason), timeout=0.5)
+            except asyncio.TimeoutError:
+                pass
+        else:
+            await self.emit("close", reason)
 
         try:
             self.server.close()

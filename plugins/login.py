@@ -14,7 +14,7 @@ import hypixel
 import auth
 from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
-from core.events import listen_client, listen_server
+from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from core.plugin import Plugin
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
@@ -133,7 +133,7 @@ class LoginPlugin(Plugin):
             self.CONNECT_HOST[0], self.CONNECT_HOST[1]
         )
         self.server = Server(reader, writer)
-        asyncio.create_task(self.handle_server())
+        self.handle_server_task = asyncio.create_task(self.handle_server())
 
         if self.keep_alive_task:
             self.keep_alive_task.cancel()
@@ -207,6 +207,15 @@ class LoginPlugin(Plugin):
             else:
                 await self.close()
                 break
+
+    @subscribe("close")
+    async def _close_login(self, _):
+        if self.keep_alive_task and not self.keep_alive_task.done():
+            self.keep_alive_task.cancel()
+            try:
+                await self.keep_alive_task
+            except asyncio.CancelledError:
+                pass
 
     @listen_client(0x00, State.HANDSHAKING, blocking=True, override=True)
     async def packet_handshake(self, buff: Buffer):

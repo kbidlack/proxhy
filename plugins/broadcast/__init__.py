@@ -136,26 +136,52 @@ class BroadcastPlugin(Plugin):
         # in packet_login_start to avoid live packets mixing with sync packets
 
         # start processing packets from this client (runs until client disconnects)
-        await client.handle_client()
+        client.handle_client_task = asyncio.create_task(client.handle_client())
+        await client.handle_client_task
         # ^ this is await since we need to keep this method alive
         # so that pyroh doesn't slime out the reader and writer
 
     @subscribe("close")
-    async def bc_on_close(self, _):  # _: reason (str); unused (for now?)
-        if self.logged_in:
-            self.bps_t.cancel()
+    async def _close_broadcast(self, _):  # _: reason (str); unused (for now?)
+        if hasattr(self, "gamestate_task") and self.gamestate_task:
+            self.gamestate_task.cancel()
+            try:
+                await self.gamestate_task
+            except asyncio.CancelledError:
+                pass
 
-            await self.disconnect_clients(reason="The broadcast owner disconnected!")
+        if self.logged_in:
+            if hasattr(self, "bps_t") and self.bps_t:
+                self.bps_t.cancel()
+
+            try:
+                await asyncio.wait_for(
+                    self.disconnect_clients(reason="The broadcast owner disconnected!"),
+                    timeout=0.5,
+                )
+            except asyncio.TimeoutError:
+                pass
+
             try:
                 self.compass_client.stop_listening()
-                await self.compass_client.set_undiscoverable()
-            except compass.ProtocolError, compass.ConnectionError:
-                pass  # probably not registered
+                await asyncio.wait_for(
+                    self.compass_client.set_undiscoverable(), timeout=0.5
+                )
+            except (
+                compass.ProtocolError,
+                compass.ConnectionError,
+                asyncio.TimeoutError,
+            ):
+                pass  # probably not registered, or timed out
 
             self._transformer.reset()
 
             if self.serverbound_task and not self.serverbound_task.done():
                 self.serverbound_task.cancel()
+                try:
+                    await self.serverbound_task
+                except asyncio.CancelledError:
+                    pass
 
     async def _expire_broadcast_request(self, request_id: str):
         if request_id in self.broadcast_invites:
@@ -302,7 +328,9 @@ class BroadcastPlugin(Plugin):
             new_proxy.state = State.LOGIN
             new_proxy.server = Server(reader, writer)
 
-            asyncio.create_task(new_proxy.handle_server())
+            new_proxy.handle_server_task = asyncio.create_task(
+                new_proxy.handle_server()
+            )
 
             new_proxy.server.send_packet(
                 0x00,
