@@ -7,7 +7,7 @@ from typing import Awaitable, Callable, Literal, Optional
 import compass
 import hypixel
 import pyroh
-from compass import CompassClient, ConnectionRequest
+from compass import CompassClient, ConnectionRequest, PeerInfo
 
 import auth
 from broadcasting.peer_plugins import BroadcastPeerProxy
@@ -46,6 +46,33 @@ class BCClientClosePlugin(Plugin):
         typing.cast(pyroh.StreamWriter, self.server.writer)
         await self.server.writer.drain()
         await self.server.writer.write_eof()  # type: ignore
+
+    async def create_server(
+        self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
+    ):
+        self.server = Server(reader, writer)
+
+    async def join(
+        self,
+        username: str,
+        peer_info: PeerInfo,
+    ):
+        self.state = State.LOGIN
+
+        self.handle_server_task = asyncio.create_task(self.handle_server())
+
+        self.server.send_packet(
+            0x00,
+            VarInt.pack(47),
+            String.pack(peer_info.node_id),
+            Short.pack(25565),  # technically wrong but whatever
+            VarInt.pack(State.LOGIN.value),
+        )
+        self.server.send_packet(0x00, String.pack(username))
+
+        await self.server.drain()
+
+        self.state = State.PLAY
 
 
 bc_client_plugin_list: tuple[type, ...] = (
@@ -105,7 +132,7 @@ class BroadcastPlugin(Plugin):
     async def initialize_cc(self):
         # TODO: wait for compass client initialization
         self.broadcast_pyroh_server = await pyroh.serve(
-            self.on_peer, alpn=b"proxhy.broadcast/1"
+            self.on_broadcast_peer, alpn=b"proxhy.broadcast/1"
         )
         self.bps_t = asyncio.create_task(self.broadcast_pyroh_server.serve_forever())
 
@@ -125,7 +152,9 @@ class BroadcastPlugin(Plugin):
 
         self.compass_client_initialized = True
 
-    async def on_peer(self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter):
+    async def on_broadcast_peer(
+        self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
+    ):
         client = BroadcastPeerProxy(
             reader, writer, ("localhost", 41222, "localhost", 41222), autostart=False
         )
@@ -319,7 +348,7 @@ class BroadcastPlugin(Plugin):
 
             peer_info = await request.accept()
 
-            # TODO: handle errors properly
+            # TODO: handle errors here properly
             reader, writer = await pyroh.connect(
                 pyroh.node_addr(peer_info.node_id),
                 alpn="proxhy.broadcast/1",
@@ -333,39 +362,29 @@ class BroadcastPlugin(Plugin):
                 # ^ keep username & uuid for bc proxy
             )
 
-            # TODO: move below to BCClientProxy plugin
             new_proxy = BCClientProxy(
                 self.client.reader,
                 self.client.writer,
                 autostart=False,
             )
 
-            new_proxy.state = State.LOGIN
-            new_proxy.server = Server(reader, writer)
-
-            new_proxy.handle_server_task = asyncio.create_task(
-                new_proxy.handle_server()
-            )
-
-            new_proxy.server.send_packet(
-                0x00,
-                VarInt.pack(47),
-                String.pack(peer_info.node_id),
-                Short.pack(25565),  # technically wrong but whatever
-                VarInt.pack(State.LOGIN.value),
-            )
-            new_proxy.server.send_packet(0x00, String.pack(self.username))
-
-            await new_proxy.server.drain()
-
-            new_proxy.state = State.PLAY
-
+            await new_proxy.create_server(reader, writer)
             await self.transfer_to(new_proxy)
+
+            self.server.writer.write_eof()
+            await new_proxy.join(self.username, peer_info)
 
         elif action == "invite":
             if not self.compass_client_initialized:
                 raise CommandException(
-                    "The compass client is not connected yet! (wait a second?)"
+                    TextComponent(
+                        "The compass client is not connected yet, please wait a second!"
+                    )
+                    .appends(TextComponent("(Try again)").color("gold"))
+                    .click_event("run_command", f"/bc invite {' '.join(args)}")
+                    .hover_text(
+                        TextComponent(f"/bc invite {' '.join(args)}").color("gold")
+                    )
                 )
 
             _verify_one_args(*args)
@@ -387,6 +406,12 @@ class BroadcastPlugin(Plugin):
                     TextComponent(name)
                     .color("aqua")
                     .appends("has already been invited to the broadcast!")
+                )
+            elif name in [getattr(c, "username", "") for c in self.clients]:
+                raise CommandException(
+                    TextComponent(name)
+                    .color("aqua")
+                    .appends("has already joined the broadcast!")
                 )
 
             self.client.chat(

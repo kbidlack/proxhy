@@ -177,6 +177,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
+        self.proxy.broadcast_requests.remove(self.username)
 
         # send login success packet
         # TODO: support server support. this + login encryption will come back then
@@ -192,6 +193,25 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # so we always switch to a different dimension
         # ts so complicated bruh
         fake_dim = 1 if current_dim in (0, -1) else 0
+
+        players_before = self.proxy.gamestate.player_list.copy()
+
+        # snapshot entity ids for the players currently known
+        # we capture these BEFORE any operations that might remove players so we
+        # can still reference their entity IDs even if they're removed later
+        player_entity_ids_before: dict[str, int] = {}
+        for puuid in players_before.keys():
+            try:
+                normalized = str(uuid.UUID(puuid))
+            except Exception:
+                normalized = puuid
+
+            player = self.proxy.gamestate.get_player_by_uuid(normalized)
+            if not player:
+                player = self.proxy.gamestate.get_player_by_uuid(puuid)
+            if player:
+                player_entity_ids_before[normalized] = player.entity_id
+                player_entity_ids_before[puuid] = player.entity_id
 
         self.client.send_packet(
             0x07,  # respawn
@@ -268,6 +288,36 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Boolean.pack(True),  # has display name
             Chat.pack(display_name),
         )
+
+        players_after = self.proxy.gamestate.player_list.copy()
+        player_diff = players_before.keys() - players_after.keys()
+
+        self.proxy.client.send_packet(
+            0x38,
+            VarInt.pack(4),  # remove
+            VarInt.pack(len(player_diff)),
+            *(UUID.pack(uuid.UUID(u)) for u in player_diff),
+        )
+
+        entity_ids: list[int] = []
+        for u in player_diff:
+            try:
+                normalized = str(uuid.UUID(u))
+            except Exception:
+                normalized = u
+
+            eid = player_entity_ids_before.get(normalized)
+            if eid is None:
+                eid = player_entity_ids_before.get(u)
+            if eid is not None:
+                entity_ids.append(eid)
+
+        if entity_ids:
+            data = VarInt.pack(len(entity_ids)) + b"".join(
+                VarInt.pack(eid) for eid in entity_ids
+            )
+            self.proxy.client.send_packet(0x13, data)
+            print(data)
 
 
 # "proxy" for any connected broadcast clients
