@@ -44,8 +44,8 @@ class BCClientClosePlugin(Plugin):
     @subscribe("close")
     async def _close_bc_client_proxy(self, _):
         typing.cast(pyroh.StreamWriter, self.server.writer)
+        self.server.writer.write_eof()
         await self.server.writer.drain()
-        await self.server.writer.write_eof()  # type: ignore
 
     async def create_server(
         self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter

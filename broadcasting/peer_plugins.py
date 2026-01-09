@@ -75,7 +75,8 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             self.proxy.clients.remove(self)  # pyright: ignore[reportArgumentType]
 
         try:
-            await asyncio.wait_for(self.writer.aclose(), timeout=0.5)
+            self.writer.close()
+            await asyncio.wait_for(self.writer.wait_closed(), timeout=0.5)
         except asyncio.TimeoutError:
             pass
 

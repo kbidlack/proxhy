@@ -555,7 +555,7 @@ wheels = [
 [[package]]
 name = "pyroh"
 version = "0.1.0"
-source = { git = "https://github.com/kbidlack/pyroh#d704ffeb1a7bdecb1a8d2ccfd45a553fec587fbf" }
+source = { git = "https://github.com/kbidlack/pyroh#b5f9857ebdee9920b10c1f2c8a5f36f0194df93d" }
 dependencies = [
     { name = "iroh" },
 ]
