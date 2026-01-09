@@ -134,7 +134,9 @@ class BroadcastPlugin(Plugin):
         self.broadcast_pyroh_server = await pyroh.serve(
             self.on_broadcast_peer, alpn=b"proxhy.broadcast/1"
         )
-        self.bps_t = asyncio.create_task(self.broadcast_pyroh_server.serve_forever())
+        self.broadcast_server_task = asyncio.create_task(
+            self.broadcast_pyroh_server.serve_forever()
+        )
 
         self.compass_client = CompassClient(
             COMPASS_SERVER_NODE_ID, node=self.broadcast_pyroh_server.node
@@ -197,8 +199,8 @@ class BroadcastPlugin(Plugin):
                 pass
 
         if self.logged_in:
-            if hasattr(self, "bps_t") and self.bps_t:
-                self.bps_t.cancel()
+            if hasattr(self, "broadcast_server_task") and self.broadcast_server_task:
+                self.broadcast_server_task.cancel()
 
             try:
                 await asyncio.wait_for(

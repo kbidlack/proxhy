@@ -24,16 +24,21 @@ class SpatialPlugin(Plugin):
     received_locraw: asyncio.Event
 
     def _init_spatial(self):
+        self.check_height_task = None
         self.position: tuple[float, float, float] | None = None
+
+    @subscribe("login_sucess")
+    async def _spatial_on_login_success(self, _):
         self.check_height_task = asyncio.create_task(self.check_height_loop())
 
     @subscribe("close")
     async def _close_spatial(self, _):
-        self.check_height_task.cancel()
-        try:
-            await self.check_height_task
-        except asyncio.CancelledError:
-            pass
+        if self.check_height_task:
+            self.check_height_task.cancel()
+            try:
+                await self.check_height_task
+            except asyncio.CancelledError:
+                pass
 
     # =========================
     #   TRACK PLAYER POSITION

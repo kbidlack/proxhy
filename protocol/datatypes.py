@@ -413,7 +413,17 @@ class TextComponent:
         self.data["insertion"] = text
         return self
 
-    def click_event(self, action: str, value: str) -> TextComponent:
+    def click_event(
+        self,
+        action: Literal[
+            "open_url",
+            "run_command",
+            "suggest_command",
+            "change_page",
+            "copy_to_clipboard",
+        ],
+        value: str,
+    ) -> TextComponent:
         """Set click event (open_url, run_command, suggest_command, etc.)"""
         self.data["clickEvent"] = {"action": action, "value": value}
         return self
