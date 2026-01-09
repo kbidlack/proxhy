@@ -182,7 +182,7 @@ class SettingsMenu(Window):
         self.proxy: SettingsPlugin = proxy  # type: ignore
         self.settings = self.proxy.settings
         self.subsetting_path = subsetting_path
-        self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
+        self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(  # pyright: ignore
             subsetting_path
         )  # type: ignore
 
@@ -320,7 +320,7 @@ class SettingsMenu(Window):
             lore = ["§7" + t for t in lore]
             lore.extend(["", "§8(Click to toggle)"])  # "" adds a newline
 
-            display_nbt: dict[str, Any] = {  # display item
+            display_nbt: dict[str, Any] = {  # display item # pyright: ignore
                 "display": {"Name": f"§r§l{s.display_name}", "Lore": lore}
             }
 
@@ -441,7 +441,7 @@ class SettingsMenu(Window):
                 f"Slot {slot + 1} has no associated element.\nElements: {self.menu_slots}"
             )
         if self.subsetting_path:
-            g_path: str = self.subsetting_path + "." + group
+            g_path: str = self.subsetting_path + "." + group  # pyright: ignore
         else:
             g_path: str = group  # if we are already at the root
         self.subsetting_path = g_path
