@@ -3000,3 +3000,133 @@ class GameState:
         packets.extend(self._build_block_break_animations())
 
         return packets
+
+    def sync_broadcast_spectator(self, eid: int) -> list[Packet]:
+        """Build packets to sync a broadcast spectator client.
+
+        Broadcast spectators should be presented to the client as being in
+        ADVENTURE mode (so they cannot break blocks) but still be allowed to
+        fly using vanilla behaviour (double-tap space to start/stop flying).
+        This function builds a similar set of packets to `sync_spectator` but:
+
+        - sets gamemode to ADVENTURE (2)
+        - includes a Player Abilities packet (0x39) with INVULNERABLE and
+          ALLOW_FLYING set, CREATIVE_MODE unset, and FLYING unset so the client
+          uses the normal double-tap to start flying behaviour.
+        """
+        packets: list[Packet] = []
+
+        # 1. Join Game (0x01) - Present as Adventure to prevent block breaking
+        packets.append(self._build_join_game(eid, 2))  # adventure
+
+        # 2. Server Difficulty (0x41)
+        packets.append(self._build_server_difficulty())
+
+        # 3. Player Abilities (0x39) - INVULNERABLE + ALLOW_FLYING, FLYING unset
+        abilities = PlayerAbilityFlags.INVULNERABLE | PlayerAbilityFlags.ALLOW_FLYING
+        packets.append(
+            (
+                0x39,
+                Byte.pack(int(abilities))
+                + Float.pack(self.flying_speed)
+                + Float.pack(self.field_of_view_modifier),
+            )
+        )
+
+        # 4. Held Item Change (0x09)
+        # packets.append(self._build_held_item_change())
+
+        # 5. Spawn Position (0x05)
+        # packets.append(self._build_spawn_position())
+
+        # 6. Player Position And Look (0x08)
+        packets.append(self._build_player_position_and_look())
+
+        # 7. Update Health (0x06)
+        # packets.append(self._build_update_health())
+
+        # 8. Set Experience (0x1F)
+        # packets.append(self._build_set_experience())
+
+        # 9. Time Update (0x03)
+        packets.append(self._build_time_update())
+
+        # 10. World Border (0x44) - Initialize
+        packets.append(self._build_world_border())
+
+        # 11. Player List Items (0x38) - Add all players
+        packets.extend(self._build_player_list_items())
+
+        # 12. Tab Header/Footer (0x47)
+        if self.tab_header or self.tab_footer:
+            packets.append(self._build_player_list_header_footer())
+
+        # 13. Scoreboard Objectives (0x3B)
+        packets.extend(self._build_scoreboard_objectives())
+
+        # 14. Scoreboard Scores (0x3C)
+        packets.extend(self._build_scoreboard_scores())
+
+        # 15. Display Scoreboard (0x3D)
+        packets.extend(self._build_display_scoreboards())
+
+        # 16. Teams (0x3E)
+        packets.extend(self._build_teams())
+
+        # 17. Chunk Data (0x21) - All loaded chunks
+        packets.extend(self._build_chunk_data())
+
+        # 18. Block Entities (0x35)
+        packets.extend(self._build_block_entities())
+
+        # 19. Signs (0x33)
+        packets.extend(self._build_signs())
+
+        # 20. Entities - Spawn all entities
+        packets.extend(self._build_entity_spawns())
+
+        # 21. Entity Metadata (0x1C) - For all entities
+        packets.extend(self._build_entity_metadata())
+
+        # 22. Entity Equipment (0x04) - For all entities
+        packets.extend(self._build_entity_equipment())
+
+        # 23. Entity Effects (0x1D) - For all entities
+        packets.extend(self._build_entity_effects())
+
+        # 24. Entity Properties (0x20) - For all entities
+        packets.extend(self._build_entity_properties())
+
+        # 25. Window Items (0x30) - Player inventory
+        # packets.append(self._build_player_inventory())
+
+        # 26. Open Window (0x2D) + Window Items if window is open
+        # if self.open_window:
+        #     packets.extend(self._build_open_window())
+
+        # 27. Statistics (0x37)
+        # if self.statistics.stats:
+        #     packets.append(self._build_statistics())
+
+        # 28. Title (0x45) - If visible
+        if self.title.visible:
+            packets.extend(self._build_title())
+
+        # 29. Game State Changes (0x2B) - Weather
+        packets.extend(self._build_game_state_changes())
+
+        # 30. Maps (0x34)
+        packets.extend(self._build_maps())
+
+        # 31. Resource Pack (0x48)
+        if self.resource_pack.url:
+            packets.append(self._build_resource_pack())
+
+        # 32. Camera (0x43) - If spectating another entity
+        # if self.camera_entity_id and self.camera_entity_id != self.player_entity_id:
+        #     packets.append(self._build_camera())
+
+        # 33. Block Break Animations (0x25)
+        packets.extend(self._build_block_break_animations())
+
+        return packets

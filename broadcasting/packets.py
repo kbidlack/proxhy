@@ -55,7 +55,7 @@ BC_SPEC_ALLOW = (
     # 0x36,  # Sign Editor Open - player-specific
     0x37,  # Statistics - could show for context
     0x38,  # Player List Item - tab list updates
-    0x39,  # Player Abilities - spectators need to know flight status
+    # 0x39,  # Player Abilities - spectators have their own ability flags
     # 0x3A,  # Tab Complete - player-specific
     0x3B,  # Scoreboard Objective - scoreboard display
     0x3C,  # Update Score - scoreboard updates

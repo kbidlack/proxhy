@@ -30,6 +30,7 @@ from protocol.datatypes import (
 )
 from proxhy.command import command
 from proxhy.errors import CommandException
+from proxhy.gamestate import PlayerAbilityFlags
 
 if TYPE_CHECKING:
     from proxhy.proxhy import Proxhy
@@ -174,6 +175,34 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         self.client.send_packet(0x00, String(json.dumps(self.server_list_ping)))
 
+    @listen(0x13)
+    async def packet_serverbound_player_abilities(self, buff: Buffer):
+        flags = PlayerAbilityFlags(buff.unpack(Byte))
+
+        # if server/player is flying, include flying in outgoing packet
+        # otherwise leave it unset so broadcast clients can return to grounded state
+        if flags & PlayerAbilityFlags.FLYING:  # flying
+            # INVULNERABLE | FLYING | ALLOW_FLYING
+            abilities_flags = int(
+                PlayerAbilityFlags.INVULNERABLE
+                | PlayerAbilityFlags.FLYING
+                | PlayerAbilityFlags.ALLOW_FLYING
+            )
+        else:
+            # INVULNERABLE | ALLOW_FLYING
+            abilities_flags = int(
+                PlayerAbilityFlags.INVULNERABLE | PlayerAbilityFlags.ALLOW_FLYING
+            )
+
+        self.client.send_packet(
+            0x39,
+            Byte.pack(abilities_flags)
+            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.proxy.gamestate.field_of_view_modifier),
+        )
+
+        await self.client.drain()
+
     @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
@@ -217,12 +246,12 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             0x07,  # respawn
             Int(fake_dim),
             UnsignedByte.pack(self.proxy.gamestate.difficulty.value),
-            UnsignedByte.pack(3),  # gamemode: spectator
+            UnsignedByte.pack(2),  # gamemode: adventure
             String.pack(self.proxy.gamestate.level_type),
         )
 
         # includes join game
-        packets = self.proxy.gamestate.sync_spectator(self.eid)
+        packets = self.proxy.gamestate.sync_broadcast_spectator(self.eid)
         self.client.send_packet(*packets[0])  # join game
         await self.client.drain()
 
@@ -241,7 +270,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             0x07,
             Int(current_dim),
             UnsignedByte.pack(self.proxy.gamestate.difficulty.value),
-            UnsignedByte.pack(3),  # gamemode: spectator
+            UnsignedByte.pack(2),  # gamemode: adventure
             String.pack(self.proxy.gamestate.level_type),
         )
 
@@ -257,6 +286,17 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Float.pack(rot.yaw),
             Float.pack(rot.pitch),
             Byte.pack(0),  # flags: all absolute
+        )
+
+        # resend player abilities (allow flying in adventure mode) so respawn doesn't clear them
+        abilities_flags = int(
+            PlayerAbilityFlags.INVULNERABLE | PlayerAbilityFlags.ALLOW_FLYING
+        )
+        self.client.send_packet(
+            0x39,
+            Byte.pack(abilities_flags)
+            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
         await self.client.drain()
@@ -283,7 +323,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             UUID.pack(uuid.UUID(self.uuid)),
             String.pack(self.username),  # player name with prefix
             VarInt.pack(0),  # properties count
-            VarInt.pack(3),  # gamemode: spectator
+            VarInt.pack(2),  # gamemode: adventure
             VarInt.pack(0),  # ping
             Boolean.pack(True),  # has display name
             Chat.pack(display_name),
@@ -317,7 +357,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
                 VarInt.pack(eid) for eid in entity_ids
             )
             self.proxy.client.send_packet(0x13, data)
-            print(data)
 
 
 # "proxy" for any connected broadcast clients
