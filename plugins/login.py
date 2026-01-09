@@ -129,9 +129,21 @@ class LoginPlugin(Plugin):
         if auth.token_needs_refresh(self.username):
             return await self.login(reason="regen")
 
-        reader, writer = await asyncio.open_connection(
-            self.CONNECT_HOST[0], self.CONNECT_HOST[1]
-        )
+        try:
+            reader, writer = await asyncio.open_connection(
+                self.CONNECT_HOST[0], self.CONNECT_HOST[1]
+            )
+        except ConnectionRefusedError:
+            self.client.send_packet(
+                0x00,
+                Chat.pack(
+                    TextComponent(
+                        f"Failed to connect to {self.CONNECT_HOST[0]}:{self.CONNECT_HOST[1]}"
+                    ).color("red")
+                ),
+            )
+            return await self.close()
+
         self.server = Server(reader, writer)
         self.handle_server_task = asyncio.create_task(self.handle_server())
 

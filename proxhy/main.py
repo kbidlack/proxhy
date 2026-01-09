@@ -1,5 +1,6 @@
 import argparse
 import asyncio
+import errno
 import platform
 import signal
 import sys
@@ -139,7 +140,18 @@ async def handle_client(reader: StreamReader, writer: StreamWriter):
 
 
 async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
-    server = await asyncio.start_server(handle_client, host, port)
+    try:
+        server = await asyncio.start_server(handle_client, host, port)
+    except OSError as e:
+        if (e.errno == errno.EADDRINUSE) or (getattr(e, "winerror", None) == 10048):
+            print(
+                f"Error: could not bind to {host}:{port}. "
+                "(Do you already have another instance of Proxhy running?)",
+                sep="\n",
+            )
+            sys.exit(1)
+        raise
+
     server = ProxhyServer(server)
 
     print(
