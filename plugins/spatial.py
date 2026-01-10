@@ -27,7 +27,7 @@ class SpatialPlugin(Plugin):
         self.check_height_task = None
         self.position: tuple[float, float, float] | None = None
 
-    @subscribe("login_sucess")
+    @subscribe("login_success")
     async def _spatial_on_login_success(self, _):
         self.check_height_task = asyncio.create_task(self.check_height_loop())
 

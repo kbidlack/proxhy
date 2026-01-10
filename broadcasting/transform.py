@@ -9,7 +9,7 @@ This module handles converting player packets (serverbound) into entity packets
 # because there is a lot of busywork here
 
 import uuid as uuid_mod
-from typing import Callable, Optional
+from typing import Callable
 
 from protocol.datatypes import (
     UUID,
@@ -18,8 +18,6 @@ from protocol.datatypes import (
     Buffer,
     Byte,
     Chat,
-    Double,
-    Float,
     Int,
     Short,
     Slot,
@@ -40,9 +38,13 @@ class PlayerTransformer:
     """
     Transforms player packets into entity packets for spectator clients.
 
-    This class tracks the player's state (position, rotation, equipment, etc.)
-    and converts serverbound player packets into clientbound entity packets
-    that can be sent to spectator clients.
+    This class handles forwarding and transforming packets for broadcasting.
+    Player state (position, rotation, flags, etc.) is tracked by GameState.
+    This class only handles:
+    - Converting serverbound packets into entity packets for spectators
+    - Forwarding/transforming clientbound packets for spectators
+    - Tracking which spectators have the player entity spawned
+    - Tracking player equipment for spectators
     """
 
     def __init__(
@@ -64,18 +66,17 @@ class PlayerTransformer:
         self._announce = announce_func
         self._announce_player = announce_player_func
 
-        # Player entity state
+        # Player entity state (for spectators - uses different EID than server)
         self._player_eid: int = 0
         self._player_uuid: str = ""
         self._player_spawned_for: set[int] = set()
 
-        # Player state tracking
-        self._player_position: Vec3d = Vec3d()
-        self._player_rotation: Rotation = Rotation()
-        self._player_on_ground: bool = False
-        self._player_metadata_flags: int = 0
-        self._player_held_slot: int = 0
+        # Equipment tracked separately for spectator updates
         self._player_equipment: dict[int, SlotData] = {}
+
+        # Track previous position/rotation for delta calculations
+        self._last_position: Vec3d = Vec3d()
+        self._last_rotation: Rotation = Rotation()
 
     def reset(self):
         """Reset spawn tracking (e.g., on dimension change)."""
@@ -85,12 +86,13 @@ class PlayerTransformer:
         """Initialize player state from the current gamestate."""
         self._player_uuid = player_uuid
         self._player_eid = self.gamestate.player_entity_id
-        self._player_position = Vec3d(
+        # Sync last position/rotation for delta calculations
+        self._last_position = Vec3d(
             self.gamestate.position.x,
             self.gamestate.position.y,
             self.gamestate.position.z,
         )
-        self._player_rotation = Rotation(
+        self._last_rotation = Rotation(
             self.gamestate.rotation.yaw,
             self.gamestate.rotation.pitch,
         )
@@ -104,20 +106,13 @@ class PlayerTransformer:
         return self._player_uuid
 
     @property
-    def player_position(self) -> Vec3d:
-        return self._player_position
-
-    @property
-    def player_rotation(self) -> Rotation:
-        return self._player_rotation
-
-    @property
     def player_equipment(self) -> dict[int, SlotData]:
         return self._player_equipment
 
     @property
     def player_metadata_flags(self) -> int:
-        return self._player_metadata_flags
+        """Get player metadata flags from gamestate."""
+        return self.gamestate.player_flags
 
     @property
     def player_spawned_for(self) -> set[int]:
@@ -135,47 +130,31 @@ class PlayerTransformer:
         """
         Handle a serverbound packet and generate spectator updates.
 
+        GameState has already been updated with the new state before this is called.
+        This method generates the appropriate entity packets for spectators.
+
         Args:
             packet_id: The packet ID
             data: The packet data
         """
-        buff = Buffer(data)
-
         if packet_id == 0x03:  # Player (on ground only)
-            on_ground = buff.unpack(Boolean)
-            self._player_on_ground = on_ground
             self._announce_player(0x14, VarInt.pack(self._player_eid))
 
         elif packet_id == 0x04:  # Player Position
-            x = buff.unpack(Double)
-            y = buff.unpack(Double)
-            z = buff.unpack(Double)
-            on_ground = buff.unpack(Boolean)
-            self._update_player_position(x, y, z, None, None, on_ground)
+            self._broadcast_position_update(has_look=False)
 
         elif packet_id == 0x05:  # Player Look
-            yaw = buff.unpack(Float)
-            pitch = buff.unpack(Float)
-            on_ground = buff.unpack(Boolean)
-            self._update_player_look(yaw, pitch, on_ground)
+            self._broadcast_look_update()
 
         elif packet_id == 0x06:  # Player Position And Look
-            x = buff.unpack(Double)
-            y = buff.unpack(Double)
-            z = buff.unpack(Double)
-            yaw = buff.unpack(Float)
-            pitch = buff.unpack(Float)
-            on_ground = buff.unpack(Boolean)
-            self._update_player_position(x, y, z, yaw, pitch, on_ground)
+            self._broadcast_position_update(has_look=True)
 
         elif packet_id == 0x07:  # Player Digging
             pass  # Server will send block break animation
 
         elif packet_id == 0x09:  # Held Item Change (serverbound)
-            slot = buff.unpack(Short)
-            self._player_held_slot = slot
             # Send equipment update to spectators with the item in the new slot
-            held_item = self.gamestate.get_hotbar_slot(slot)
+            held_item = self.gamestate.get_held_item()
             if held_item is None:
                 held_item = SlotData()  # Empty slot
             self._player_equipment[EQUIPMENT_SLOT_HELD] = held_item
@@ -193,27 +172,18 @@ class PlayerTransformer:
             )
 
         elif packet_id == 0x0B:  # Entity Action (sneak/sprint/etc)
-            _ = buff.unpack(VarInt)  # entity id
-            action_id = buff.unpack(VarInt)
-            _ = buff.unpack(VarInt)  # action parameter
-            self._handle_entity_action(action_id)
+            # Gamestate already updated the flags, just broadcast the metadata
+            self._broadcast_entity_action()
 
-    def _update_player_position(
-        self,
-        x: float,
-        y: float,
-        z: float,
-        yaw: Optional[float],
-        pitch: Optional[float],
-        on_ground: bool,
-    ):
-        """Update player position and send entity movement to spectators."""
-        old_pos = self._player_position
-        new_pos = Vec3d(x, y, z)
+    def _broadcast_position_update(self, has_look: bool):
+        """Broadcast player position (and optionally look) update to spectators."""
+        gs = self.gamestate
+        new_pos = gs.position
+        new_rot = gs.rotation
 
-        dx = (x - old_pos.x) * 32
-        dy = (y - old_pos.y) * 32
-        dz = (z - old_pos.z) * 32
+        dx = (new_pos.x - self._last_position.x) * 32
+        dy = (new_pos.y - self._last_position.y) * 32
+        dz = (new_pos.z - self._last_position.z) * 32
 
         use_relative = (
             abs(dx) < 128
@@ -222,14 +192,8 @@ class PlayerTransformer:
             and self._player_spawned_for
         )
 
-        self._player_position = new_pos
-        self._player_on_ground = on_ground
-
-        if yaw is not None and pitch is not None:
-            self._player_rotation = Rotation(yaw, pitch)
-
         if use_relative:
-            if yaw is not None and pitch is not None:
+            if has_look:
                 # Entity Look And Relative Move (0x17)
                 self._announce_player(
                     0x17,
@@ -237,13 +201,13 @@ class PlayerTransformer:
                     + Byte.pack(int(dx))
                     + Byte.pack(int(dy))
                     + Byte.pack(int(dz))
-                    + Angle.pack(yaw)
-                    + Angle.pack(pitch)
-                    + Boolean.pack(on_ground),
+                    + Angle.pack(new_rot.yaw)
+                    + Angle.pack(new_rot.pitch)
+                    + Boolean.pack(gs.on_ground),
                 )
                 self._announce_player(
                     0x19,
-                    VarInt.pack(self._player_eid) + Angle.pack(yaw),
+                    VarInt.pack(self._player_eid) + Angle.pack(new_rot.yaw),
                 )
             else:
                 # Entity Relative Move (0x15)
@@ -253,30 +217,36 @@ class PlayerTransformer:
                     + Byte.pack(int(dx))
                     + Byte.pack(int(dy))
                     + Byte.pack(int(dz))
-                    + Boolean.pack(on_ground),
+                    + Boolean.pack(gs.on_ground),
                 )
         else:
             # Entity Teleport (0x18)
             self._announce_player(
                 0x18,
                 VarInt.pack(self._player_eid)
-                + Int.pack(int(x * 32))
-                + Int.pack(int(y * 32))
-                + Int.pack(int(z * 32))
-                + Angle.pack(self._player_rotation.yaw)
-                + Angle.pack(self._player_rotation.pitch)
-                + Boolean.pack(on_ground),
+                + Int.pack(int(new_pos.x * 32))
+                + Int.pack(int(new_pos.y * 32))
+                + Int.pack(int(new_pos.z * 32))
+                + Angle.pack(new_rot.yaw)
+                + Angle.pack(new_rot.pitch)
+                + Boolean.pack(gs.on_ground),
             )
-            if yaw is not None:
+            if has_look:
                 self._announce_player(
                     0x19,
-                    VarInt.pack(self._player_eid) + Angle.pack(yaw),
+                    VarInt.pack(self._player_eid) + Angle.pack(new_rot.yaw),
                 )
 
-    def _update_player_look(self, yaw: float, pitch: float, on_ground: bool):
-        """Update player rotation and send entity look to spectators."""
-        self._player_rotation = Rotation(yaw, pitch)
-        self._player_on_ground = on_ground
+        # Update last known position for next delta calculation
+        self._last_position = Vec3d(new_pos.x, new_pos.y, new_pos.z)
+        if has_look:
+            self._last_rotation = Rotation(new_rot.yaw, new_rot.pitch)
+
+    def _broadcast_look_update(self):
+        """Broadcast player look update to spectators."""
+        gs = self.gamestate
+        yaw = gs.rotation.yaw
+        pitch = gs.rotation.pitch
 
         # Entity Look (0x16)
         self._announce_player(
@@ -284,7 +254,7 @@ class PlayerTransformer:
             VarInt.pack(self._player_eid)
             + Angle.pack(yaw)
             + Angle.pack(pitch)
-            + Boolean.pack(on_ground),
+            + Boolean.pack(gs.on_ground),
         )
         # Entity Head Look (0x19)
         self._announce_player(
@@ -292,20 +262,11 @@ class PlayerTransformer:
             VarInt.pack(self._player_eid) + Angle.pack(yaw),
         )
 
-    def _handle_entity_action(self, action_id: int):
-        """Handle entity action and update metadata flags."""
-        if action_id == 0:  # Start sneaking
-            self._player_metadata_flags |= 0x02
-        elif action_id == 1:  # Stop sneaking
-            self._player_metadata_flags &= ~0x02
-        elif action_id == 3:  # Start sprinting
-            self._player_metadata_flags |= 0x08
-        elif action_id == 4:  # Stop sprinting
-            self._player_metadata_flags &= ~0x08
-        else:
-            return
+        self._last_rotation = Rotation(yaw, pitch)
 
-        metadata = pack_single_metadata(0, 0, self._player_metadata_flags)
+    def _broadcast_entity_action(self):
+        """Broadcast entity metadata update for sneak/sprint state."""
+        metadata = pack_single_metadata(0, 0, self.gamestate.player_flags)
         self._announce_player(
             0x1C,
             VarInt.pack(self._player_eid) + metadata,
@@ -354,26 +315,11 @@ class PlayerTransformer:
             )
 
         elif packet_id == 0x08:  # Player Position And Look (server -> client)
-            x = buff.unpack(Double)
-            y = buff.unpack(Double)
-            z = buff.unpack(Double)
-            yaw = buff.unpack(Float)
-            pitch = buff.unpack(Float)
-            flags = buff.unpack(Byte)
-
-            if flags & 0x01:
-                x += self._player_position.x
-            if flags & 0x02:
-                y += self._player_position.y
-            if flags & 0x04:
-                z += self._player_position.z
-            if flags & 0x08:
-                yaw += self._player_rotation.yaw
-            if flags & 0x10:
-                pitch += self._player_rotation.pitch
-
-            self._player_position = Vec3d(x, y, z)
-            self._player_rotation = Rotation(yaw, pitch)
+            # Gamestate has already processed this packet and updated position/rotation
+            # We just need to sync our last position tracking and broadcast
+            gs = self.gamestate
+            self._last_position = Vec3d(gs.position.x, gs.position.y, gs.position.z)
+            self._last_rotation = Rotation(gs.rotation.yaw, gs.rotation.pitch)
 
             self._announce(packet_id, b"".join(data))
             spawn_callback()
@@ -381,12 +327,12 @@ class PlayerTransformer:
             self._announce_player(
                 0x18,
                 VarInt.pack(self._player_eid)
-                + Int.pack(int(x * 32))
-                + Int.pack(int(y * 32))
-                + Int.pack(int(z * 32))
-                + Angle.pack(yaw)
-                + Angle.pack(pitch)
-                + Boolean.pack(self._player_on_ground),
+                + Int.pack(int(gs.position.x * 32))
+                + Int.pack(int(gs.position.y * 32))
+                + Int.pack(int(gs.position.z * 32))
+                + Angle.pack(gs.rotation.yaw)
+                + Angle.pack(gs.rotation.pitch)
+                + Boolean.pack(gs.on_ground),
             )
 
         elif packet_id == 0x04:  # Entity Equipment
@@ -490,7 +436,10 @@ class PlayerTransformer:
             # Window 0 is player inventory, slots 36-44 are hotbar (36 + held_slot)
             if window_id == 0:
                 hotbar_slot = slot - 36
-                if 0 <= hotbar_slot <= 8 and hotbar_slot == self._player_held_slot:
+                if (
+                    0 <= hotbar_slot <= 8
+                    and hotbar_slot == self.gamestate.held_item_slot
+                ):
                     # The currently held slot was updated, send equipment update
                     self._player_equipment[EQUIPMENT_SLOT_HELD] = slot_data
                     self._announce_player(

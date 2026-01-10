@@ -604,6 +604,9 @@ class GameState:
         # Held item
         self.held_item_slot: int = 0
 
+        # Player entity flags (sneaking, sprinting, etc.) - tracked from serverbound packets
+        self.player_flags: int = 0  # EntityFlags bitmask
+
         # Spawn position
         self.spawn_position: Vec3i = Vec3i()
 
@@ -962,8 +965,6 @@ class GameState:
             self.rotation.pitch += pitch
         else:
             self.rotation.pitch = pitch
-
-        print(self.position, x, y, z)
 
     def _handle_held_item_change(self, buff: Buffer) -> None:
         """Handle Held Item Change packet (0x09)."""
@@ -1974,6 +1975,63 @@ class GameState:
         entity = self._get_or_create_entity(entity_id)
         # Store raw NBT data at special index -1 (not sent via metadata protocol)
         entity.metadata[-1] = MetadataValue(-1, nbt_data)
+
+    # =========================================================================
+    # Serverbound Packet Handlers (player -> server)
+    # =========================================================================
+
+    def update_serverbound(self, packet_id: int, packet_data: bytes) -> None:
+        """
+        Update the game state based on a serverbound packet.
+
+        This handles packets sent by the player to the server, which are needed
+        to track the player's own state (position, rotation, actions) that isn't
+        sent back via clientbound packets.
+
+        Args:
+            packet_id: The serverbound packet ID
+            packet_data: The raw packet data (excluding packet ID)
+        """
+        buff = Buffer(packet_data)
+
+        if packet_id == 0x03:  # Player (on ground only)
+            self.on_ground = buff.unpack(Boolean)
+
+        elif packet_id == 0x04:  # Player Position
+            self.position.x = buff.unpack(Double)
+            self.position.y = buff.unpack(Double)
+            self.position.z = buff.unpack(Double)
+            self.on_ground = buff.unpack(Boolean)
+
+        elif packet_id == 0x05:  # Player Look
+            self.rotation.yaw = buff.unpack(Float)
+            self.rotation.pitch = buff.unpack(Float)
+            self.on_ground = buff.unpack(Boolean)
+
+        elif packet_id == 0x06:  # Player Position And Look
+            self.position.x = buff.unpack(Double)
+            self.position.y = buff.unpack(Double)
+            self.position.z = buff.unpack(Double)
+            self.rotation.yaw = buff.unpack(Float)
+            self.rotation.pitch = buff.unpack(Float)
+            self.on_ground = buff.unpack(Boolean)
+
+        elif packet_id == 0x09:  # Held Item Change (serverbound)
+            self.held_item_slot = buff.unpack(Short)
+
+        elif packet_id == 0x0B:  # Entity Action
+            _ = buff.unpack(VarInt)  # entity id (always player's own)
+            action_id = buff.unpack(VarInt)
+            # action_param = buff.unpack(VarInt)  # jump boost for horse, unused here
+
+            if action_id == 0:  # Start sneaking
+                self.player_flags |= EntityFlags.CROUCHED
+            elif action_id == 1:  # Stop sneaking
+                self.player_flags &= ~EntityFlags.CROUCHED
+            elif action_id == 3:  # Start sprinting
+                self.player_flags |= EntityFlags.SPRINTING
+            elif action_id == 4:  # Stop sprinting
+                self.player_flags &= ~EntityFlags.SPRINTING
 
     # =========================================================================
     # Query Methods

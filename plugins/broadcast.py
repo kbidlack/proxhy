@@ -492,12 +492,16 @@ class BroadcastPlugin(Plugin):
             self._forward_spec_packet(id, *data)
 
     async def _update_serverbound(self):
-        """Process serverbound packets (player -> server) and transform for spectators."""
+        """Process serverbound packets (player -> server) and update gamestate/spectators."""
         try:
             while self.open:
                 id, *data = await self.server.pqueue.get()
+                packet_data = b"".join(data)
+                # Always update gamestate with serverbound packets
+                self.gamestate.update_serverbound(id, packet_data)
+                # Broadcast to spectators if any are connected
                 if self.clients:
-                    self._transformer.handle_serverbound_packet(id, b"".join(data))
+                    self._transformer.handle_serverbound_packet(id, packet_data)
         except asyncio.CancelledError:
             pass  # Task was cancelled, exit gracefully
 
@@ -614,9 +618,9 @@ class BroadcastPlugin(Plugin):
                     + Slot.pack(item),
                 )
 
-        # Sync transformer state with current gamestate so subsequent updates work correctly
-        self._transformer._player_position = current_position
-        self._transformer._player_rotation = current_rotation
+        # Sync transformer's last known position/rotation for delta calculations
+        self._transformer._last_position = current_position
+        self._transformer._last_rotation = current_rotation
 
         self._transformer.mark_spawned(client.eid)
 
