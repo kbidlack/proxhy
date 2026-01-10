@@ -18,6 +18,7 @@ from protocol.datatypes import (
     Buffer,
     Byte,
     Chat,
+    Float,
     Int,
     Short,
     Slot,
@@ -26,7 +27,7 @@ from protocol.datatypes import (
     UnsignedByte,
     VarInt,
 )
-from proxhy.gamestate import GameState, Rotation, Vec3d
+from proxhy.gamestate import GameState, PlayerAbilityFlags, Rotation, Vec3d
 
 from . import packets
 
@@ -306,12 +307,26 @@ class PlayerTransformer:
 
             self._player_spawned_for.clear()
 
+            # Send respawn with adventure mode (2) instead of spectator (3)
+            # to keep broadcast peers in adventure mode across dimension changes
             self._announce(
                 packet_id,
                 Int.pack(dimension)
                 + UnsignedByte.pack(difficulty)
-                + UnsignedByte.pack(3)  # spectator
+                + UnsignedByte.pack(2)  # adventure
                 + String.pack(level_type),
+            )
+
+            # Resend player abilities after respawn to restore flying capability
+            # Respawn clears client abilities, so we need to re-grant them
+            abilities_flags = int(
+                PlayerAbilityFlags.INVULNERABLE | PlayerAbilityFlags.ALLOW_FLYING
+            )
+            self._announce(
+                0x39,  # Player Abilities
+                Byte.pack(abilities_flags)
+                + Float.pack(self.gamestate.flying_speed)
+                + Float.pack(self.gamestate.field_of_view_modifier),
             )
 
         elif packet_id == 0x08:  # Player Position And Look (server -> client)
