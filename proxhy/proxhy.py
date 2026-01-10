@@ -12,9 +12,9 @@ from plugins.statcheck import StatCheckPlugin
 from plugins.window import WindowPlugin
 
 plugins: tuple[type, ...] = (
+    CommandsPlugin,  # Must be first - other plugins depend on command_registry
     BroadcastPlugin,
     ChatPlugin,
-    CommandsPlugin,
     DebugPlugin,
     HypixelStatePlugin,
     LoginPlugin,

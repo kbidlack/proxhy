@@ -963,6 +963,8 @@ class GameState:
         else:
             self.rotation.pitch = pitch
 
+        print(self.position, x, y, z)
+
     def _handle_held_item_change(self, buff: Buffer) -> None:
         """Handle Held Item Change packet (0x09)."""
         self.held_item_slot = buff.unpack(Byte)

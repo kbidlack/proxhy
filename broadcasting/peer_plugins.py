@@ -99,8 +99,8 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             UUID.pack(uuid.UUID(self.uuid)),
         )
 
-    @command("spec")
-    async def spectate(self, target: str = ""):
+    @command("spectate", "spec")
+    async def _command_spectate(self, target: str = ""):
         if not target:
             if self.spec_eid:
                 return self.client.send_packet(0x43, VarInt.pack(self.eid))

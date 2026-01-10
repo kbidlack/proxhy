@@ -34,6 +34,7 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.aliases import Gamemode
+from proxhy.argtypes import HypixelPlayer
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
@@ -151,7 +152,7 @@ class StatCheckPlugin(Plugin):
 
         self._cached_players: dict = {}
         # players from packet_player_list_item
-        self.players: dict[str, str] = {}
+        self.players: dict[str, str] = {}  # uuid: name
         self._hypixel_api_key = ""
 
         self.game_error = None  # if error has been sent that game
@@ -169,6 +170,23 @@ class StatCheckPlugin(Plugin):
         self._api_key_validated_at: float | None = None
 
         self.update_stats_complete = asyncio.Event()
+
+    @property
+    def all_players(self) -> set[str]:
+        real_player_teams: list[Team] = [
+            team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
+        ]
+
+        real_players = set()
+        for player in (
+            set(self.players.values())
+            | set(self.dead.keys())
+            | set(self.final_dead.keys())
+        ):
+            if any(player in team.players for team in real_player_teams):
+                real_players.add(player)
+
+        return real_players
 
     @property
     def hypixel_api_key(self):
@@ -718,7 +736,7 @@ class StatCheckPlugin(Plugin):
 
     async def _sc_internal(
         self,
-        ign: str = "",
+        player: Optional[HypixelPlayer] = None,
         mode: str = "bedwars",
         window: Optional[float] = -1.0,
         *stats,
@@ -748,9 +766,6 @@ class StatCheckPlugin(Plugin):
         if window == -1.0:
             window = None
 
-        # Use player's name and assume gamemode is bedwars.
-        ign = ign or self.username
-
         if (gamemode := Gamemode(mode)) != "bedwars":
             raise CommandException("Currently only Bedwars stats are supported!")
 
@@ -764,9 +779,12 @@ class StatCheckPlugin(Plugin):
             elif gamemode == "skywars":
                 stats = ("Kills", "KDR", "Wins", "WLR")
 
-        # Retrieve current player stats from the API.
+        # Retrieve current player stats - use provided player or fetch current user
         try:
-            current_player = await self.hypixel_client.player(ign)
+            if player is not None:
+                current_player = player._player
+            else:
+                current_player = await self.hypixel_client.player(self.username)
             current_stats = current_player._data.get("stats", {}).get("Bedwars", {})
         except Exception as e:
             raise CommandException(f"Failed to fetch current stats: {e}")
@@ -786,7 +804,9 @@ class StatCheckPlugin(Plugin):
                 )
 
             # Find the closest stat log entry within the time window
-            old_stats, chosen_date = self._find_closest_stat_log(ign, window)
+            old_stats, chosen_date = self._find_closest_stat_log(
+                current_player.name, window
+            )
 
             # Calculate stat deltas
             diffs = self._calculate_stat_deltas(current_stats, old_stats, required_keys)
@@ -873,21 +893,39 @@ class StatCheckPlugin(Plugin):
         # Format the hover text and send the chat message
         return fplayer.format_stats(gamemode, *stats).hover_text(hover_text)
 
-    @command("sc")
-    async def statcheck(
-        self, ign: str = "", mode: str = "bedwars", window: float = -1.0, *stats: str
+    @command("sc", "statcheck")
+    async def _command_statcheck(
+        self,
+        player: HypixelPlayer = None,  # type: ignore[assignment]
+        mode: str = "bedwars",
+        window: float = -1.0,
+        *stats: str,
     ):
-        return await self._sc_internal(ign, mode, window, *stats)
+        """Check player stats. Usage: /sc [player] [mode] [window_days]"""
+        return await self._sc_internal(player, mode, window, *stats)
 
-    @command("scw")
-    async def scweekly(self, ign: str = "", mode: str = "bedwars", *stats: str):
-        return await self._sc_internal(ign, mode, 7.0, *stats)
+    @command("scw", "scweekly")
+    async def _command_scweekly(
+        self,
+        player: HypixelPlayer = None,  # type: ignore[assignment]
+        mode: str = "bedwars",
+        *stats: str,
+    ):
+        """Check player's weekly stats. Usage: /scw [player] [mode]"""
+        return await self._sc_internal(player, mode, 7.0, *stats)
 
     @command("scfull")
-    async def statcheckfull(
-        self, ign: str = "", mode: str = "bedwars", window: float = -1.0, *stats
+    async def _command_scfull(
+        self,
+        player: HypixelPlayer = None,  # type: ignore[assignment]
+        mode: str = "bedwars",
+        window: float = -1.0,
+        *stats: str,
     ):
-        return await self._sc_internal(ign, mode, window, *stats, display_abridged=True)
+        """Check player stats with all modes. Usage: /scfull [player] [mode] [window_days]"""
+        return await self._sc_internal(
+            player, mode, window, *stats, display_abridged=True
+        )
 
     async def _get_player(self, player: str) -> dict[str, Player]:
         """Get a player from cache or fetch from API."""
@@ -1030,7 +1068,8 @@ class StatCheckPlugin(Plugin):
             for result in player_stats:
                 expected_name = ""
                 try:
-                    expected_name, player_result = await result
+                    result = await result
+                    expected_name, player_result = result.copy().popitem()
                 except PlayerNotFound as player:  # assume nick
                     # I don't actually know if we can assume this is a string
                     # but I want the type checker to be friendly to me
@@ -1586,8 +1625,9 @@ class StatCheckPlugin(Plugin):
             self.received_who.clear()
             self.game.started = True
 
-    @command()
-    async def key(self, key):
+    @command("key", "apikey")
+    async def _command_key(self, key: str):
+        """Set your Hypixel API key. Usage: /key <api_key>"""
         try:
             new_client = hypixel.Client(key)
             await new_client.player("gamerboy80")  # test key
@@ -1602,13 +1642,11 @@ class StatCheckPlugin(Plugin):
 
         self.hypixel_api_key = key
         self.hypixel_client = hypixel.Client(key)
-        # Mark as valid immediately (already tested)
         self._api_key_valid = True
         self._api_key_validated_at = asyncio.get_event_loop().time()
 
-        api_key_msg = TextComponent("Updated API Key!").color("green")
         self.game_error = None
-        self.client.chat(api_key_msg)
+        self.client.chat(TextComponent("Updated API Key!").color("green"))
 
         await self._update_stats()
         if not self.stats_highlighted:

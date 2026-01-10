@@ -177,7 +177,7 @@ class LoginPlugin(Plugin):
         self.server.send_packet(0x00, String(self.username))
 
     @command("login")
-    async def login_command(self, email, password):
+    async def _command_login(self, email: str, password: str):
         if (not self.logging_in) or self.regenerating_credentials:
             raise CommandException("You can't use that right now!")
 

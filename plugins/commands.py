@@ -1,39 +1,70 @@
 import asyncio
 import re
+from typing import Union
 
 from core.events import listen_client, listen_server, subscribe
 from core.plugin import Plugin
 from protocol.datatypes import Buffer, String, TextComponent, VarInt
-from proxhy.command import Command
+from proxhy.command import Command, CommandGroup, CommandRegistry
 from proxhy.errors import CommandException
 
 
 class CommandsPlugin(Plugin):
-    def _init_commands(self):
-        self.commands: dict[str, Command] = {}
+    """
+    Plugin that handles command registration, execution, and tab completion.
+
+    Commands are registered per-instance, allowing different proxy instances
+    to have different command configurations.
+    """
+
+    def _init_0_commands(self):  # 0 so it runs first (alphabetically)
+        self.command_registry = CommandRegistry()
         self.suggestions: asyncio.Queue[list[str]] = asyncio.Queue()
 
+        # Discover and register @command decorated methods
         for item in dir(self):
             try:
                 obj = getattr(self, item)
                 if hasattr(obj, "_command"):
                     command: Command = getattr(obj, "_command")
-                    for alias in command.aliases:
-                        self.commands.update({alias: command})
+                    self.command_registry.register(command)
             except AttributeError:
-                pass  # yeah
+                pass
+
+    def register_command(self, cmd: Command) -> None:
+        """
+        Register a command with this proxy instance.
+
+        Args:
+            cmd: The Command instance to register
+        """
+        self.command_registry.register(cmd)
+
+    def register_command_group(self, group: CommandGroup) -> None:
+        """
+        Register a command group with this proxy instance.
+
+        Args:
+            group: The CommandGroup instance to register
+        """
+        self.command_registry.register(group)
 
     @subscribe("chat:client:/.*")
     async def on_client_chat_command(self, buff: Buffer):
         message = buff.unpack(String)
 
         segments = message.split()
-        command = self.commands.get(
-            segments[0].removeprefix("/").casefold()
-        ) or self.commands.get(segments[0].removeprefix("//").casefold())
+        cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
+
+        command: Union[Command, CommandGroup, None] = self.command_registry.get(
+            cmd_name
+        )
+
         if command:
             try:
-                output: str | TextComponent = await command(self, message)
+                # Parse arguments (everything after command name)
+                args = segments[1:]
+                output: str | TextComponent = await command(self, args)
             except CommandException as err:
                 if isinstance(err.message, TextComponent):
                     err.message.flatten()
@@ -68,33 +99,51 @@ class CommandsPlugin(Plugin):
         text = buff.unpack(String)
 
         precommand = None
-
         suggestions: list[str] = []
 
         # generate autocomplete suggestions
-        if text.startswith("/"):
-            precommand = text.split()[0].removeprefix("/")
-        elif text.startswith("//"):
+        if text.startswith("//"):
             precommand = text.split()[0].removeprefix("//")
+            prefix = "//"
+        elif text.startswith("/"):
+            precommand = text.split()[0].removeprefix("/")
+            prefix = "/"
         else:
-            ...  # TODO: add dead players if setting is on
+            prefix = ""
 
         if precommand is not None:
+            parts = text.split()
+
             if " " in text:
-                # typed space; indicating starting to type parameters
-                # TODO: add parameter completion logic
-                suggestions = []
+                # User has typed at least the command name and started typing args
+                cmd_name = parts[0].removeprefix("/").removeprefix("/").casefold()
+                command = self.command_registry.get(cmd_name)
+
+                if command:
+                    # Determine what's been typed
+                    # text = "/cmd arg1 arg2 part" -> args = ["arg1", "arg2"], partial = "part"
+                    # text = "/cmd arg1 arg2 " -> args = ["arg1", "arg2"], partial = ""
+                    if text.endswith(" "):
+                        args = parts[1:]
+                        partial = ""
+                    else:
+                        args = parts[1:-1]
+                        partial = parts[-1] if len(parts) > 1 else ""
+
+                    try:
+                        suggestions = await command.get_suggestions(self, args, partial)
+                    except Exception:
+                        suggestions = []
             else:
-                # still typing command name
+                # Still typing command name
+                all_commands = self.command_registry.all_commands()
                 suggestions = [
-                    f"/{command}"
-                    for command in self.commands.keys()
-                    if command.startswith(precommand)
+                    f"{prefix}{cmd}"
+                    for cmd in all_commands.keys()
+                    if cmd.startswith(precommand.lower())
                 ]
 
-        # technically we can await put() here since maxsize is inf but whatever
         self.suggestions.put_nowait(suggestions)
-
         return self.server.send_packet(0x14, buff.getvalue())
 
     @listen_server(0x3A)

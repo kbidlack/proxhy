@@ -1,4 +1,7 @@
+from __future__ import annotations
+
 import inspect
+from abc import ABC, abstractmethod
 from typing import (
     Any,
     Awaitable,
@@ -6,108 +9,527 @@ from typing import (
     Literal,
     get_args,
     get_origin,
+    get_type_hints,
 )
 
 from protocol.datatypes import TextComponent
 from proxhy.errors import CommandException
 
+# =============================================================================
+# Custom Argument Types
+# =============================================================================
+
+
+class CommandArg(ABC):
+    """
+    Base class for custom command argument types.
+
+    Subclass this to create custom types that can be used in command signatures.
+    The type will automatically convert string arguments and provide tab suggestions.
+
+    Example:
+        class Player(CommandArg):
+            def __init__(self, name: str, uuid: str):
+                self.name = name
+                self.uuid = uuid
+
+            @classmethod
+            async def convert(cls, proxy, value: str) -> "Player":
+                # Fetch player data and return a Player instance
+                data = await fetch_player(value)
+                return cls(data["name"], data["uuid"])
+
+            @classmethod
+            async def suggest(cls, proxy, partial: str) -> list[str]:
+                # Return tab completion suggestions
+                return [p for p in proxy.players if p.lower().startswith(partial.lower())]
+    """
+
+    @classmethod
+    @abstractmethod
+    async def convert(cls, proxy: Any, value: str) -> Any:
+        """
+        Convert a string argument to this type.
+
+        Args:
+            proxy: The proxy instance (for accessing game state, APIs, etc.)
+            value: The raw string argument from the command
+
+        Returns:
+            An instance of this type
+
+        Raises:
+            CommandException: If the value cannot be converted
+        """
+        ...
+
+    @classmethod
+    async def suggest(cls, proxy: Any, partial: str) -> list[str]:
+        """
+        Provide tab completion suggestions for this type.
+
+        Args:
+            proxy: The proxy instance
+            partial: The partially typed argument
+
+        Returns:
+            List of suggestion strings
+        """
+        return []
+
+
+# =============================================================================
+# Parameter Handling
+# =============================================================================
+
 
 class Parameter:
-    def __init__(self, param: inspect.Parameter):
-        self.name = param.name
+    """Represents a command parameter with its metadata."""
 
+    def __init__(self, param: inspect.Parameter, type_hint: Any = None):
+        self.name = param.name
+        self.type_hint = type_hint or param.annotation
+
+        # Check if required (no default value)
         if param.default is not inspect._empty:
             self.default = param.default
             self.required = False
         else:
+            self.default = None
             self.required = True
 
-        if param.kind is inspect.Parameter.VAR_POSITIONAL:  # *args
+        # Check for *args (infinite arguments)
+        if param.kind is inspect.Parameter.VAR_POSITIONAL:
             self.infinite = True
             self.required = False
         else:
             self.infinite = False
 
-        if get_origin(param.annotation) is Literal:
-            self.options = get_args(param.annotation)
+        # Check for Literal type (restricted options)
+        if get_origin(self.type_hint) is Literal:
+            self.options = get_args(self.type_hint)
         else:
             self.options = None
+
+        # Check if this is a custom CommandArg type
+        self.is_custom_type = isinstance(self.type_hint, type) and issubclass(
+            self.type_hint, CommandArg
+        )
 
     def __repr__(self):
         return "Parameter: " + ", ".join([f"{k}={v}" for k, v in self.__dict__.items()])
 
 
+# =============================================================================
+# Command Class
+# =============================================================================
+
+
 class Command:
-    def __init__(self, function, *aliases) -> None:
+    """
+    Represents a single command (or subcommand).
+
+    Handles argument parsing, validation, type conversion, and execution.
+    """
+
+    def __init__(
+        self,
+        function: Callable[..., Awaitable[Any]],
+        name: str | None = None,
+        aliases: tuple[str, ...] = (),
+    ) -> None:
         self.function = function
-        self.name = function.__name__
+        self.name = name or function.__name__
+        self.aliases = (self.name, *aliases)
 
+        # Get type hints for proper annotation resolution
+        try:
+            hints = get_type_hints(function)
+        except Exception:
+            hints = {}
+
+        # Parse parameters (skip 'self')
         sig = inspect.signature(function)
-        self.parameters = [
-            Parameter(sig.parameters[param]) for param in sig.parameters
-        ][1:]
-        self.required_parameters = [
-            param for param in self.parameters if param.required
-        ]
+        params = list(sig.parameters.values())[1:]  # Skip self
+        self.parameters = [Parameter(p, hints.get(p.name)) for p in params]
+        self.required_parameters = [p for p in self.parameters if p.required]
         self.restricted_parameters = [
-            (i, param) for i, param in enumerate(self.parameters) if param.options
+            (i, p) for i, p in enumerate(self.parameters) if p.options
         ]
 
-        self.aliases = aliases
+    async def __call__(self, proxy: Any, args: list[str]) -> Any:
+        """
+        Execute the command with the given arguments.
 
-    async def __call__(self, proxy, message: str):
-        segments = message.split()
-        args = segments[1:]
+        Args:
+            proxy: The proxy instance
+            args: List of string arguments (command name already stripped)
+
+        Returns:
+            The command's return value (usually str or TextComponent)
+        """
+        # Validate argument count
         if not self.parameters and args:
             raise CommandException(
-                TextComponent("Command")
-                .appends(TextComponent(f"{segments[0]}").color("gold"))
+                TextComponent("Command ")
+                .append(TextComponent(self.name).color("gold"))
                 .appends("takes no arguments!")
             )
-        elif (len(args) > len(self.parameters)) and not any(
-            p.infinite for p in self.parameters
-        ):
+
+        has_infinite = any(p.infinite for p in self.parameters)
+        if len(args) > len(self.parameters) and not has_infinite:
             raise CommandException(
-                TextComponent("Command")
-                .appends(TextComponent(segments[0]).color("gold"))
+                TextComponent("Command ")
+                .append(TextComponent(self.name).color("gold"))
                 .appends("takes at most")
-                .appends(TextComponent(f"{len(self.parameters)}").color("dark_aqua"))
+                .appends(TextComponent(str(len(self.parameters))).color("dark_aqua"))
                 .appends("argument(s)!")
             )
-        elif len(args) < len(self.required_parameters):
-            names = ", ".join([param.name for param in self.required_parameters])
+
+        if len(args) < len(self.required_parameters):
+            names = ", ".join([p.name for p in self.required_parameters])
             raise CommandException(
-                TextComponent("Command")
-                .appends(TextComponent(segments[0]).color("gold"))
+                TextComponent("Command ")
+                .append(TextComponent(self.name).color("gold"))
                 .appends("needs at least")
                 .appends(
-                    TextComponent(f"{len(self.required_parameters)}").color("dark_aqua")
+                    TextComponent(str(len(self.required_parameters))).color("dark_aqua")
                 )
                 .appends("argument(s)! (")
-                .append(TextComponent(f"{names}").color("dark_aqua"))
+                .append(TextComponent(names).color("dark_aqua"))
                 .append(")")
             )
-        else:
-            for index, param in self.restricted_parameters:
-                if param.options and args[index].lower() not in param.options:
+
+        # Validate restricted parameters (Literal types)
+        for index, param in self.restricted_parameters:
+            if index < len(args) and param.options:
+                if args[index].lower() not in [str(o).lower() for o in param.options]:
                     raise CommandException(
                         TextComponent("Invalid option '")
-                        .append(TextComponent(f"{args[index]}").color("gold"))
+                        .append(TextComponent(args[index]).color("gold"))
                         .append("'. Please choose a correct argument! (")
                         .append(
-                            TextComponent(f"{', '.join(param.options)}").color(
-                                "dark_aqua"
-                            )
+                            TextComponent(
+                                ", ".join(str(o) for o in param.options)
+                            ).color("dark_aqua")
                         )
                         .append(")")
                     )
 
-            return await self.function(proxy, *args)
+        # Convert arguments to their proper types
+        converted_args = []
+        for i, param in enumerate(self.parameters):
+            if param.infinite:
+                # Handle *args - convert remaining arguments
+                remaining = args[i:]
+                if param.is_custom_type:
+                    converted = [
+                        await param.type_hint.convert(proxy, arg) for arg in remaining
+                    ]
+                else:
+                    converted = remaining
+                converted_args.extend(converted)
+                break
+            elif i < len(args):
+                # Convert single argument
+                if param.is_custom_type:
+                    converted = await param.type_hint.convert(proxy, args[i])
+                else:
+                    converted = args[i]
+                converted_args.append(converted)
+
+        return await self.function(proxy, *converted_args)
+
+    async def get_suggestions(
+        self, proxy: Any, args: list[str], partial: str
+    ) -> list[str]:
+        """
+        Get tab completion suggestions for the current argument position.
+
+        Args:
+            proxy: The proxy instance
+            args: Arguments typed so far (complete ones)
+            partial: The partially typed current argument
+
+        Returns:
+            List of suggestion strings
+        """
+        arg_index = len(args)
+
+        if arg_index >= len(self.parameters):
+            # Check if last param is infinite
+            if self.parameters and self.parameters[-1].infinite:
+                param = self.parameters[-1]
+            else:
+                return []
+        else:
+            param = self.parameters[arg_index]
+
+        # Get suggestions based on parameter type
+        if param.options:
+            return [
+                str(o)
+                for o in param.options
+                if str(o).lower().startswith(partial.lower())
+            ]
+        elif param.is_custom_type:
+            return await param.type_hint.suggest(proxy, partial)
+
+        return []
 
 
-def command[**P](*aliases):
-    def wrapper(func: Callable[P, Awaitable[Any]]):
-        setattr(func, "_command", Command(func, *(func.__name__, *aliases)))
+# =============================================================================
+# Command Group
+# =============================================================================
+
+
+class CommandGroup:
+    """
+    A group of related commands with a shared prefix.
+
+    Supports nested subgroups and a base command for when no subcommand is given.
+
+    Example:
+        broadcast = CommandGroup("broadcast", "bc")
+
+        @broadcast.command()
+        async def _base(self):
+            return "Usage: /broadcast <list|join|leave>"
+
+        @broadcast.command("list")
+        async def _list(self):
+            return "Players: ..."
+
+        setting = broadcast.group("setting", "set")
+
+        @setting.command("add")
+        async def _add(self, name: str, value: str):
+            return f"Added {name}={value}"
+    """
+
+    def __init__(self, name: str, *aliases: str, parent: CommandGroup | None = None):
+        self.name = name
+        self.aliases = (name, *aliases)
+        self.parent = parent
+
+        self._base_command: Command | None = None
+        self._subcommands: dict[str, Command] = {}
+        self._subgroups: dict[str, CommandGroup] = {}
+
+    @property
+    def full_name(self) -> str:
+        """Get the full command path (e.g., 'broadcast setting')."""
+        if self.parent:
+            return f"{self.parent.full_name} {self.name}"
+        return self.name
+
+    def command(self, name: str | None = None, *aliases: str):
+        """
+        Decorator to register a command in this group.
+
+        Args:
+            name: Subcommand name. If None, this becomes the base command
+                  (executed when no subcommand is given).
+            *aliases: Additional aliases for this subcommand.
+
+        Example:
+            @group.command()  # Base command
+            async def _base(self): ...
+
+            @group.command("list", "ls")  # Subcommand with alias
+            async def _list(self): ...
+        """
+
+        def decorator(func: Callable[..., Awaitable[Any]]):
+            cmd = Command(func, name=name or self.name, aliases=aliases)
+
+            if name is None:
+                self._base_command = cmd
+            else:
+                # Register under primary name and all aliases
+                self._subcommands[name.lower()] = cmd
+                for alias in aliases:
+                    self._subcommands[alias.lower()] = cmd
+
+            return func
+
+        return decorator
+
+    def group(self, name: str, *aliases: str) -> CommandGroup:
+        """
+        Create a nested subgroup.
+
+        Args:
+            name: The subgroup name
+            *aliases: Additional aliases for this subgroup
+
+        Returns:
+            The new CommandGroup instance
+        """
+        subgroup = CommandGroup(name, *aliases, parent=self)
+
+        # Register under primary name and all aliases
+        self._subgroups[name.lower()] = subgroup
+        for alias in aliases:
+            self._subgroups[alias.lower()] = subgroup
+
+        return subgroup
+
+    def _build_usage_message(self) -> TextComponent:
+        """Build a usage message showing available subcommands."""
+        msg = TextComponent("Usage: ").color("yellow")
+        msg.append(TextComponent(f"/{self.full_name} ").color("gold"))
+        msg.append(TextComponent("<").color("gray"))
+
+        # Collect unique subcommand names (not aliases)
+        subcommand_names = set()
+        for cmd in self._subcommands.values():
+            subcommand_names.add(cmd.name)
+        for grp in self._subgroups.values():
+            subcommand_names.add(grp.name)
+
+        options = sorted(subcommand_names)
+        msg.append(TextComponent("|".join(options)).color("white"))
+        msg.append(TextComponent(">").color("gray"))
+
+        return msg
+
+    async def __call__(self, proxy: Any, args: list[str]) -> Any:
+        """
+        Execute this command group with the given arguments.
+
+        Routes to the appropriate subcommand or base command.
+        """
+        if not args:
+            # No subcommand given
+            if self._base_command:
+                return await self._base_command(proxy, [])
+            else:
+                return self._build_usage_message()
+
+        subcommand_name = args[0].lower()
+        remaining_args = args[1:]
+
+        # Check for subgroup first
+        if subcommand_name in self._subgroups:
+            return await self._subgroups[subcommand_name](proxy, remaining_args)
+
+        # Check for subcommand
+        if subcommand_name in self._subcommands:
+            return await self._subcommands[subcommand_name](proxy, remaining_args)
+
+        # Unknown subcommand
+        raise CommandException(
+            TextComponent("Unknown subcommand '")
+            .append(TextComponent(args[0]).color("gold"))
+            .append("'. ")
+            .append(self._build_usage_message())
+        )
+
+    async def get_suggestions(
+        self, proxy: Any, args: list[str], partial: str
+    ) -> list[str]:
+        """Get tab completion suggestions."""
+        if not args:
+            # Suggest subcommands and subgroups
+            all_options = list(self._subcommands.keys()) + list(self._subgroups.keys())
+            # Filter to unique names (not aliases) that match partial
+            seen = set()
+            suggestions = []
+            for opt in all_options:
+                if opt.lower().startswith(partial.lower()) and opt not in seen:
+                    seen.add(opt)
+                    suggestions.append(opt)
+            return suggestions
+
+        subcommand_name = args[0].lower()
+        remaining_args = args[1:]
+
+        # Delegate to subgroup
+        if subcommand_name in self._subgroups:
+            return await self._subgroups[subcommand_name].get_suggestions(
+                proxy, remaining_args, partial
+            )
+
+        # Delegate to subcommand
+        if subcommand_name in self._subcommands:
+            return await self._subcommands[subcommand_name].get_suggestions(
+                proxy, remaining_args, partial
+            )
+
+        return []
+
+
+# =============================================================================
+# Command Registry (per-instance)
+# =============================================================================
+
+
+class CommandRegistry:
+    """
+    Per-instance command registry.
+
+    Each proxy instance has its own registry, allowing different proxies
+    to have different command sets or configurations.
+    """
+
+    def __init__(self):
+        self._commands: dict[str, Command | CommandGroup] = {}
+
+    def register(self, cmd: Command | CommandGroup) -> None:
+        """Register a command or command group."""
+        for alias in cmd.aliases:
+            self._commands[alias.lower()] = cmd
+
+    def get(self, name: str) -> Command | CommandGroup | None:
+        """Get a command by name or alias."""
+        return self._commands.get(name.lower())
+
+    def all_commands(self) -> dict[str, Command | CommandGroup]:
+        """Get all registered commands."""
+        return self._commands.copy()
+
+    def command_names(self) -> list[str]:
+        """Get all unique command names (not aliases)."""
+        seen = set()
+        names = []
+        for cmd in self._commands.values():
+            if cmd.name not in seen:
+                seen.add(cmd.name)
+                names.append(cmd.name)
+        return names
+
+
+# =============================================================================
+# Decorator for Simple Commands
+# =============================================================================
+
+
+def command(name: str, *aliases: str):
+    """
+    Decorator to create a simple command (no subcommands).
+
+    The command name is required as the first argument.
+    This enforces the `_command_<name>` naming convention for functions.
+
+    Args:
+        name: The command name (required).
+        *aliases: Additional command aliases.
+
+    Example:
+        @command("bc", "broadcast")
+        async def _command_bc(self, message: str):
+            return f"Broadcasting: {message}"
+
+        @command("ping")
+        async def _command_ping(self):
+            return "Pong!"
+    """
+
+    def decorator(func: Callable[..., Awaitable[Any]]):
+        cmd = Command(func, name=name, aliases=aliases)
+        # Store as attribute for discovery by CommandsPlugin
+        setattr(func, "_command", cmd)
         return func
 
-    return wrapper
+    return decorator
