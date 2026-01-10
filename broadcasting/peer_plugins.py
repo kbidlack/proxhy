@@ -1,7 +1,7 @@
 import asyncio
 import json
 import uuid
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 from unittest.mock import Mock
 
 import hypixel
@@ -60,6 +60,10 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
     def _init_broadcast_peer(self):
         self.uuid = ""
         self.spec_eid: Optional[int] = None
+        self.flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING] = (
+            PlayerAbilityFlags.ALLOW_FLYING
+        )  # alternatively 0 if off
+        self.flying: Literal[0, PlayerAbilityFlags.FLYING]
 
     @subscribe("chat:client:.*")
     async def on_any_client_chat(self, buff: Buffer):
@@ -197,8 +201,32 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             .append(TextComponent(f"{x:.1f}, {y:.1f}, {z:.1f}").color("gold"))
         )
 
+    @command("fly")
+    async def _command_fly(self):
+        if self.flight == PlayerAbilityFlags.ALLOW_FLYING:
+            self.flight = 0
+            self.flying = 0
+        else:  # self.flight == 0
+            self.flight = PlayerAbilityFlags.ALLOW_FLYING
+
+        self.client.send_packet(
+            0x39,
+            Byte.pack(PlayerAbilityFlags.INVULNERABLE | self.flying | self.flight)
+            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.proxy.gamestate.field_of_view_modifier),
+        )
+
+        self.client.chat(
+            TextComponent(f"Turned flight {'on' if self.flight else 'off'}!").color(
+                "green"
+            )
+        )
+
 
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
+    flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING]
+    flying: Literal[0, PlayerAbilityFlags.FLYING]
+
     def _init_login(self):
         self.server = Mock()  # HACK
 
@@ -242,17 +270,15 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # if server/player is flying, include flying in outgoing packet
         # otherwise leave it unset so broadcast clients can return to grounded state
         if flags & PlayerAbilityFlags.FLYING:  # flying
+            self.flying = PlayerAbilityFlags.FLYING
             # INVULNERABLE | FLYING | ALLOW_FLYING
             abilities_flags = int(
-                PlayerAbilityFlags.INVULNERABLE
-                | PlayerAbilityFlags.FLYING
-                | PlayerAbilityFlags.ALLOW_FLYING
+                PlayerAbilityFlags.INVULNERABLE | self.flying | self.flight
             )
         else:
+            self.flying = 0
             # INVULNERABLE | ALLOW_FLYING
-            abilities_flags = int(
-                PlayerAbilityFlags.INVULNERABLE | PlayerAbilityFlags.ALLOW_FLYING
-            )
+            abilities_flags = int(PlayerAbilityFlags.INVULNERABLE | self.flight)
 
         self.client.send_packet(
             0x39,
@@ -349,9 +375,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         )
 
         # resend player abilities (allow flying in adventure mode) so respawn doesn't clear them
-        abilities_flags = int(
-            PlayerAbilityFlags.INVULNERABLE | PlayerAbilityFlags.ALLOW_FLYING
-        )
+        abilities_flags = int(PlayerAbilityFlags.INVULNERABLE | self.flight)
         self.client.send_packet(
             0x39,
             Byte.pack(abilities_flags)
