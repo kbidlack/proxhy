@@ -2,15 +2,14 @@ import asyncio
 
 import numpy as np
 
-from core.events import listen_client, listen_server, subscribe
+from core.events import subscribe
 from core.plugin import Plugin
 from protocol.datatypes import (
     Boolean,
-    Buffer,
-    Double,
     Float,
     Int,
 )
+from proxhy.gamestate import GameState
 from proxhy.mcmodels import Game, Teams
 from proxhy.settings import ProxhySettings
 
@@ -22,10 +21,10 @@ class SpatialPlugin(Plugin):
     received_who: asyncio.Event
     username: str
     received_locraw: asyncio.Event
+    gamestate: GameState
 
     def _init_spatial(self):
         self.check_height_task = None
-        self.position: tuple[float, float, float] | None = None
 
     @subscribe("login_success")
     async def _spatial_on_login_success(self, _):
@@ -39,37 +38,6 @@ class SpatialPlugin(Plugin):
                 await self.check_height_task
             except asyncio.CancelledError:
                 pass
-
-    # =========================
-    #   TRACK PLAYER POSITION
-    # =========================
-    @listen_client(0x04)  # player position (for when look is unchanged)
-    async def sb_read_player_pos(self, buff: Buffer):
-        x = buff.unpack(Double)
-        y = buff.unpack(Double)
-        z = buff.unpack(Double)
-        self.position = (x, y, z)
-
-        # self.client.chat(f"Player Position: {x}, {y}, {z}")
-        self.server.send_packet(0x04, buff.getvalue())
-
-    @listen_client(0x06)  # player look and position
-    async def sb_read_player_pos_look(self, buff: Buffer):
-        x = buff.unpack(Double)
-        y = buff.unpack(Double)
-        z = buff.unpack(Double)
-        self.position = (x, y, z)
-
-        self.server.send_packet(0x06, buff.getvalue())
-
-    @listen_server(0x08)
-    async def cb_read_player_pos_look(self, buff: Buffer):
-        x = buff.unpack(Double)
-        y = buff.unpack(Double)
-        z = buff.unpack(Double)
-        self.position = (x, y, z)
-
-        self.client.send_packet(0x08, buff.getvalue())
 
     async def check_height_loop(self):
         """Called once when the proxy is started; loops indefinitely"""
@@ -86,9 +54,9 @@ class SpatialPlugin(Plugin):
     async def height_limit_warnings(self):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
-        if self.position is None or self.game.map is None:
+        if self.game.map is None:
             return
-        y = self.position[1]
+        y = self.gamestate.position.y
         max_height: int = self.game.map.max_height or 255
         min_height: int = self.game.map.max_height or 0
 
@@ -100,13 +68,13 @@ class SpatialPlugin(Plugin):
             )
             particle_y = (  # whichever height limit the player is closest to
                 max_height
-                if abs(max_height - self.position[1])
-                < abs(min_height - self.position[1])
+                if abs(max_height - self.gamestate.position.y)
+                < abs(min_height - self.gamestate.position.y)
                 else min_height
             )
             for _ in range(10):
-                particle_x = self.position[0] + np.random.normal(0, 0.7) * 3
-                particle_z = self.position[2] + np.random.normal(0, 0.7) * 3
+                particle_x = self.gamestate.position.x + np.random.normal(0, 0.7) * 3
+                particle_z = self.gamestate.position.z + np.random.normal(0, 0.7) * 3
                 self.display_particle(
                     particle_id=30, pos=(particle_x, particle_y, particle_z)
                 )
