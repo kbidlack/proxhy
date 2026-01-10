@@ -119,14 +119,14 @@ class BroadcastPlugin(Plugin):
     def _setup_broadcast_commands(self):
         bc = CommandGroup("broadcast", "bc")
 
-        @bc.command("chat", "c")
-        async def _bc_chat(self, *message: str):
+        @bc.command("chat")
+        async def _command_broadcast_chat(self, *message: str):
             if not message:
                 raise CommandException("Please provide a message to broadcast!")
             self.bc_chat(self.username, " ".join(message))
 
-        @bc.command("list", "ls")
-        async def _bc_list(self):
+        @bc.command("list")
+        async def _command_broadcast_list(self):
             if not self.clients:
                 return TextComponent("No players are currently connected.").color(
                     "gold"
@@ -139,8 +139,8 @@ class BroadcastPlugin(Plugin):
                 msg.append(TextComponent(client.username).color("aqua"))
             return msg
 
-        @bc.command("join", "j")
-        async def _bc_join(self, request_id: str):
+        @bc.command("join")
+        async def _command_broadcast_join(self, request_id: str):
             if not self.compass_client_initialized:
                 raise CommandException(
                     "The compass client is not connected yet! (wait a second?)"
@@ -152,8 +152,16 @@ class BroadcastPlugin(Plugin):
                 raise CommandException(
                     TextComponent("You have no broadcast invites from that player!")
                 )
-            del self.broadcast_invites[request_id]
 
+            self.client.chat(
+                TextComponent("Joining")
+                .color("yellow")
+                .appends(TextComponent(request.username).color("aqua"))
+                .append("'s broadcast...")
+                .color("yellow")
+            )
+
+            del self.broadcast_invites[request_id]
             peer_info = await request.accept()
 
             reader, writer = await pyroh.connect(
@@ -180,8 +188,8 @@ class BroadcastPlugin(Plugin):
             self.server.writer.write_eof()
             await new_proxy.join(self.username, peer_info)
 
-        @bc.command("invite", "inv")
-        async def _bc_invite(self, player: MojangPlayer):
+        @bc.command("invite")
+        async def _command_broadcast_invite(self, player: MojangPlayer):
             if not self.compass_client_initialized:
                 raise CommandException(
                     TextComponent("The compass client is not connected yet!")
