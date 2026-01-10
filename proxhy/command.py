@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import inspect
+import types
 from abc import ABC, abstractmethod
 from typing import (
     Any,
     Awaitable,
     Callable,
     Literal,
+    Union,
     get_args,
     get_origin,
     get_type_hints,
@@ -14,6 +16,18 @@ from typing import (
 
 from protocol.datatypes import TextComponent
 from proxhy.errors import CommandException
+
+
+def _is_union_type(type_hint: Any) -> bool:
+    """Check if a type hint is a Union type (including X | Y syntax)."""
+    origin = get_origin(type_hint)
+    return origin is Union or origin is types.UnionType
+
+
+def _get_union_args(type_hint: Any) -> tuple[Any, ...]:
+    """Get the member types of a Union."""
+    return get_args(type_hint)
+
 
 # =============================================================================
 # Custom Argument Types
@@ -111,6 +125,14 @@ class Parameter:
         else:
             self.options = None
 
+        # Check for Union type (e.g., ServerPlayer | float)
+        if _is_union_type(self.type_hint):
+            self.is_union = True
+            self.union_types = _get_union_args(self.type_hint)
+        else:
+            self.is_union = False
+            self.union_types = None
+
         # Check if this is a custom CommandArg type
         self.is_custom_type = isinstance(self.type_hint, type) and issubclass(
             self.type_hint, CommandArg
@@ -118,6 +140,107 @@ class Parameter:
 
     def __repr__(self):
         return "Parameter: " + ", ".join([f"{k}={v}" for k, v in self.__dict__.items()])
+
+    @staticmethod
+    async def convert_value(proxy: Any, value: str, type_hint: Any) -> Any:
+        """
+        Convert a string value to the specified type.
+
+        Supports:
+        - CommandArg subclasses (async convert)
+        - Basic types: int, float, str, bool
+        - Returns the string as-is for unknown types
+        """
+        # Check if it's a CommandArg subclass
+        if isinstance(type_hint, type) and issubclass(type_hint, CommandArg):
+            return await type_hint.convert(proxy, value)
+
+        # Handle basic types
+        if type_hint is int:
+            return int(value)
+        elif type_hint is float:
+            return float(value)
+        elif type_hint is bool:
+            lower = value.lower()
+            if lower in ("true", "yes", "1", "on"):
+                return True
+            elif lower in ("false", "no", "0", "off"):
+                return False
+            raise ValueError(f"Cannot convert '{value}' to bool")
+        elif type_hint is str:
+            return value
+
+        # Unknown type, return as string
+        return value
+
+    async def convert(self, proxy: Any, value: str) -> Any:
+        """
+        Convert a string value to this parameter's type.
+
+        For union types, tries each type in order until one succeeds.
+        """
+        if self.is_union and self.union_types:
+            # Try each type in the union in order
+            errors = []
+            for member_type in self.union_types:
+                # Skip NoneType in unions (for Optional types)
+                if member_type is type(None):
+                    continue
+                try:
+                    return await self.convert_value(proxy, value, member_type)
+                except (ValueError, CommandException) as e:
+                    errors.append((member_type, e))
+                    continue
+
+            # All types failed - raise an error with details
+            type_names = [
+                t.__name__ if hasattr(t, "__name__") else str(t)
+                for t in self.union_types
+                if t is not type(None)
+            ]
+            raise CommandException(
+                TextComponent("Could not parse '")
+                .append(TextComponent(value).color("gold"))
+                .append("' as any of: ")
+                .append(TextComponent(", ".join(type_names)).color("dark_aqua"))
+            )
+
+        elif self.is_custom_type:
+            return await self.type_hint.convert(proxy, value)
+
+        else:
+            return await self.convert_value(proxy, value, self.type_hint)
+
+    async def get_suggestions(self, proxy: Any, partial: str) -> list[str]:
+        """Get tab completion suggestions for this parameter."""
+        suggestions: list[str] = []
+
+        if self.options:
+            # Literal type - suggest from options
+            suggestions = [
+                str(o)
+                for o in self.options
+                if str(o).lower().startswith(partial.lower())
+            ]
+        elif self.is_union and self.union_types:
+            # Union type - collect suggestions from all CommandArg members
+            for member_type in self.union_types:
+                if isinstance(member_type, type) and issubclass(
+                    member_type, CommandArg
+                ):
+                    member_suggestions = await member_type.suggest(proxy, partial)
+                    suggestions.extend(member_suggestions)
+            # Deduplicate while preserving order
+            seen = set()
+            suggestions = [
+                s
+                for s in suggestions
+                if not (s in seen or seen.add(s))  # type: ignore
+            ]
+        elif self.is_custom_type:
+            suggestions = await self.type_hint.suggest(proxy, partial)
+
+        return suggestions
 
 
 # =============================================================================
@@ -222,20 +345,12 @@ class Command:
             if param.infinite:
                 # Handle *args - convert remaining arguments
                 remaining = args[i:]
-                if param.is_custom_type:
-                    converted = [
-                        await param.type_hint.convert(proxy, arg) for arg in remaining
-                    ]
-                else:
-                    converted = remaining
+                converted = [await param.convert(proxy, arg) for arg in remaining]
                 converted_args.extend(converted)
                 break
             elif i < len(args):
-                # Convert single argument
-                if param.is_custom_type:
-                    converted = await param.type_hint.convert(proxy, args[i])
-                else:
-                    converted = args[i]
+                # Convert single argument using Parameter.convert
+                converted = await param.convert(proxy, args[i])
                 converted_args.append(converted)
 
         return await self.function(proxy, *converted_args)
@@ -265,17 +380,8 @@ class Command:
         else:
             param = self.parameters[arg_index]
 
-        # Get suggestions based on parameter type
-        if param.options:
-            return [
-                str(o)
-                for o in param.options
-                if str(o).lower().startswith(partial.lower())
-            ]
-        elif param.is_custom_type:
-            return await param.type_hint.suggest(proxy, partial)
-
-        return []
+        # Delegate to Parameter.get_suggestions
+        return await param.get_suggestions(proxy, partial)
 
 
 # =============================================================================

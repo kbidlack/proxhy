@@ -173,20 +173,23 @@ class StatCheckPlugin(Plugin):
 
     @property
     def all_players(self) -> set[str]:
-        real_player_teams: list[Team] = [
-            team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
-        ]
+        if self.game.gametype == "bedwars" and self.game.started:
+            real_player_teams: list[Team] = [
+                team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
+            ]
 
-        real_players = set()
-        for player in (
-            set(self.players.values())
-            | set(self.dead.keys())
-            | set(self.final_dead.keys())
-        ):
-            if any(player in team.players for team in real_player_teams):
-                real_players.add(player)
+            real_players = set()
+            for player in (
+                set(self.players.values())
+                | set(self.dead.keys())
+                | set(self.final_dead.keys())
+            ):
+                if any(player in team.players for team in real_player_teams):
+                    real_players.add(player)
 
-        return real_players
+            return real_players
+        else:
+            return set(self.players.values())
 
     @property
     def hypixel_api_key(self):

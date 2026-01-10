@@ -12,7 +12,6 @@ Example:
 
 from __future__ import annotations
 
-import typing
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
@@ -25,6 +24,23 @@ from proxhy.utils import PlayerInfo, _Client
 
 if TYPE_CHECKING:
     from core.settings import Setting, SettingGroup
+
+
+def _resolve_in_proxy_chain(obj: Any, attr: str) -> Any:
+    """
+    Search for attribute `attr` on `obj` and up the `.proxy` chain.
+    Returns the attribute value if found, otherwise None.
+    Prevents infinite loops by tracking visited objects.
+    """
+    # this is so stupid but it works lmao
+    seen = set()
+    current = obj
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if hasattr(current, attr):
+            return getattr(current, attr)
+        current = getattr(current, "proxy", None)
+    return None
 
 
 # =============================================================================
@@ -58,17 +74,19 @@ class Player(CommandArg):
         suggestions: set[str] = set()
         partial_lower = partial.lower()
 
-        # add all players including dead (if available from statcheck plugin)
-        if hasattr(proxy, "all_players"):
-            typing.cast(set, proxy.all_players)
-
-            for name in proxy.all_players:
+        # Try to find all known players first on the proxy chain
+        all_players = _resolve_in_proxy_chain(proxy, "all_players")
+        if isinstance(all_players, (set, list)):
+            for name in all_players:
                 if name.lower().startswith(partial_lower):
                     suggestions.add(name)
-        elif hasattr(proxy, "players"):
-            for name in proxy.players.values():
-                if name.lower().startswith(partial_lower):
-                    suggestions.add(name)
+        else:
+            # Fallback to the active players dict (uuid -> name)
+            players = _resolve_in_proxy_chain(proxy, "players")
+            if isinstance(players, dict):
+                for name in players.values():
+                    if name.lower().startswith(partial_lower):
+                        suggestions.add(name)
 
         return sorted(suggestions)
 
@@ -106,18 +124,35 @@ class ServerPlayer(Player):
         """
         Convert a player name to a ServerPlayer.
 
-        No validation is performed - the name is accepted as-is.
-        This allows for nicked players or custom player names.
-        """
-        # Try to find UUID from proxy's player list if available
-        uuid = None
-        if hasattr(proxy, "players"):
-            for u, name in proxy.players.items():
-                if name.casefold() == value.casefold():
-                    uuid = u
-                    break
+        Validates that the player exists in the server's player list
+        and retrieves their UUID.
 
-        return cls(name=value, uuid=uuid)
+        Raises:
+            CommandException: If the player is not found in the server's player list
+        """
+        from proxhy.errors import CommandException
+
+        # Above all prefer all players
+        if hasattr(proxy, "all_players"):
+            return proxy
+
+        gamestate = _resolve_in_proxy_chain(proxy, "gamestate")
+        if gamestate is not None and hasattr(gamestate, "player_list"):
+            for uuid, player_info in gamestate.player_list.items():
+                if player_info.name.casefold() == value.casefold():
+                    return cls(name=player_info.name, uuid=uuid)
+
+        players = _resolve_in_proxy_chain(proxy, "players")
+        if isinstance(players, dict):
+            for uuid, name in players.items():
+                if name.casefold() == value.casefold():
+                    return cls(name=name, uuid=uuid)
+
+        raise CommandException(
+            TextComponent("Player '")
+            .append(TextComponent(value).color("gold"))
+            .append("' not found on the server!")
+        )
 
 
 class MojangPlayer(Player):
@@ -204,7 +239,7 @@ class HypixelPlayer(Player):
         Raises:
             CommandException: If the player is not found, API key is invalid, etc.
         """
-        client: hypixel.Client | None = getattr(proxy, "hypixel_client", None)
+        client = _resolve_in_proxy_chain(proxy, "hypixel_client")
 
         if client is None:
             raise CommandException(
@@ -294,12 +329,12 @@ class SettingPath(CommandArg):
         """
         from core.settings import Setting, SettingGroup
 
-        if not hasattr(proxy, "settings"):
+        settings = _resolve_in_proxy_chain(proxy, "settings")
+        if settings is None:
             raise CommandException(
                 TextComponent("Settings not available!").color("red")
             )
 
-        settings: SettingGroup = proxy.settings
         parts = value.split(".")
         current: Any = settings
         traversed: list[str] = []
@@ -353,10 +388,11 @@ class SettingPath(CommandArg):
     @classmethod
     async def suggest(cls, proxy: Any, partial: str) -> list[str]:
         """Suggest setting paths based on partial input."""
-        if not hasattr(proxy, "settings"):
+        settings = _resolve_in_proxy_chain(proxy, "settings")
+        if settings is None:
             return []
 
-        all_paths = cls._get_all_setting_paths(proxy.settings)
+        all_paths = cls._get_all_setting_paths(settings)
         partial_lower = partial.lower()
         return [path for path in all_paths if path.lower().startswith(partial_lower)]
 

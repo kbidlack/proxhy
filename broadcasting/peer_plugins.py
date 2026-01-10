@@ -28,6 +28,7 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
+from proxhy.argtypes import ServerPlayer
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.gamestate import PlayerAbilityFlags
@@ -100,43 +101,101 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         )
 
     @command("spectate", "spec")
-    async def _command_spectate(self, target: str = ""):
-        if not target:
-            if self.spec_eid:
-                return self.client.send_packet(0x43, VarInt.pack(self.eid))
+    async def _command_spectate(self, target: ServerPlayer | None = None) -> None:
+        if target is None:
+            if self.spec_eid is not None:
+                self.client.send_packet(0x43, VarInt.pack(self.eid))
+                return
             else:
                 raise CommandException("Please provide a target player!")
 
-        player_uuid = next(
-            (
-                uuid
-                for (uuid, pi) in self.proxy.gamestate.player_list.items()
-                if pi.name.lower() == target.lower()
-            ),
-            "",
-        )
-
-        if not player_uuid:
-            self.client.chat(
-                TextComponent(f"Player '{target}' not found!").color("red")
-            )
-            return
-
-        # check if it's the broadcasting player
-        if player_uuid == self.proxy.uuid:
-            eid = self.proxy.gamestate.player_entity_id
+        # check if it's the broadcasting player (compare by username since UUIDs
+        # may differ between auth and server in offline/local mode)
+        if target.name.casefold() == self.proxy.username.casefold():
+            # use transformer's player_eid, not gamestate's - the transformer
+            # spawns the owner with a different entity ID for spectators
+            eid = self.proxy._transformer.player_eid
         else:
             # another player -- check that they're spawned nearby
-            player = self.proxy.gamestate.get_player_by_uuid(player_uuid)
+            if target.uuid is None:
+                self.client.chat(
+                    TextComponent(f"Player '{target.name}' is not nearby!").color("red")
+                )
+                return
+            player = self.proxy.gamestate.get_player_by_uuid(target.uuid)
             if not player:
                 self.client.chat(
-                    TextComponent(f"Player '{target}' is not nearby!").color("red")
+                    TextComponent(f"Player '{target.name}' is not nearby!").color("red")
                 )
                 return
             eid = player.entity_id
 
         self.spec_eid = eid
         self.client.send_packet(0x43, VarInt.pack(eid))
+
+    @command("tp", "teleport")
+    async def _command_tp(
+        self,
+        target: ServerPlayer | float,
+        y: float | None = None,
+        z: float | None = None,
+    ) -> TextComponent:
+        if isinstance(target, ServerPlayer):
+            # compare by username since UUIDs may differ in offline/local mode
+            if target.name.casefold() == self.proxy.username.casefold():
+                pos = self.proxy.gamestate.position
+            else:
+                # another player, check that they're spawned nearby
+                if target.uuid is None:
+                    raise CommandException(
+                        TextComponent("Player '")
+                        .append(TextComponent(target.name).color("gold"))
+                        .append("' is not nearby!")
+                    )
+                entity = self.proxy.gamestate.get_player_by_uuid(target.uuid)
+                if not entity:
+                    raise CommandException(
+                        TextComponent("Player '")
+                        .append(TextComponent(target.name).color("gold"))
+                        .append("' is not nearby!")
+                    )
+                pos = entity.position
+
+            self.client.send_packet(
+                0x08,
+                Double.pack(pos.x),
+                Double.pack(pos.y),
+                Double.pack(pos.z),
+                Float.pack(self.proxy.gamestate.rotation.yaw),
+                Float.pack(self.proxy.gamestate.rotation.pitch),
+                Byte.pack(0),  # flags: all absolute
+            )
+            return (
+                TextComponent("Teleported to ")
+                .color("green")
+                .append(TextComponent(target.name).color("gold"))
+            )
+
+        # target is a float (x coordinate)
+        x = target
+        if y is None or z is None:
+            raise CommandException(
+                "Position teleport requires x, y, and z coordinates!"
+            )
+        self.client.send_packet(
+            0x08,
+            Double.pack(x),
+            Double.pack(y),
+            Double.pack(z),
+            Float.pack(self.proxy.gamestate.rotation.yaw),
+            Float.pack(self.proxy.gamestate.rotation.pitch),
+            Byte.pack(0),  # flags: all absolute
+        )
+        return (
+            TextComponent("Teleported to ")
+            .color("green")
+            .append(TextComponent(f"{x:.1f}, {y:.1f}, {z:.1f}").color("gold"))
+        )
 
 
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
