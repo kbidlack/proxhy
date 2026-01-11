@@ -2,12 +2,12 @@ import asyncio
 import json
 
 from core.events import listen_client, listen_server, subscribe
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import Buffer, Byte, ByteArray, Chat, Int, String, VarInt
 from proxhy.mcmodels import Game, Team, Teams
 
 
-class HypixelStatePlugin(Plugin):
+class HypixelStatePlugin(ProxhyPlugin):
     game: Game
 
     def _init_hypixelstate(self):

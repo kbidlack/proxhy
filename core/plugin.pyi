@@ -13,7 +13,7 @@ class Plugin:
     state: State
     open: bool
 
-    CONNECT_HOST: tuple[str, int, str, int]
+    CONNECT_HOST: tuple[str, int]
 
     handle_client_task: Optional[asyncio.Task]
     handle_server_task: Optional[asyncio.Task]
@@ -28,3 +28,8 @@ class Plugin:
     async def handle_server(self) -> None: ...
     async def emit(self, event: str, data: Any = None) -> list: ...
     async def close(self, reason: str = "", force: bool = False) -> None: ...
+
+class ProxhyPlugin(Plugin):
+    FAKE_CONNECT_HOST: tuple[str, int]
+
+    dev_mode: bool

@@ -1,6 +1,6 @@
 import hypixel
 
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import Item, SlotData, String, TextComponent
 from protocol.nbt import dumps, from_dict
 from proxhy.command import command
@@ -10,7 +10,7 @@ from proxhy.mcmodels import Game
 from .window import Window, get_trigger
 
 
-class MiscPlugin(Plugin):
+class MiscPlugin(ProxhyPlugin):
     hypixel_client: hypixel.Client
     rq_game: Game
 

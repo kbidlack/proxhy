@@ -50,7 +50,7 @@ def parse_args():
     parser.add_argument(
         "--dev",
         action="store_true",
-        help="Shorthand to bind proxhy to localhost:41224 to develop on a separate instance",
+        help="Enable developer mode",
     )
     parser.add_argument(
         "-fh",
@@ -75,7 +75,10 @@ if args.local:
     args.remote_port = 25565
 
 if args.dev:
+    args.dev = True
     args.port = 41224
+else:
+    args.dev = False
 
 if not args.fake_host:
     args.fake_host = args.remote_host
@@ -112,13 +115,10 @@ async def handle_client(reader: StreamReader, writer: StreamWriter):
     proxy = Proxhy(
         reader,
         writer,
-        connect_host=(
-            args.remote_host,
-            args.remote_port,
-            args.fake_host,
-            args.fake_port,
-        ),
+        connect_host=(args.remote_host, args.remote_port),
         autostart=False,
+        fake_connect_host=(args.fake_host, args.fake_port),
+        dev_mode=True,
     )
     instances.append(proxy)
 
@@ -157,6 +157,8 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     print(
         f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
+    if args.dev:
+        print("==> DEV MODE ACTIVATED <==")
 
     return server
 

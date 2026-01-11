@@ -17,7 +17,7 @@ from broadcasting.transform import (
 )
 from core.events import subscribe
 from core.net import Server, State
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from core.proxy import Proxy
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
@@ -39,7 +39,7 @@ from proxhy.errors import CommandException
 from proxhy.gamestate import GameState
 
 
-class BCClientClosePlugin(Plugin):
+class BCClientClosePlugin(ProxhyPlugin):
     @subscribe("close")
     async def _bcclientclose_event_close(self, _):
         typing.cast(pyroh.StreamWriter, self.server.writer)
@@ -88,7 +88,7 @@ COMPASS_SERVER_NODE_ID = (
 compass_client = CompassClient(server_node_id=COMPASS_SERVER_NODE_ID)
 
 
-class BroadcastPlugin(Plugin):
+class BroadcastPlugin(ProxhyPlugin):
     username: str
     uuid: str
     access_token: str
@@ -275,7 +275,12 @@ class BroadcastPlugin(Plugin):
 
     @subscribe("login_success")
     async def _broadcast_event_login_success(self, _):
-        asyncio.create_task(self.initialize_cc())
+        if self.dev_mode:
+            self.client.chat(
+                TextComponent("==> Dev Mode Activated <==").color("green").bold()
+            )  # TODO: move to somewhere more appropriate
+        else:
+            asyncio.create_task(self.initialize_cc())
 
         # Initialize transformer with current player state
         self._transformer.init_from_gamestate(self.uuid)
@@ -310,7 +315,7 @@ class BroadcastPlugin(Plugin):
         self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
     ):
         client = BroadcastPeerProxy(
-            reader, writer, ("localhost", 41222, "localhost", 41222), autostart=False
+            reader, writer, ("localhost", 41222), autostart=False
         )
 
         # TODO: fix with protocols
@@ -371,6 +376,7 @@ class BroadcastPlugin(Plugin):
                 compass.ProtocolError,
                 compass.ConnectionError,
                 asyncio.TimeoutError,
+                AttributeError,  # probably no compass client, dev mode?
             ):
                 pass  # probably not registered, or timed out
 

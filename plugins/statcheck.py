@@ -23,7 +23,7 @@ from hypixel import (
 from platformdirs import user_cache_dir
 
 from core.events import listen_server, subscribe
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -134,7 +134,7 @@ def minecraft_uuid_v2():
     return uuid.UUID(int=u)
 
 
-class StatCheckPlugin(Plugin):
+class StatCheckPlugin(ProxhyPlugin):
     teams: Teams
     game: Game
     settings: ProxhySettings

@@ -16,7 +16,7 @@ from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
 from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
     Boolean,
@@ -37,7 +37,7 @@ from proxhy.command import command
 from proxhy.errors import CommandException
 
 
-class LoginPlugin(Plugin):
+class LoginPlugin(ProxhyPlugin):
     def _init_login(self):
         self.logged_in = False
         self.logging_in = False
@@ -155,8 +155,8 @@ class LoginPlugin(Plugin):
         self.server.send_packet(
             0x00,
             VarInt(47),
-            String(self.CONNECT_HOST[2]),
-            UnsignedShort(self.CONNECT_HOST[3]),
+            String(self.FAKE_CONNECT_HOST[0]),
+            UnsignedShort(self.FAKE_CONNECT_HOST[1]),
             VarInt(State.LOGIN.value),
         )
 

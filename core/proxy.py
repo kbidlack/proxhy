@@ -27,9 +27,7 @@ class Proxy:
         self,
         reader: StreamReader,
         writer: StreamWriter,
-        connect_host: tuple[str, int, str, int] = (
-            "mc.hypixel.net",
-            25565,
+        connect_host: tuple[str, int] = (
             "mc.hypixel.net",
             25565,
         ),

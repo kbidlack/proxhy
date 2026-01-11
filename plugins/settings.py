@@ -2,7 +2,7 @@ import math
 from textwrap import fill
 from typing import Any
 
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from core.settings import SettingGroup
 from protocol.datatypes import (
     Item,
@@ -18,7 +18,7 @@ from proxhy.settings import ProxhySettings
 from .window import Window
 
 
-class SettingsPlugin(Plugin):
+class SettingsPlugin(ProxhyPlugin):
     settings: ProxhySettings
 
     def _init_settings(self):
@@ -85,7 +85,7 @@ class SettingsPlugin(Plugin):
 class SettingsMenu(Window):
     def __init__(
         self,
-        proxy: Plugin,
+        proxy: ProxhyPlugin,
         num_slots: int = 18,
         subsetting_path: str = "",
         window_title: str = "Settings",

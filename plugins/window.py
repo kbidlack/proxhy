@@ -7,7 +7,7 @@ from types import NoneType, NotImplementedType
 from typing import Awaitable, Callable, Literal, Optional, SupportsIndex, overload
 
 from core.events import listen_client
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import (
     Buffer,
     Byte,
@@ -22,7 +22,7 @@ from protocol.datatypes import (
 from proxhy.gamestate import GameState
 
 
-class WindowPlugin(Plugin):
+class WindowPlugin(ProxhyPlugin):
     gamestate: GameState
 
     def _init_window(self):
@@ -117,7 +117,7 @@ class Slots(list[SlotType]):
 class Window:
     def __init__(
         self,
-        proxy: Plugin,
+        proxy: ProxhyPlugin,
         window_title: str = "Chest",
         window_type: str = "minecraft:chest",
         num_slots: int = 27,

@@ -1,9 +1,9 @@
 from core.events import listen_client, listen_server
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import Buffer, Chat, String
 
 
-class ChatPlugin(Plugin):
+class ChatPlugin(ProxhyPlugin):
     @listen_server(0x02)
     async def packet_server_chat_message(self, buff: Buffer):
         results = await self.emit(

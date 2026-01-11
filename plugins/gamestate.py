@@ -1,11 +1,11 @@
 import asyncio
 
 from core.events import subscribe
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from proxhy.gamestate import GameState
 
 
-class GameStatePlugin(Plugin):
+class GameStatePlugin(ProxhyPlugin):
     def _init_0_gamestate(self):  # since other plugins require we put 0
         self.gamestate = GameState()
 

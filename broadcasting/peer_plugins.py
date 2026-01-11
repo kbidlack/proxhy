@@ -9,7 +9,7 @@ import pyroh
 
 from core.events import listen_client as listen
 from core.events import subscribe
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from core.proxy import Proxy, State
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
@@ -37,7 +37,7 @@ if TYPE_CHECKING:
     from proxhy.proxhy import Proxhy
 
 
-class BroadcastPeerPlugin(Plugin):
+class BroadcastPeerPlugin(ProxhyPlugin):
     proxy: Proxhy
     eid: int
 

@@ -3,7 +3,7 @@ import asyncio
 import numpy as np
 
 from core.events import subscribe
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import (
     Boolean,
     Float,
@@ -14,7 +14,7 @@ from proxhy.mcmodels import Game
 from proxhy.settings import ProxhySettings
 
 
-class SpatialPlugin(Plugin):
+class SpatialPlugin(ProxhyPlugin):
     game: Game
     settings: ProxhySettings
     gamestate: GameState

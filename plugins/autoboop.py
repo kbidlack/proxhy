@@ -5,14 +5,14 @@ from pathlib import Path
 from platformdirs import user_config_dir
 
 from core.events import subscribe
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import HypixelPlayer
 from proxhy.command import CommandGroup, CommandRegistry
 from proxhy.errors import CommandException
 
 
-class AutoboopPlugin(Plugin):
+class AutoboopPlugin(ProxhyPlugin):
     command_registry: CommandRegistry
 
     def _init_misc(self):

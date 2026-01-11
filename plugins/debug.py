@@ -1,4 +1,4 @@
-from core.plugin import Plugin
+from core.plugin import ProxhyPlugin
 from protocol.datatypes import TextComponent
 from proxhy.command import command
 from proxhy.mcmodels import Game, Teams
@@ -14,7 +14,7 @@ from proxhy.mcmodels import Game, Teams
 # )
 
 
-class DebugPlugin(Plugin):
+class DebugPlugin(ProxhyPlugin):
     game: Game
     rq_game: Game
     teams: Teams
