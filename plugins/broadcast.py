@@ -95,14 +95,13 @@ class BroadcastPlugin(Plugin):
     logged_in: bool
     transfer_to: Callable[[Proxy], Awaitable[None]]
     command_registry: CommandRegistry  # From CommandsPlugin mixin
+    gamestate: GameState
 
     def _init_broadcasting(self):
         self.clients: list[BroadcastPeerProxy] = []
         self.broadcast_invites: dict[str, compass.ConnectionRequest] = {}
         self.broadcast_requests: set[str] = set()
 
-        self.gamestate = GameState()
-        self.gamestate_task = asyncio.create_task(self._update_gamestate())
         self.serverbound_task: Optional[asyncio.Task] = None
 
         self.compass_client_initialized = False
@@ -275,16 +274,11 @@ class BroadcastPlugin(Plugin):
         self.command_registry.register(bc)
 
     @subscribe("login_success")
-    async def on_login_success(self, _):
+    async def _broadcast_event_login_success(self, _):
         asyncio.create_task(self.initialize_cc())
 
         # Initialize transformer with current player state
         self._transformer.init_from_gamestate(self.uuid)
-
-        # Start listening to serverbound packets for player movement/actions
-        # (must be after login when server connection exists)
-        if self.serverbound_task is None or self.serverbound_task.done():
-            self.serverbound_task = asyncio.create_task(self._update_serverbound())
 
     async def initialize_cc(self):
         self.broadcast_pyroh_server = await pyroh.serve(
@@ -347,12 +341,14 @@ class BroadcastPlugin(Plugin):
 
     @subscribe("close")
     async def _close_broadcast(self, _):  # _: reason (str); unused (for now?)
-        if hasattr(self, "gamestate_task") and self.gamestate_task:
-            self.gamestate_task.cancel()
-            try:
-                await self.gamestate_task
-            except asyncio.CancelledError:
-                pass
+        for tsk in {"cb_gamestate_task", "sb_gamestate_task"}:  # tsk tsk
+            # might not be neceessary to check this anymore bc of gamestate plugin
+            if hasattr(self, tsk) and (task := getattr(self, tsk)):
+                task.cancel()
+                try:
+                    await task
+                except asyncio.CancelledError:
+                    pass
 
         if self.logged_in:
             if hasattr(self, "broadcast_server_task") and self.broadcast_server_task:
@@ -493,51 +489,44 @@ class BroadcastPlugin(Plugin):
             ):
                 client.client.send_packet(packet_id, data)
 
-    async def _update_gamestate(self):
-        while self.open:
-            id, *data = await self.client.pqueue.get()
-            self.gamestate.update(id, b"".join(data))
-            self._forward_spec_packet(id, *data)
-
-    async def _update_serverbound(self):
-        """Process serverbound packets (player -> server) and update gamestate/spectators."""
-        try:
-            while self.open:
-                id, *data = await self.server.pqueue.get()
-                packet_data = b"".join(data)
-                # Always update gamestate with serverbound packets
-                self.gamestate.update_serverbound(id, packet_data)
-                # Broadcast to spectators if any are connected
-                if self.clients:
-                    self._transformer.handle_serverbound_packet(id, packet_data)
-        except asyncio.CancelledError:
-            pass  # Task was cancelled, exit gracefully
-
-    def _forward_spec_packet(self, id: int, *data: bytes):
+    @subscribe("cb_gamestate_update")
+    # needs to be async for subscribe -- TODO: allow sync subscribers?
+    async def _broadcast_event_cb_gamestate_update(
+        self, data: tuple[int, *tuple[bytes, ...]]
+    ):
+        packet_id, *packet_data = data
         """Forward a clientbound packet to spectators with appropriate transformations."""
         if not self.clients:
             return
         # Handle Join Game specially to update EID per client
         if id == 0x01:
-            buff_data = b"".join(data)
+            buff_data = b"".join(packet_data)
             # Extract player EID and update transformer
             self._transformer._player_eid = int.from_bytes(
                 buff_data[:4], "big", signed=True
             )
             self._transformer.reset()
 
-            # Start listening to serverbound packets if not already
-            if self.serverbound_task is None or self.serverbound_task.done():
-                self.serverbound_task = asyncio.create_task(self._update_serverbound())
-
             # Forward with modified EID for each client
             for client in self.clients:
                 if client.state == State.PLAY:
-                    client.client.send_packet(id, Int(client.eid) + buff_data[4:])
+                    client.client.send_packet(
+                        packet_id, Int(client.eid) + buff_data[4:]
+                    )
         else:
             # Use transformer for other packets
             self._transformer.forward_clientbound_packet(
-                id, data, self._spawn_players_after_position
+                packet_id, tuple(packet_data), self._spawn_players_after_position
+            )
+
+    @subscribe("sb_gamestate_update")
+    async def _broadcast_event_sb_gamestate_update(
+        self, data: tuple[int, *tuple[bytes, ...]]
+    ):
+        packet_id, *packet_data = data
+        if self.clients:
+            self._transformer.handle_serverbound_packet(
+                packet_id, b"".join(packet_data)
             )
 
     def _spawn_players_after_position(self):

@@ -3,6 +3,7 @@ from plugins.broadcast import BroadcastPlugin
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
 from plugins.debug import DebugPlugin
+from plugins.gamestate import GameStatePlugin
 from plugins.hypixelstate import HypixelStatePlugin
 from plugins.login import LoginPlugin
 from plugins.misc import MiscPlugin
@@ -23,6 +24,7 @@ plugins: tuple[type, ...] = (
     SettingsPlugin,
     SpatialPlugin,
     MiscPlugin,
+    GameStatePlugin,
 )
 
 

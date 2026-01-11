@@ -10,7 +10,7 @@ from proxhy.mcmodels import Game, Team, Teams
 class HypixelStatePlugin(Plugin):
     game: Game
 
-    def _init_gamestate(self):
+    def _init_hypixelstate(self):
         self.teams: Teams = Teams()
 
         self.client_type = ""

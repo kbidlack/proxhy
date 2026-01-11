@@ -10,17 +10,13 @@ from protocol.datatypes import (
     Int,
 )
 from proxhy.gamestate import GameState
-from proxhy.mcmodels import Game, Teams
+from proxhy.mcmodels import Game
 from proxhy.settings import ProxhySettings
 
 
 class SpatialPlugin(Plugin):
-    teams: Teams
     game: Game
     settings: ProxhySettings
-    received_who: asyncio.Event
-    username: str
-    received_locraw: asyncio.Event
     gamestate: GameState
 
     def _init_spatial(self):

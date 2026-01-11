@@ -23,7 +23,7 @@ class DebugPlugin(Plugin):
     async def _command_game(self):
         """Display current game info."""
         self.client.chat(TextComponent("Game:").color("green"))
-        for key in self.game.__annotations__:
+        for key in type(self.game).__annotations__:
             if value := getattr(self.game, key):
                 self.client.chat(
                     TextComponent(f"{key.capitalize()}: ")
