@@ -112,8 +112,71 @@ class BroadcastPlugin(ProxhyPlugin):
             announce_player_func=self._announce_player_entity,
         )
 
-        # Set up broadcast command group
         self._setup_broadcast_commands()
+        self._setup_compass_commands()
+
+    def _setup_compass_commands(self):
+        compass = CommandGroup("compass")
+
+        @compass.command("init")
+        async def _command_compass_init(self: BroadcastPlugin):
+            if self.compass_client_initialized:
+                raise CommandException(
+                    "The Compass client has already been initialized!"
+                )
+
+            asyncio.create_task(self.initialize_cc())
+            self.client.chat(
+                TextComponent("Initializing Compass client...").color("yellow")
+            )
+
+        @compass.command("status")
+        async def _command_compass_status(self: BroadcastPlugin):
+            self.client.chat(TextComponent("Compass Client Status:").color("gold"))
+            self.client.chat(
+                TextComponent("Initialized:")
+                .color("green")
+                .appends(
+                    TextComponent(str(self.compass_client_initialized)).color("yellow")
+                )
+            )
+            if self.compass_client_initialized:
+                self.client.chat(
+                    TextComponent("Node ID:")
+                    .color("green")
+                    .appends(
+                        TextComponent(self.compass_client.server_node_id).color(
+                            "yellow"
+                        )
+                    )
+                )
+                self.client.chat(
+                    TextComponent("Connected:")
+                    .color("green")
+                    .appends(
+                        TextComponent(self.compass_client.is_connected).color("yellow")
+                    )
+                )
+                self.client.chat(
+                    TextComponent("Registered:")
+                    .color("green")
+                    .appends(
+                        TextComponent(self.compass_client.is_registered).color("yellow")
+                    )
+                )
+                self.client.chat(
+                    TextComponent("Discoverable:")
+                    .color("green")
+                    .appends(
+                        TextComponent(self.compass_client.is_discoverable).color(
+                            "yellow"
+                        )
+                    )
+                )
+
+        # TODO: add /compass restart and /compass close (or deinit) if needed
+
+        self.command_registry.register(compass)
 
     def _setup_broadcast_commands(self):
         bc = CommandGroup("broadcast", "bc")
