@@ -66,7 +66,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.flying: Literal[0, PlayerAbilityFlags.FLYING]
 
     @subscribe("chat:client:.*")
-    async def on_any_client_chat(self, buff: Buffer):
+    async def _broadcast_peer_base_event_chat_client_any(self, buff: Buffer):
         msg = buff.unpack(String)
         if msg.startswith("/"):
             return  # command plugin
@@ -74,7 +74,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.proxy.bc_chat(self.username, msg)
 
     @subscribe("close")
-    async def _close_broadcast_peer(self, _):
+    async def _broadcast_peer_base_event_close(self, _):
         # remove this client
         if self in self.proxy.clients:
             self.proxy.clients.remove(self)  # pyright: ignore[reportArgumentType]

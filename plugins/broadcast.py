@@ -41,7 +41,7 @@ from proxhy.gamestate import GameState
 
 class BCClientClosePlugin(Plugin):
     @subscribe("close")
-    async def _close_bc_client_proxy(self, _):
+    async def _bcclientclose_event_close(self, _):
         typing.cast(pyroh.StreamWriter, self.server.writer)
         self.server.writer.write_eof()
         await self.server.writer.drain()
@@ -340,7 +340,7 @@ class BroadcastPlugin(Plugin):
                 await client.close()
 
     @subscribe("close")
-    async def _close_broadcast(self, _):  # _: reason (str); unused (for now?)
+    async def _broadcast_event_close(self, _):  # _: reason (str); unused (for now?)
         for tsk in {"cb_gamestate_task", "sb_gamestate_task"}:  # tsk tsk
             # might not be neceessary to check this anymore bc of gamestate plugin
             if hasattr(self, tsk) and (task := getattr(self, tsk)):

@@ -95,7 +95,7 @@ class HypixelStatePlugin(Plugin):
             return
 
     @subscribe(r"chat:server:\{.*\}$")
-    async def on_chat_locraw(self, buff: Buffer):
+    async def _hypixelstate_event_chat_server_locraw(self, buff: Buffer):
         message = buff.unpack(Chat)
 
         if not self.received_locraw.is_set():

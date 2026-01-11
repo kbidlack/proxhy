@@ -50,7 +50,7 @@ class CommandsPlugin(Plugin):
         self.command_registry.register(group)
 
     @subscribe("chat:client:/.*")
-    async def on_client_chat_command(self, buff: Buffer):
+    async def _commands_event_chat_client_command(self, buff: Buffer):
         message = buff.unpack(String)
 
         segments = message.split()

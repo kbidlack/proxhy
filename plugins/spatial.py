@@ -23,11 +23,11 @@ class SpatialPlugin(Plugin):
         self.check_height_task = None
 
     @subscribe("login_success")
-    async def _spatial_on_login_success(self, _):
+    async def _spatial_event_login_success(self, _):
         self.check_height_task = asyncio.create_task(self.check_height_loop())
 
     @subscribe("close")
-    async def _close_spatial(self, _):
+    async def _spatial_event_close(self, _):
         if self.check_height_task:
             self.check_height_task.cancel()
             try:

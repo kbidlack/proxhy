@@ -221,7 +221,7 @@ class LoginPlugin(Plugin):
                 break
 
     @subscribe("close")
-    async def _close_login(self, _):
+    async def _login_event_close(self, _):
         if self.keep_alive_task and not self.keep_alive_task.done():
             self.keep_alive_task.cancel()
             try:

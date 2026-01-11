@@ -373,7 +373,7 @@ class StatCheckPlugin(Plugin):
         self.adjacent_teams_highlighted = False
 
     @subscribe("setting:bedwars.tablist.show_stats")
-    async def bedwars_tablist_show_stats_callback(self, data: list):
+    async def _statcheck_event_setting_bedwars_tablist_show_stats(self, data: list):
         # data = [old_state, new_state]
         if data == ["OFF", "ON"]:
             self.received_who.clear()
@@ -385,7 +385,9 @@ class StatCheckPlugin(Plugin):
         self._update_dead_players_in_tablist()
 
     @subscribe("setting:bedwars.tablist.is_mode_specific")
-    async def bedwars_tablist_is_mode_specific_callback(self, data: list) -> None:
+    async def _statcheck_event_setting_bedwars_tablist_is_mode_specific(
+        self, data: list
+    ) -> None:
         """Callback when is_mode_specific setting changes - rebuild display names."""
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
             # Recalculate display names with new mode-specific setting
@@ -417,7 +419,9 @@ class StatCheckPlugin(Plugin):
         self._update_dead_players_in_tablist()
 
     @subscribe("setting:bedwars.tablist.show_rankname")
-    async def bedwars_tablist_show_rankname_callback(self, data: list) -> None:
+    async def _statcheck_event_setting_bedwars_tablist_show_rankname(
+        self, data: list
+    ) -> None:
         """Callback when show_rankname setting changes - rebuild display names."""
         for player, player_data in self.players_with_stats.items():
             fplayer = player_data["fplayer"]
@@ -433,7 +437,7 @@ class StatCheckPlugin(Plugin):
         self._update_dead_players_in_tablist()
 
     @subscribe("setting:bedwars.tablist.show_eliminated_players")
-    async def bedwars_tablist_show_eliminated_players_callback(
+    async def _statcheck_event_setting_bedwars_tablist_show_eliminated_players(
         self, data: list
     ) -> None:
         # remove self from final_dead
@@ -462,7 +466,7 @@ class StatCheckPlugin(Plugin):
             self.client.send_packet(0x38, packet)
 
     @subscribe("update_teams")
-    async def on_update_teams(self, _):
+    async def _statcheck_event_update_teams(self, _):
         self.keep_player_stats_updated()
 
     @listen_server(0x38, blocking=True)
@@ -506,12 +510,12 @@ class StatCheckPlugin(Plugin):
         self.client.send_packet(0x38, buff.getvalue())
 
     @subscribe("login_success")
-    async def log_stats_on_login(self, _):
+    async def _statcheck_event_login_success(self, _):
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
         asyncio.create_task(self.log_bedwars_stats("login"))
 
     @subscribe("close")
-    async def _close_statcheck(self, _):
+    async def _statcheck_event_close(self, _):
         try:
             if self.hypixel_client:
                 try:
@@ -1524,7 +1528,7 @@ class StatCheckPlugin(Plugin):
         self._send_bulk_tablist_update(living_players)
 
     @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
-    async def on_queue(self, buff: Buffer):
+    async def _statcheck_event_chat_server_player_joined(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
         if self.settings.bedwars.api_key_reminder.get() == "ON":
             message = buff.unpack(Chat)
@@ -1554,7 +1558,7 @@ class StatCheckPlugin(Plugin):
                     )
 
     @subscribe("chat:server:ONLINE: .*")
-    async def on_chat_who(self, buff: Buffer):
+    async def _statcheck_event_chat_server_who(self, buff: Buffer):
         message = buff.unpack(Chat)
 
         if not self.received_who.is_set():
@@ -1575,7 +1579,7 @@ class StatCheckPlugin(Plugin):
     @subscribe(
         "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
-    async def on_chat_user_rejoin(self, buff: Buffer):
+    async def _statcheck_event_chat_server_bedwars_rejoin(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
@@ -1600,7 +1604,7 @@ class StatCheckPlugin(Plugin):
         return self.game.gametype == "bedwars" and self.game.mode
 
     @subscribe(f"chat:server:({'|'.join(game_start_msgs)})")
-    async def on_chat_game_start(self, buff: Buffer):
+    async def _statcheck_event_chat_server_game_start(self, buff: Buffer):
         if self.game.gametype != "bedwars" or self.stats_highlighted:
             return self.client.send_packet(0x02, buff.getvalue())
 
@@ -1724,7 +1728,7 @@ class StatCheckPlugin(Plugin):
         )
 
     @subscribe(r"chat:server:(.+?) reconnected\.$")
-    async def on_player_recon(self, buff: Buffer):
+    async def _statcheck_event_chat_server_player_recon(self, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
 
         await self.received_locraw.wait()  # so that we can run the next check
@@ -1745,7 +1749,7 @@ class StatCheckPlugin(Plugin):
         asyncio.create_task(self.respawn_timer(player, reconnect=True))
 
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
-    async def on_chat_kill_message(self, buff: Buffer):
+    async def _statcheck_event_chat_server_kill_msg(self, buff: Buffer):
         if not self.in_bedwars_game():
             return self.client.send_packet(0x02, buff.getvalue())
 
