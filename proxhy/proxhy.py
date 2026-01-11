@@ -1,4 +1,5 @@
 from core.proxy import Proxy
+from plugins.autoboop import AutoboopPlugin
 from plugins.broadcast import BroadcastPlugin
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
@@ -13,18 +14,19 @@ from plugins.statcheck import StatCheckPlugin
 from plugins.window import WindowPlugin
 
 plugins: tuple[type, ...] = (
-    CommandsPlugin,  # Must be first - other plugins depend on command_registry
+    AutoboopPlugin,
     BroadcastPlugin,
     ChatPlugin,
+    CommandsPlugin,
     DebugPlugin,
+    GameStatePlugin,
     HypixelStatePlugin,
     LoginPlugin,
-    StatCheckPlugin,
-    WindowPlugin,
+    MiscPlugin,
     SettingsPlugin,
     SpatialPlugin,
-    MiscPlugin,
-    GameStatePlugin,
+    StatCheckPlugin,
+    WindowPlugin,
 )
 
 

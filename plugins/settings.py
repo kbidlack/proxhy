@@ -7,21 +7,18 @@ from core.settings import SettingGroup
 from protocol.datatypes import (
     Item,
     SlotData,
-    String,
     TextComponent,
 )
 from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import SettingPath, SettingValue
 from proxhy.command import command
 from proxhy.errors import CommandException
-from proxhy.mcmodels import Game
 from proxhy.settings import ProxhySettings
 
 from .window import Window
 
 
 class SettingsPlugin(Plugin):
-    rq_game: Game
     settings: ProxhySettings
 
     def _init_settings(self):
@@ -83,17 +80,6 @@ class SettingsPlugin(Plugin):
         )
 
         await self.emit(f"setting:{setting.path}", [old_state, new_state])
-
-    @command("rq")
-    async def _command_requeue(self):
-        """Requeue for the last played game."""
-        if not self.rq_game.mode:
-            raise CommandException("No game to requeue!")
-        self.server.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
-
-    @command("garlicbread")  # Mmm, garlic bread.
-    async def _command_garlicbread(self):  # Mmm, garlic bread.
-        return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
 
 class SettingsMenu(Window):
