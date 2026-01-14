@@ -9,7 +9,7 @@ import pyroh
 from compass import CompassClient, ConnectionRequest
 
 import auth
-from broadcasting.peer_plugins import BroadcastPeerProxy
+from broadcasting.proxy import BroadcastPeerProxy
 from broadcasting.transform import (
     PlayerTransformer,
     build_player_list_add_packet,
@@ -17,6 +17,7 @@ from broadcasting.transform import (
 )
 from core.events import subscribe
 from core.net import Server, State
+from core.plugin import Plugin
 from core.proxy import Proxy
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
@@ -49,7 +50,7 @@ class BroadcastPluginState:
     broadcast_server_task: asyncio.Task
 
 
-class BCClientClosePlugin(ProxhyPlugin):
+class BCClientClosePlugin(Plugin):
     @subscribe("close")
     async def _bcclientclose_event_close(self, _):
         typing.cast(pyroh.StreamWriter, self.server.writer)

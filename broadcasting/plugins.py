@@ -1,7 +1,7 @@
 import asyncio
 import json
 import uuid
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import Literal, Optional
 from unittest.mock import Mock
 
 import hypixel
@@ -9,9 +9,7 @@ import pyroh
 
 from core.events import listen_client as listen
 from core.events import subscribe
-from core.plugin import Plugin
-from core.proxy import Proxy, State
-from plugins.chat import ChatPlugin
+from core.proxy import State
 from plugins.commands import CommandsPlugin
 from protocol.datatypes import (
     UUID,
@@ -33,13 +31,7 @@ from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.gamestate import PlayerAbilityFlags
 
-if TYPE_CHECKING:
-    from proxhy.proxhy import Proxhy
-
-
-class BroadcastPeerPlugin(Plugin):
-    proxy: Proxhy
-    eid: int
+from .plugin import BroadcastPeerPlugin
 
 
 class BroadcastPeerCommandsPlugin(CommandsPlugin):
@@ -443,17 +435,3 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
                 VarInt.pack(eid) for eid in entity_ids
             )
             self.proxy.client.send_packet(0x13, data)
-
-
-# "proxy" for any connected broadcast clients
-# we are just reusing proxy code and then omitting the server
-# to be able to take advantage of all the prebuilt plugins
-# and packet handling stuff from proxy, just for a client connection
-broadcast_peer_plugins: tuple[type, ...] = (
-    ChatPlugin,
-    BroadcastPeerLoginPlugin,
-    BroadcastPeerBasePlugin,
-    BroadcastPeerCommandsPlugin,
-)
-
-BroadcastPeerProxy = type("BroadcastPeerProxy", (*broadcast_peer_plugins, Proxy), {})
