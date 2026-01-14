@@ -420,7 +420,7 @@ class TextComponent:
             "run_command",
             "suggest_command",
             "change_page",
-            "copy_to_clipboard",
+            # "copy_to_clipboard", # does not seem to work in 1.8
         ],
         value: str,
     ) -> TextComponent:

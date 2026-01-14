@@ -292,7 +292,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
-        self.proxy.broadcast_requests.remove(self.username)
+        if self.username in self.proxy.broadcast_requests:
+            # might not be if joining by ID
+            self.proxy.broadcast_requests.remove(self.username)
 
         # send login success packet
         # TODO: support server support. this + login encryption will come back then

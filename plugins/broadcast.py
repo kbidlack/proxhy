@@ -6,7 +6,7 @@ from typing import Awaitable, Callable, Optional
 
 import compass
 import pyroh
-from compass import CompassClient, ConnectionRequest, PeerInfo
+from compass import CompassClient, ConnectionRequest
 
 import auth
 from broadcasting.peer_plugins import BroadcastPeerProxy
@@ -51,11 +51,7 @@ class BCClientClosePlugin(ProxhyPlugin):
     ):
         self.server = Server(reader, writer)
 
-    async def join(
-        self,
-        username: str,
-        peer_info: PeerInfo,
-    ):
+    async def join(self, username: str, node_id: str):
         self.state = State.LOGIN
 
         self.handle_server_task = asyncio.create_task(self.handle_server())
@@ -63,7 +59,7 @@ class BCClientClosePlugin(ProxhyPlugin):
         self.server.send_packet(
             0x00,
             VarInt.pack(47),
-            String.pack(peer_info.node_id),
+            String.pack(node_id),
             Short.pack(25565),
             VarInt.pack(State.LOGIN.value),
         )
@@ -175,6 +171,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 )
 
         # TODO: add /compass restart and /compass close (or deinit) if needed
+        # and /compass discoverable (toggle)
 
         self.command_registry.register(compass)
 
@@ -201,6 +198,10 @@ class BroadcastPlugin(ProxhyPlugin):
                 msg.append(TextComponent(client.username).color("aqua"))
             return msg
 
+        @bc.command("joinid")
+        async def _command_broadcast_joinid(self: BroadcastPlugin, node_id: str):
+            await self._join_broadcast_by_node_id(node_id)
+
         @bc.command("join")
         async def _command_broadcast_join(self, request_id: str):
             if not self.compass_client_initialized:
@@ -226,29 +227,7 @@ class BroadcastPlugin(ProxhyPlugin):
             del self.broadcast_invites[request_id]
             peer_info = await request.accept()
 
-            reader, writer = await pyroh.connect(
-                pyroh.node_addr(peer_info.node_id),
-                alpn="proxhy.broadcast/1",
-                node=self.broadcast_pyroh_server.node,
-            )
-
-            BCClientProxy = type(
-                "BCClientProxy",
-                (*bc_client_plugin_list, Proxy),
-                {"username": self.username, "uuid": self.uuid},
-            )
-
-            new_proxy = BCClientProxy(
-                self.client.reader,
-                self.client.writer,
-                autostart=False,
-            )
-
-            await new_proxy.create_server(reader, writer)
-            await self.transfer_to(new_proxy)
-
-            self.server.writer.write_eof()
-            await new_proxy.join(self.username, peer_info)
+            await self._join_broadcast_by_node_id(peer_info.node_id)
 
         @bc.command("invite")
         async def _command_broadcast_invite(self, player: MojangPlayer):
@@ -334,7 +313,47 @@ class BroadcastPlugin(ProxhyPlugin):
             finally:
                 self.broadcast_requests.discard(name)
 
+        @bc.command("server")
+        async def _command_broadcast_server(self: BroadcastPlugin):
+            # TODO: add more info?
+            self.client.chat(
+                TextComponent("Server Node ID:")
+                .color("green")
+                .appends(
+                    TextComponent(self.broadcast_pyroh_server.node_id)
+                    .color("yellow")
+                    .hover_text(TextComponent("Get Node ID to copy").color("yellow"))
+                    .click_event("suggest_command", self.broadcast_pyroh_server.node_id)
+                )
+            )
+
         self.command_registry.register(bc)
+
+    async def _join_broadcast_by_node_id(self, node_id: str):
+        # TODO: handle errors here properly
+        reader, writer = await pyroh.connect(
+            pyroh.node_addr(node_id),
+            alpn="proxhy.broadcast/1",
+            node=self.broadcast_pyroh_server.node,
+        )
+
+        BCClientProxy = type(
+            "BCClientProxy",
+            (*bc_client_plugin_list, Proxy),
+            {"username": self.username, "uuid": self.uuid},
+        )
+
+        new_proxy = BCClientProxy(
+            self.client.reader,
+            self.client.writer,
+            autostart=False,
+        )
+
+        await new_proxy.create_server(reader, writer)
+        await self.transfer_to(new_proxy)
+
+        self.server.writer.write_eof()
+        await new_proxy.join(self.username, node_id)
 
     @subscribe("login_success")
     async def _broadcast_event_login_success(self, _):
@@ -345,10 +364,10 @@ class BroadcastPlugin(ProxhyPlugin):
         else:
             asyncio.create_task(self.initialize_cc())
 
-        # Initialize transformer with current player state
         self._transformer.init_from_gamestate(self.uuid)
+        asyncio.create_task(self.initialize_broadcast_pyroh_server())
 
-    async def initialize_cc(self):
+    async def initialize_broadcast_pyroh_server(self):
         self.broadcast_pyroh_server = await pyroh.serve(
             self.on_broadcast_peer, alpn=b"proxhy.broadcast/1"
         )
@@ -356,6 +375,12 @@ class BroadcastPlugin(ProxhyPlugin):
             self.broadcast_pyroh_server.serve_forever()
         )
 
+        if self.dev_mode:
+            self.client.chat(
+                TextComponent("✓ Broadcast server initialized!").color("green")
+            )
+
+    async def initialize_cc(self):
         self.compass_client = CompassClient(
             COMPASS_SERVER_NODE_ID, node=self.broadcast_pyroh_server.node
         )
