@@ -2,6 +2,7 @@ import asyncio
 import re
 import zlib  # pyright: ignore[reportShadowedImports]
 from collections import defaultdict
+from copy import deepcopy
 from typing import Any, Callable, Coroutine, Literal, Optional
 
 from protocol.datatypes import Buffer, VarInt
@@ -201,12 +202,7 @@ class Proxy:
         for e in self._event_listeners:
             if re.fullmatch(e, event):
                 for handler in self._event_listeners[e]:
-                    if isinstance(data, Buffer):
-                        # emit reuses data across handlers
-                        # but we don't want buffers to be messed up
-                        # by one handler, and then sent to another
-                        data = data.clone()
-                    results.append(await handler(self, data))
+                    results.append(await handler(self, deepcopy(data)))
 
         return results
 
