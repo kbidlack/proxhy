@@ -5,34 +5,6 @@ from typing import Literal, Optional
 
 
 @dataclass
-class Team:
-    name: str
-    display_name: str
-    prefix: str
-    suffix: str
-    friendly_fire: int
-    name_tag_visibility: str
-    color: int
-    players: set[str]
-
-    def __eq__(self, other: object):
-        if not isinstance(other, Team):
-            raise TypeError("Comparisons must be between two Team objects")
-
-        return self.name == other.name
-
-
-class Teams(list[Team]):
-    def get(self, key) -> Team:
-        return next(team for team in self if team.name == key)
-
-    def delete(self, key):
-        team = self.get(key)
-        if team:
-            self.remove(team)
-
-
-@dataclass
 class BedwarsMap:
     name: str
     rush_direction: Optional[Literal["side", "alt"]] = None

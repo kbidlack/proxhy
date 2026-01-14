@@ -1,7 +1,8 @@
 from core.plugin import ProxhyPlugin
 from protocol.datatypes import TextComponent
 from proxhy.command import command
-from proxhy.mcmodels import Game, Teams
+from proxhy.gamestate import GameState
+from proxhy.mcmodels import Game
 
 # from core.events import listen_server, subscribe
 # from protocol.datatypes import (
@@ -15,9 +16,9 @@ from proxhy.mcmodels import Game, Teams
 
 
 class DebugPlugin(ProxhyPlugin):
+    gamestate: GameState
     game: Game
     rq_game: Game
-    teams: Teams
 
     @command("game")
     async def _command_game(self):
@@ -46,8 +47,8 @@ class DebugPlugin(ProxhyPlugin):
     @command("teams")
     async def _command_teams(self):
         print("\n")
-        for team in self.teams:
-            print(f"Team: {team}")
+        for team_name, team in self.gamestate.teams.items():
+            print(f"{team_name}: {team}")
         print("\n")
 
     # @subscribe("chat:server:.*")

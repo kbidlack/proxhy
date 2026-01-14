@@ -38,7 +38,8 @@ from proxhy.argtypes import HypixelPlayer
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from proxhy.mcmodels import Game, Nick, Team, Teams
+from proxhy.gamestate import GameState, Team
+from proxhy.mcmodels import Game, Nick
 from proxhy.settings import ProxhySettings
 
 with (
@@ -127,7 +128,7 @@ class TeamColor(TypedDict):
 
 
 def minecraft_uuid_v2():
-    u: int = uuid.uuid4().int  # pyright:ignore[reportAssignmentType]
+    u = uuid.uuid4().int
     # Set version bits (4 bits starting at bit 76) to 2
     u &= ~(0xF << 76)  # clear version bits
     u |= 0x2 << 76  # set version=2
@@ -135,8 +136,8 @@ def minecraft_uuid_v2():
 
 
 class StatCheckPlugin(ProxhyPlugin):
-    teams: Teams
     game: Game
+    gamestate: GameState
     settings: ProxhySettings
     received_who: asyncio.Event
     username: str
@@ -175,7 +176,9 @@ class StatCheckPlugin(ProxhyPlugin):
     def all_players(self) -> set[str]:
         if self.game.gametype == "bedwars" and self.game.started:
             real_player_teams: list[Team] = [
-                team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
+                team
+                for team in self.gamestate.teams.values()
+                if re.match("§.§l[A-Z] §r§.", team.prefix)
             ]
 
             real_players = set()
@@ -184,7 +187,7 @@ class StatCheckPlugin(ProxhyPlugin):
                 | set(self.dead.keys())
                 | set(self.final_dead.keys())
             ):
-                if any(player in team.players for team in real_player_teams):
+                if any(player in team.members for team in real_player_teams):
                     real_players.add(player)
 
             return real_players
@@ -465,9 +468,12 @@ class StatCheckPlugin(ProxhyPlugin):
 
             self.client.send_packet(0x38, packet)
 
-    @subscribe("update_teams")
-    async def _statcheck_event_update_teams(self, _):
-        self.keep_player_stats_updated()
+    @subscribe("cb_gamestate_update")
+    async def _statcheck_event_cb_gamestate_update_teams(
+        self, data: tuple[int, *tuple[bytes, ...]]
+    ):
+        if data[0] == 0x3E:
+            self.keep_player_stats_updated()
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self, buff: Buffer):
@@ -993,7 +999,12 @@ class StatCheckPlugin(ProxhyPlugin):
         except (ValueError, AttributeError):
             # Fall back to sidebar detection
             sidebar_own_team = next(
-                (team for team in self.teams if "YOU" in team.suffix), None
+                (
+                    team
+                    for team in self.gamestate.teams.values()
+                    if "YOU" in team.suffix
+                ),
+                None,
             )
             if sidebar_own_team is None:
                 raise ValueError(
@@ -1155,8 +1166,8 @@ class StatCheckPlugin(ProxhyPlugin):
                         fplayer = FormattedPlayer(player)
                     else:  # if is a nicked player
                         # get team color for nicked player
-                        for team in self.teams:
-                            if player.name in team.players:
+                        for team in self.gamestate.teams.values():
+                            if player.name in team.members:
                                 self.nick_team_colors.update({player.name: team.prefix})
                                 break
                         fplayer = player
@@ -1338,11 +1349,11 @@ class StatCheckPlugin(ProxhyPlugin):
         """
         target = color.lower()
         players: set[str] = set()
-        for team in self.teams:
+        for team in self.gamestate.teams.values():
             # team names like 'Green8', 'Green9' -> strip digits to get color
             base_color = re.sub(r"\d", "", team.name).lower()
             if base_color == target:
-                players.update(team.players)
+                players.update(team.members)
         return list(players)
 
     async def log_bedwars_stats(self, event: str) -> None:
@@ -1503,10 +1514,12 @@ class StatCheckPlugin(ProxhyPlugin):
         """
 
         real_player_teams: list[Team] = [
-            team for team in self.teams if re.match("§.§l[A-Z] §r§.", team.prefix)
+            team
+            for team in self.gamestate.teams.values()
+            if re.match("§.§l[A-Z] §r§.", team.prefix)
         ]
         return next(
-            (team for team in real_player_teams if user in team.players),
+            (team for team in real_player_teams if user in team.members),
             None,
         )
 
