@@ -4,6 +4,7 @@ import json
 import os
 import re
 import uuid
+from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
@@ -38,7 +39,6 @@ from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
 from proxhy.gamestate import Team
-from proxhy.mcmodels import Nick
 from proxhy.plugin import ProxhyPlugin
 
 with (
@@ -124,6 +124,12 @@ class TeamColor(TypedDict):
     letter: str
     code: str
     name: str
+
+
+@dataclass
+class Nick:
+    name: str
+    uuid: str = field(init=False)
 
 
 def minecraft_uuid_v2():
