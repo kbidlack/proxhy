@@ -1,6 +1,5 @@
 import asyncio
 import random
-import typing
 import uuid as uuid_mod
 from typing import Optional
 
@@ -16,20 +15,14 @@ from broadcasting.transform import (
     build_spawn_player_packet,
 )
 from core.events import subscribe
-from core.net import Server, State
-from core.plugin import Plugin
+from core.net import State
 from core.proxy import Proxy
-from plugins.chat import ChatPlugin
-from plugins.commands import CommandsPlugin
-from plugins.settings import SettingsPlugin
-from plugins.window import WindowPlugin
 from protocol.datatypes import (
     Angle,
     Chat,
     Int,
     Short,
     Slot,
-    String,
     TextComponent,
     VarInt,
 )
@@ -37,6 +30,8 @@ from proxhy.argtypes import MojangPlayer
 from proxhy.command import CommandGroup
 from proxhy.errors import CommandException
 from proxhy.plugin import ProxhyPlugin
+
+from .broadcastee.proxy import broadcastee_plugin_list
 
 
 class BroadcastPluginState:
@@ -49,45 +44,6 @@ class BroadcastPluginState:
     broadcast_pyroh_server: pyroh.Server
     broadcast_server_task: asyncio.Task
 
-
-class BCClientClosePlugin(Plugin):
-    @subscribe("close")
-    async def _bcclientclose_event_close(self, _):
-        typing.cast(pyroh.StreamWriter, self.server.writer)
-        self.server.writer.write_eof()
-        await self.server.writer.drain()
-
-    async def create_server(
-        self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
-    ):
-        self.server = Server(reader, writer)
-
-    async def join(self, username: str, node_id: str):
-        self.state = State.LOGIN
-
-        self.handle_server_task = asyncio.create_task(self.handle_server())
-
-        self.server.send_packet(
-            0x00,
-            VarInt.pack(47),
-            String.pack(node_id),
-            Short.pack(25565),
-            VarInt.pack(State.LOGIN.value),
-        )
-        self.server.send_packet(0x00, String.pack(username))
-
-        await self.server.drain()
-
-        self.state = State.PLAY
-
-
-bc_client_plugin_list: tuple[type, ...] = (
-    BCClientClosePlugin,
-    ChatPlugin,
-    CommandsPlugin,
-    SettingsPlugin,
-    WindowPlugin,
-)
 
 COMPASS_SERVER_NODE_ID = (
     "76eeec77bd4aa6a45a449cce220ff58f2edbde29ff4c80a839d4021bbb21b134"
@@ -342,7 +298,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         BCClientProxy = type(
             "BCClientProxy",
-            (*bc_client_plugin_list, Proxy),
+            (*broadcastee_plugin_list, Proxy),
             {"username": self.username, "uuid": self.uuid},
         )
 

@@ -1,6 +1,6 @@
 from core.plugin import Plugin
 from plugins.autoboop import AutoboopPluginState
-from plugins.broadcast import BroadcastPluginState
+from plugins.broadcaster import BroadcastPluginState
 from plugins.chat import ChatPluginState
 from plugins.commands import CommandsPluginState
 from plugins.debug import DebugPluginState

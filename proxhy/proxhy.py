@@ -1,7 +1,7 @@
 from core.net import StreamReader, StreamWriter
 from core.proxy import Proxy
 from plugins.autoboop import AutoboopPlugin
-from plugins.broadcast import BroadcastPlugin
+from plugins.broadcaster import BroadcastPlugin
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
 from plugins.debug import DebugPlugin
