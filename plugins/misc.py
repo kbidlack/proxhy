@@ -1,19 +1,17 @@
-import hypixel
-
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import Item, SlotData, String, TextComponent
 from protocol.nbt import dumps, from_dict
 from proxhy.command import command
 from proxhy.errors import CommandException
-from proxhy.mcmodels import Game
+from proxhy.plugin import ProxhyPlugin
 
 from .window import Window, get_trigger
 
 
-class MiscPlugin(ProxhyPlugin):
-    hypixel_client: hypixel.Client
-    rq_game: Game
+class MiscPluginState:
+    pass
 
+
+class MiscPlugin(ProxhyPlugin):
     @command("rq")
     async def _command_requeue(self):
         """Requeue for the last played game."""

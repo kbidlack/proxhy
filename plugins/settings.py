@@ -2,7 +2,6 @@ import math
 from textwrap import fill
 from typing import Any
 
-from core.plugin import ProxhyPlugin
 from core.settings import SettingGroup
 from protocol.datatypes import (
     Item,
@@ -13,14 +12,17 @@ from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import SettingPath, SettingValue
 from proxhy.command import command
 from proxhy.errors import CommandException
+from proxhy.plugin import ProxhyPlugin
 from proxhy.settings import ProxhySettings
 
 from .window import Window
 
 
-class SettingsPlugin(ProxhyPlugin):
+class SettingsPluginState:
     settings: ProxhySettings
 
+
+class SettingsPlugin(ProxhyPlugin):
     def _init_settings(self):
         self.settings = ProxhySettings()
 

@@ -4,7 +4,7 @@ from typing import Any, Literal, Optional
 from protocol.datatypes import Buffer
 
 from .net import Client, Server, State
-from .proxy import ListenerList
+from .proxy import ListenerList, Proxy
 
 class Plugin:
     server: Server
@@ -28,8 +28,4 @@ class Plugin:
     async def handle_server(self) -> None: ...
     async def emit(self, event: str, data: Any = None) -> list: ...
     async def close(self, reason: str = "", force: bool = False) -> None: ...
-
-class ProxhyPlugin(Plugin):
-    FAKE_CONNECT_HOST: tuple[str, int]
-
-    dev_mode: bool
+    async def transfer_to(self, new_proxy: Proxy) -> None: ...

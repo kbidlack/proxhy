@@ -1,8 +1,14 @@
 import asyncio
 
 from core.events import subscribe
-from core.plugin import ProxhyPlugin
 from proxhy.gamestate import GameState
+from proxhy.plugin import ProxhyPlugin
+
+
+class GameStatePluginState:
+    gamestate: GameState
+    cb_gamestate_task: asyncio.Task
+    sb_gamestate_task: asyncio.Task
 
 
 class GameStatePlugin(ProxhyPlugin):

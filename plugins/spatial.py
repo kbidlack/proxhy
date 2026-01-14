@@ -1,24 +1,22 @@
 import asyncio
+from typing import Optional
 
 import numpy as np
 
 from core.events import subscribe
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import (
     Boolean,
     Float,
     Int,
 )
-from proxhy.gamestate import GameState
-from proxhy.mcmodels import Game
-from proxhy.settings import ProxhySettings
+from proxhy.plugin import ProxhyPlugin
+
+
+class SpatialPluginState:
+    check_height_task: Optional[asyncio.Task]
 
 
 class SpatialPlugin(ProxhyPlugin):
-    game: Game
-    settings: ProxhySettings
-    gamestate: GameState
-
     def _init_spatial(self):
         self.check_height_task = None
 

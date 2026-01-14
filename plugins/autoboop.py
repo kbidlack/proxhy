@@ -5,22 +5,26 @@ from pathlib import Path
 from platformdirs import user_config_dir
 
 from core.events import subscribe
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import HypixelPlayer
-from proxhy.command import CommandGroup, CommandRegistry
+from proxhy.command import CommandGroup
 from proxhy.errors import CommandException
+from proxhy.plugin import ProxhyPlugin
+
+
+class AutoboopPluginState:
+    AB_DATA_PATH: Path
+    autoboop_group: CommandGroup
 
 
 class AutoboopPlugin(ProxhyPlugin):
-    command_registry: CommandRegistry
-
     def _init_misc(self):
         self.AB_DATA_PATH = Path(user_config_dir("proxhy")) / "autoboop.db"
-
-        # Set up autoboop command group
         self.autoboop_group = CommandGroup("autoboop", "ab")
 
+        self._setup_autoboop_commands()
+
+    def _setup_autoboop_commands(self):
         @self.autoboop_group.command("list", "ls")
         async def _autoboop_list(self):
             with shelve.open(self.AB_DATA_PATH) as db:

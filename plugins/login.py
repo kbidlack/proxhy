@@ -16,7 +16,6 @@ from auth.errors import AuthException, InvalidCredentials, NotPremium
 from core.cache import Cache
 from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
-from core.plugin import ProxhyPlugin
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
     Boolean,
@@ -35,6 +34,20 @@ from protocol.datatypes import (
 )
 from proxhy.command import command
 from proxhy.errors import CommandException
+from proxhy.plugin import ProxhyPlugin
+
+
+class LoginPluginState:
+    logged_in: bool
+    logging_in: bool
+    regenerating_credentials: bool
+    server_list_ping: dict
+    access_token: str
+    username: str
+    uuid: str
+    secret: bytes
+    secret_task: Optional[asyncio.Task]
+    keep_alive_task: Optional[asyncio.Task]
 
 
 class LoginPlugin(ProxhyPlugin):

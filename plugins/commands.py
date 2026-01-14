@@ -3,10 +3,15 @@ import re
 from typing import Union
 
 from core.events import listen_client, listen_server, subscribe
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import Buffer, String, TextComponent, VarInt
 from proxhy.command import Command, CommandGroup, CommandRegistry
 from proxhy.errors import CommandException
+from proxhy.plugin import ProxhyPlugin
+
+
+class CommandsPluginState:
+    command_registry: CommandRegistry
+    suggestions: asyncio.Queue[list[str]]
 
 
 class CommandsPlugin(ProxhyPlugin):

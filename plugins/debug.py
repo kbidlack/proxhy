@@ -1,8 +1,6 @@
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import TextComponent
 from proxhy.command import command
-from proxhy.gamestate import GameState
-from proxhy.mcmodels import Game
+from proxhy.plugin import ProxhyPlugin
 
 # from core.events import listen_server, subscribe
 # from protocol.datatypes import (
@@ -15,11 +13,11 @@ from proxhy.mcmodels import Game
 # )
 
 
-class DebugPlugin(ProxhyPlugin):
-    gamestate: GameState
-    game: Game
-    rq_game: Game
+class DebugPluginState:
+    pass
 
+
+class DebugPlugin(ProxhyPlugin):
     @command("game")
     async def _command_game(self):
         """Display current game info."""

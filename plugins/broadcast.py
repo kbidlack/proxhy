@@ -2,7 +2,7 @@ import asyncio
 import random
 import typing
 import uuid as uuid_mod
-from typing import Awaitable, Callable, Optional
+from typing import Optional
 
 import compass
 import pyroh
@@ -17,7 +17,6 @@ from broadcasting.transform import (
 )
 from core.events import subscribe
 from core.net import Server, State
-from core.plugin import ProxhyPlugin
 from core.proxy import Proxy
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
@@ -34,9 +33,20 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import MojangPlayer
-from proxhy.command import CommandGroup, CommandRegistry
+from proxhy.command import CommandGroup
 from proxhy.errors import CommandException
-from proxhy.gamestate import GameState
+from proxhy.plugin import ProxhyPlugin
+
+
+class BroadcastPluginState:
+    clients: list[BroadcastPeerProxy]
+    broadcast_invites: dict[str, compass.ConnectionRequest]
+    broadcast_requests: set[str]
+    serverbound_task: Optional[asyncio.Task]
+    compass_client_initialized: bool
+    compass_client: CompassClient
+    broadcast_pyroh_server: pyroh.Server
+    broadcast_server_task: asyncio.Task
 
 
 class BCClientClosePlugin(ProxhyPlugin):
@@ -85,14 +95,6 @@ compass_client = CompassClient(server_node_id=COMPASS_SERVER_NODE_ID)
 
 
 class BroadcastPlugin(ProxhyPlugin):
-    username: str
-    uuid: str
-    access_token: str
-    logged_in: bool
-    transfer_to: Callable[[Proxy], Awaitable[None]]
-    command_registry: CommandRegistry  # From CommandsPlugin mixin
-    gamestate: GameState
-
     def _init_broadcasting(self):
         self.clients: list[BroadcastPeerProxy] = []
         self.broadcast_invites: dict[str, compass.ConnectionRequest] = {}

@@ -23,7 +23,6 @@ from hypixel import (
 from platformdirs import user_cache_dir
 
 from core.events import listen_server, subscribe
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -38,9 +37,9 @@ from proxhy.argtypes import HypixelPlayer
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
-from proxhy.gamestate import GameState, Team
-from proxhy.mcmodels import Game, Nick
-from proxhy.settings import ProxhySettings
+from proxhy.gamestate import Team
+from proxhy.mcmodels import Nick
+from proxhy.plugin import ProxhyPlugin
 
 with (
     files("proxhy")
@@ -135,14 +134,28 @@ def minecraft_uuid_v2():
     return uuid.UUID(int=u)
 
 
-class StatCheckPlugin(ProxhyPlugin):
-    game: Game
-    gamestate: GameState
-    settings: ProxhySettings
-    received_who: asyncio.Event
-    username: str
-    received_locraw: asyncio.Event
+class StatCheckPluginState:
+    players_with_stats: dict[str, PlayersWithStats]
+    nick_team_colors: dict[str, str]
+    players_without_stats: set[str]
+    final_dead: dict[str, str]
+    dead: dict[str, str]
+    _cached_players: dict
+    players: dict[str, str]
+    _hypixel_api_key: str
+    game_error: Optional[Exception]
+    stats_highlighted: bool
+    adjacent_teams_highlighted: bool
+    received_player_stats: asyncio.Event
+    player_stats_lock: asyncio.Lock
+    log_path: Path
+    _api_key_valid: bool | None
+    _api_key_validated_at: float | None
+    update_stats_complete: asyncio.Event
+    hypixel_client: hypixel.Client
 
+
+class StatCheckPlugin(ProxhyPlugin):
     def _init_statcheck(self):
         self.players_with_stats: dict[str, PlayersWithStats] = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors

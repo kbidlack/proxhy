@@ -1,6 +1,10 @@
 from core.events import listen_client, listen_server
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import Buffer, Chat, String
+from proxhy.plugin import ProxhyPlugin
+
+
+class ChatPluginState:
+    pass
 
 
 class ChatPlugin(ProxhyPlugin):

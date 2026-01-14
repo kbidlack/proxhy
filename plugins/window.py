@@ -7,7 +7,6 @@ from types import NoneType, NotImplementedType
 from typing import Awaitable, Callable, Literal, Optional, SupportsIndex, overload
 
 from core.events import listen_client
-from core.plugin import ProxhyPlugin
 from protocol.datatypes import (
     Buffer,
     Byte,
@@ -19,12 +18,14 @@ from protocol.datatypes import (
     String,
     UnsignedByte,
 )
-from proxhy.gamestate import GameState
+from proxhy.plugin import ProxhyPlugin
+
+
+class WindowPluginState:
+    windows: dict[int, "Window"]
 
 
 class WindowPlugin(ProxhyPlugin):
-    gamestate: GameState
-
     def _init_window(self):
         self.windows: dict[int, Window] = {}
 
