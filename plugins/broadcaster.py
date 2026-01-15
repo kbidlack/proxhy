@@ -188,15 +188,53 @@ class BroadcastPlugin(ProxhyPlugin):
 
             await self._join_broadcast_by_node_id(peer_info.node_id)
 
-        @bc.command("invite")
-        async def _command_broadcast_invite(self, player: MojangPlayer):
+        @bc.command("accept")
+        async def _command_broadcast_accept(self, request_id: str):
+            if not self.compass_client_initialized:
+                raise CommandException(
+                    "The compass client is not connected yet! (wait a second?)"
+                )
+
+            try:
+                request = self.broadcast_invites[request_id]
+            except KeyError:
+                raise CommandException(
+                    TextComponent("You have no broadcast requests from that player!")
+                )
+
+            if request.reason != "proxhy.broadcast_request":
+                raise CommandException(
+                    TextComponent(
+                        "That is not a broadcast request! Use /bc join instead."
+                    )
+                )
+
+            self.client.chat(
+                TextComponent("Accepting ")
+                .color("green")
+                .append(TextComponent(request.username).color("aqua"))
+                .appends("into your broadcast!")
+            )
+
+            del self.broadcast_invites[request_id]
+            await request.accept()
+
+        async def _send_peer_request(
+            self: BroadcastPlugin,
+            player: MojangPlayer,
+            reason: str,
+            command: str,
+            already_pending_msg: str,
+            sent_msg: str,
+            expired_msg: str,
+        ):
             if not self.compass_client_initialized:
                 raise CommandException(
                     TextComponent("The compass client is not connected yet!")
                     .appends(TextComponent("(Try again)").color("gold"))
-                    .click_event("run_command", f"/bc invite {player.name}")
+                    .click_event("run_command", f"/bc {command} {player.name}")
                     .hover_text(
-                        TextComponent(f"/bc invite {player.name}").color("gold")
+                        TextComponent(f"/bc {command} {player.name}").color("gold")
                     )
                 )
 
@@ -205,9 +243,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
             if name in self.broadcast_requests:
                 raise CommandException(
-                    TextComponent(name)
-                    .color("aqua")
-                    .appends("has already been invited to the broadcast!")
+                    TextComponent(name).color("aqua").appends(already_pending_msg)
                 )
             elif name in [getattr(c, "username", "") for c in self.clients]:
                 raise CommandException(
@@ -218,7 +254,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
             req_task = asyncio.create_task(
                 self.compass_client.request_peer(
-                    uuid_, request_reason="proxhy.broadcast", timeout=60
+                    uuid_, request_reason=reason, timeout=60
                 )
             )
 
@@ -241,16 +277,16 @@ class BroadcastPlugin(ProxhyPlugin):
                     )
 
             self.client.chat(
-                TextComponent("Invited ")
+                TextComponent(sent_msg)
                 .color("green")
                 .append(TextComponent(name).color("aqua"))
-                .appends("to the broadcast! They have 60 seconds to accept.")
+                .appends("! They have 60 seconds to accept.")
             )
 
             self.broadcast_requests.add(name)
 
             try:
-                await req_task
+                return await req_task
             except compass.ProtocolError:
                 raise CommandException(
                     TextComponent("Unable to connect to ")
@@ -259,7 +295,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 )
             except asyncio.TimeoutError:
                 raise CommandException(
-                    TextComponent("The broadcast invite to ")
+                    TextComponent(expired_msg)
                     .append(TextComponent(name).color("blue"))
                     .append(" expired!")
                 )
@@ -271,6 +307,41 @@ class BroadcastPlugin(ProxhyPlugin):
                 )
             finally:
                 self.broadcast_requests.discard(name)
+
+        @bc.command("invite")
+        async def _command_broadcast_invite(self, player: MojangPlayer):
+            await _send_peer_request(
+                self,
+                player,
+                reason="proxhy.broadcast",
+                command="invite",
+                already_pending_msg="has already been invited to the broadcast!",
+                sent_msg="Invited ",
+                expired_msg="The broadcast invite to ",
+            )
+
+        @bc.command("request")
+        async def _command_broadcast_request(self, player: MojangPlayer):
+            peer_info = await _send_peer_request(
+                self,
+                player,
+                reason="proxhy.broadcast_request",
+                command="request",
+                already_pending_msg="has already been sent a request!",
+                sent_msg="Requested to join ",
+                expired_msg="The broadcast request to ",
+            )
+            # If we get here, the request was accepted - join their broadcast
+            self.client.chat(
+                TextComponent(player.name)
+                .color("aqua")
+                .appends(
+                    TextComponent(
+                        "accepted your request! Joining their broadcast..."
+                    ).color("green")
+                )
+            )
+            await self._join_broadcast_by_node_id(peer_info.node_id)
 
         @bc.command("server")
         async def _command_broadcast_server(self: BroadcastPlugin):
@@ -446,34 +517,61 @@ class BroadcastPlugin(ProxhyPlugin):
                 .appends(TextComponent("expired!").color("red"))
             )
 
+    def _build_broadcast_request_message(
+        self,
+        username: str,
+        message: str,
+        button_label: str,
+        command: str,
+        hover_text: str,
+    ) -> TextComponent:
+        return (
+            TextComponent(username)
+            .color("aqua")
+            .bold()
+            .appends(TextComponent(message).color("gold"))
+            .appends(TextComponent("[").color("dark_gray"))
+            .append(
+                TextComponent(button_label)
+                .color("green")
+                .bold()
+                .click_event("run_command", command)
+                .hover_text(
+                    TextComponent(hover_text)
+                    .color("green")
+                    .appends(TextComponent(username).color("aqua"))
+                )
+            )
+            .append(TextComponent("]").color("dark_gray"))
+        )
+
     async def on_request(self, request: ConnectionRequest):
         request_id = request.username
         self.broadcast_invites[request_id] = request
 
         if request.reason == "proxhy.broadcast":
             self.client.chat(
-                TextComponent(request.username)
-                .color("aqua")
-                .bold()
-                .appends(
-                    TextComponent(
-                        "has invited you to join their broadcast! You have 60 seconds to accept."
-                    ).color("gold")
+                self._build_broadcast_request_message(
+                    request.username,
+                    "has invited you to join their broadcast! You have 60 seconds to accept.",
+                    "Join",
+                    f"/bc join {request_id}",
+                    "Join ",
                 )
-                .appends(TextComponent("[").color("dark_gray"))
-                .append(
-                    TextComponent("Join")
-                    .color("green")
-                    .bold()
-                    .click_event("run_command", f"/bc join {request_id}")
-                    .hover_text(
-                        TextComponent("Join")
-                        .color("green")
-                        .appends(TextComponent(request.username).color("aqua"))
-                        .append("'s broadcast")
-                    )
+            )
+            asyncio.get_running_loop().call_later(
+                60,
+                lambda: asyncio.create_task(self._expire_broadcast_request(request_id)),
+            )
+        elif request.reason == "proxhy.broadcast_request":
+            self.client.chat(
+                self._build_broadcast_request_message(
+                    request.username,
+                    "wants to join your broadcast! You have 60 seconds to accept.",
+                    "Accept",
+                    f"/bc accept {request_id}",
+                    "Let ",
                 )
-                .append(TextComponent("]").color("dark_gray"))
             )
             asyncio.get_running_loop().call_later(
                 60,
