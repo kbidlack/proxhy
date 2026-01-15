@@ -3,6 +3,7 @@ from __future__ import annotations
 import inspect
 import types
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from typing import (
     Any,
     Awaitable,
@@ -16,6 +17,51 @@ from typing import (
 
 from protocol.datatypes import TextComponent
 from proxhy.errors import CommandException
+
+# =============================================================================
+# Command Context
+# =============================================================================
+
+
+@dataclass
+class CommandContext:
+    """
+    Context passed to CommandArg.convert() and suggest() methods.
+
+    Provides access to previously converted arguments and command metadata,
+    enabling context-aware validation and suggestions.
+
+    Attributes:
+        proxy: The proxy instance (for accessing game state, APIs, etc.)
+        args: List of previously converted argument objects
+        raw_args: List of raw string arguments (all arguments, including current)
+        param_index: Index of the current parameter being converted/suggested
+        command_name: Name of the command being executed
+    """
+
+    proxy: Any
+    args: list[Any] = field(default_factory=list)
+    raw_args: list[str] = field(default_factory=list)
+    param_index: int = 0
+    command_name: str = ""
+
+    def get_arg(self, type_: type) -> Any | None:
+        """
+        Get the first converted argument of the specified type.
+
+        Useful for finding related arguments, e.g., getting SettingPath
+        when validating SettingValue.
+
+        Args:
+            type_: The type to search for
+
+        Returns:
+            The first argument matching the type, or None if not found
+        """
+        for arg in self.args:
+            if isinstance(arg, type_):
+                return arg
+        return None
 
 
 def _is_union_type(type_hint: Any) -> bool:
@@ -48,25 +94,28 @@ class CommandArg(ABC):
                 self.uuid = uuid
 
             @classmethod
-            async def convert(cls, proxy, value: str) -> "Player":
+            async def convert(cls, ctx: CommandContext, value: str) -> "Player":
                 # Fetch player data and return a Player instance
+                # ctx.proxy gives access to the proxy instance
+                # ctx.args gives access to previously converted arguments
                 data = await fetch_player(value)
                 return cls(data["name"], data["uuid"])
 
             @classmethod
-            async def suggest(cls, proxy, partial: str) -> list[str]:
+            async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
                 # Return tab completion suggestions
-                return [p for p in proxy.players if p.lower().startswith(partial.lower())]
+                # Can use ctx.args to provide context-aware suggestions
+                return [p for p in ctx.proxy.players if p.lower().startswith(partial.lower())]
     """
 
     @classmethod
     @abstractmethod
-    async def convert(cls, proxy: Any, value: str) -> Any:
+    async def convert(cls, ctx: CommandContext, value: str) -> Any:
         """
         Convert a string argument to this type.
 
         Args:
-            proxy: The proxy instance (for accessing game state, APIs, etc.)
+            ctx: Command context with proxy, previously converted args, and metadata
             value: The raw string argument from the command
 
         Returns:
@@ -78,12 +127,12 @@ class CommandArg(ABC):
         ...
 
     @classmethod
-    async def suggest(cls, proxy: Any, partial: str) -> list[str]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """
         Provide tab completion suggestions for this type.
 
         Args:
-            proxy: The proxy instance
+            ctx: Command context with proxy, previously converted args, and metadata
             partial: The partially typed argument
 
         Returns:
@@ -142,7 +191,7 @@ class Parameter:
         return "Parameter: " + ", ".join([f"{k}={v}" for k, v in self.__dict__.items()])
 
     @staticmethod
-    async def convert_value(proxy: Any, value: str, type_hint: Any) -> Any:
+    async def convert_value(ctx: CommandContext, value: str, type_hint: Any) -> Any:
         """
         Convert a string value to the specified type.
 
@@ -153,7 +202,7 @@ class Parameter:
         """
         # Check if it's a CommandArg subclass
         if isinstance(type_hint, type) and issubclass(type_hint, CommandArg):
-            return await type_hint.convert(proxy, value)
+            return await type_hint.convert(ctx, value)
 
         # Handle basic types
         if type_hint is int:
@@ -173,7 +222,7 @@ class Parameter:
         # Unknown type, return as string
         return value
 
-    async def convert(self, proxy: Any, value: str) -> Any:
+    async def convert(self, ctx: CommandContext, value: str) -> Any:
         """
         Convert a string value to this parameter's type.
 
@@ -187,7 +236,7 @@ class Parameter:
                 if member_type is type(None):
                     continue
                 try:
-                    return await self.convert_value(proxy, value, member_type)
+                    return await self.convert_value(ctx, value, member_type)
                 except (ValueError, CommandException) as e:
                     errors.append((member_type, e))
                     continue
@@ -206,12 +255,12 @@ class Parameter:
             )
 
         elif self.is_custom_type:
-            return await self.type_hint.convert(proxy, value)
+            return await self.type_hint.convert(ctx, value)
 
         else:
-            return await self.convert_value(proxy, value, self.type_hint)
+            return await self.convert_value(ctx, value, self.type_hint)
 
-    async def get_suggestions(self, proxy: Any, partial: str) -> list[str]:
+    async def get_suggestions(self, ctx: CommandContext, partial: str) -> list[str]:
         """Get tab completion suggestions for this parameter."""
         suggestions: list[str] = []
 
@@ -228,7 +277,7 @@ class Parameter:
                 if isinstance(member_type, type) and issubclass(
                     member_type, CommandArg
                 ):
-                    member_suggestions = await member_type.suggest(proxy, partial)
+                    member_suggestions = await member_type.suggest(ctx, partial)
                     suggestions.extend(member_suggestions)
             # Deduplicate while preserving order
             seen = set()
@@ -238,7 +287,7 @@ class Parameter:
                 if not (s in seen or seen.add(s))  # type: ignore
             ]
         elif self.is_custom_type:
-            suggestions = await self.type_hint.suggest(proxy, partial)
+            suggestions = await self.type_hint.suggest(ctx, partial)
 
         return suggestions
 
@@ -339,18 +388,29 @@ class Command:
                         .append(")")
                     )
 
-        # Convert arguments to their proper types
-        converted_args = []
+        # Build context and convert arguments to their proper types
+        converted_args: list[Any] = []
+        ctx = CommandContext(
+            proxy=proxy,
+            args=converted_args,
+            raw_args=args,
+            param_index=0,
+            command_name=self.name,
+        )
+
         for i, param in enumerate(self.parameters):
+            ctx.param_index = i
             if param.infinite:
                 # Handle *args - convert remaining arguments
                 remaining = args[i:]
-                converted = [await param.convert(proxy, arg) for arg in remaining]
-                converted_args.extend(converted)
+                for j, arg in enumerate(remaining):
+                    ctx.param_index = i + j
+                    converted = await param.convert(ctx, arg)
+                    converted_args.append(converted)
                 break
             elif i < len(args):
                 # Convert single argument using Parameter.convert
-                converted = await param.convert(proxy, args[i])
+                converted = await param.convert(ctx, args[i])
                 converted_args.append(converted)
 
         return await self.function(proxy, *converted_args)
@@ -380,8 +440,36 @@ class Command:
         else:
             param = self.parameters[arg_index]
 
+        # Build context with previously converted arguments for suggestions
+        # We need to convert previous args to provide proper context
+        converted_args: list[Any] = []
+        ctx = CommandContext(
+            proxy=proxy,
+            args=converted_args,
+            raw_args=args + [partial],
+            param_index=arg_index,
+            command_name=self.name,
+        )
+
+        # Convert previous arguments to populate ctx.args
+        for i, prev_arg in enumerate(args):
+            if i >= len(self.parameters):
+                break
+            prev_param = self.parameters[i]
+            if prev_param.infinite:
+                break
+            try:
+                ctx.param_index = i
+                converted = await prev_param.convert(ctx, prev_arg)
+                converted_args.append(converted)
+            except (ValueError, CommandException):
+                # If conversion fails, skip - suggestions will work without full context
+                pass
+
+        ctx.param_index = arg_index
+
         # Delegate to Parameter.get_suggestions
-        return await param.get_suggestions(proxy, partial)
+        return await param.get_suggestions(ctx, partial)
 
 
 # =============================================================================

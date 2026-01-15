@@ -11,7 +11,6 @@ from protocol.datatypes import (
 from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import SettingPath, SettingValue
 from proxhy.command import command
-from proxhy.errors import CommandException
 from proxhy.plugin import ProxhyPlugin
 from proxhy.settings import ProxhySettings
 
@@ -46,17 +45,7 @@ class SettingsPlugin(ProxhyPlugin):
                 .append(TextComponent("/setting <path> [value]").color("gold"))
             )
 
-        # Validate value if provided
-        if value is not None and value.value not in setting.setting.states:
-            valid_states = ", ".join(setting.setting.states.keys())
-            raise CommandException(
-                TextComponent("Invalid value '")
-                .append(TextComponent(value.original).color("gold"))
-                .append("' for setting '")
-                .append(TextComponent(setting.path).color("gold"))
-                .append("'. Valid values: ")
-                .append(TextComponent(valid_states).color("green"))
-            )
+        # Note: SettingValue validation is now handled automatically via CommandContext
 
         # Get old state and set new state
         old_state = setting.setting.get()

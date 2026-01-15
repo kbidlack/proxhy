@@ -24,6 +24,7 @@ from proxhy.utils import PlayerInfo, _Client
 
 if TYPE_CHECKING:
     from core.settings import Setting, SettingGroup
+    from proxhy.command import CommandContext
 
 
 def _resolve_in_proxy_chain(obj: Any, attr: str) -> Any:
@@ -63,7 +64,7 @@ class Player(CommandArg):
     uuid: str
 
     @classmethod
-    async def suggest(cls, proxy: Any, partial: str) -> list[str]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """
         Suggest player names from server player list and dead players.
 
@@ -75,14 +76,14 @@ class Player(CommandArg):
         partial_lower = partial.lower()
 
         # Try to find all known players first on the proxy chain
-        all_players = _resolve_in_proxy_chain(proxy, "all_players")
+        all_players = _resolve_in_proxy_chain(ctx.proxy, "all_players")
         if isinstance(all_players, (set, list)):
             for name in all_players:
                 if name.lower().startswith(partial_lower):
                     suggestions.add(name)
         else:
             # Fallback to the active players dict (uuid -> name)
-            players = _resolve_in_proxy_chain(proxy, "players")
+            players = _resolve_in_proxy_chain(ctx.proxy, "players")
             if isinstance(players, dict):
                 for name in players.values():
                     if name.lower().startswith(partial_lower):
@@ -92,7 +93,7 @@ class Player(CommandArg):
 
     @classmethod
     @abstractmethod
-    async def convert(cls, proxy: Any, value: str) -> Player:
+    async def convert(cls, ctx: CommandContext, value: str) -> Player:
         """Convert a string to a Player instance."""
         ...
 
@@ -120,7 +121,7 @@ class ServerPlayer(Player):
         self.uuid = uuid
 
     @classmethod
-    async def convert(cls, proxy: Any, value: str) -> ServerPlayer:
+    async def convert(cls, ctx: CommandContext, value: str) -> ServerPlayer:
         """
         Convert a player name to a ServerPlayer.
 
@@ -131,6 +132,8 @@ class ServerPlayer(Player):
             CommandException: If the player is not found in the server's player list
         """
         from proxhy.errors import CommandException
+
+        proxy = ctx.proxy
 
         # Above all prefer all players
         if hasattr(proxy, "all_players"):
@@ -173,7 +176,7 @@ class MojangPlayer(Player):
         self.uuid = uuid
 
     @classmethod
-    async def convert(cls, proxy: Any, value: str) -> MojangPlayer:
+    async def convert(cls, ctx: CommandContext, value: str) -> MojangPlayer:
         """
         Convert a player name to a MojangPlayer by querying Mojang API.
 
@@ -230,7 +233,7 @@ class HypixelPlayer(Player):
         return getattr(self._player, name)
 
     @classmethod
-    async def convert(cls, proxy: Any, value: str) -> HypixelPlayer:
+    async def convert(cls, ctx: CommandContext, value: str) -> HypixelPlayer:
         """
         Convert a player name to a HypixelPlayer by querying Hypixel API.
 
@@ -239,7 +242,7 @@ class HypixelPlayer(Player):
         Raises:
             CommandException: If the player is not found, API key is invalid, etc.
         """
-        client = _resolve_in_proxy_chain(proxy, "hypixel_client")
+        client = _resolve_in_proxy_chain(ctx.proxy, "hypixel_client")
 
         if client is None:
             raise CommandException(
@@ -320,7 +323,7 @@ class SettingPath(CommandArg):
         return paths
 
     @classmethod
-    async def convert(cls, proxy: Any, value: str) -> SettingPath:
+    async def convert(cls, ctx: CommandContext, value: str) -> SettingPath:
         """
         Convert a setting path string to a SettingPath.
 
@@ -329,7 +332,7 @@ class SettingPath(CommandArg):
         """
         from core.settings import Setting, SettingGroup
 
-        settings = _resolve_in_proxy_chain(proxy, "settings")
+        settings = _resolve_in_proxy_chain(ctx.proxy, "settings")
         if settings is None:
             raise CommandException(
                 TextComponent("Settings not available!").color("red")
@@ -386,9 +389,9 @@ class SettingPath(CommandArg):
         return cls(path=value, setting=current)
 
     @classmethod
-    async def suggest(cls, proxy: Any, partial: str) -> list[str]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """Suggest setting paths based on partial input."""
-        settings = _resolve_in_proxy_chain(proxy, "settings")
+        settings = _resolve_in_proxy_chain(ctx.proxy, "settings")
         if settings is None:
             return []
 
@@ -401,12 +404,12 @@ class SettingValue(CommandArg):
     """
     A validated setting value.
 
-    This type should be used after SettingPath to validate the value
-    against the setting's allowed states. Since we need the setting
-    context, this is typically used with runtime validation.
+    This type uses the command context to validate the value against
+    the setting's allowed states when a SettingPath is available.
 
-    For now, this just passes through the value as-is (uppercase).
-    Validation happens in the command handler with the setting context.
+    Attributes:
+        value: The normalized (uppercase) value
+        original: The original value as provided by the user
     """
 
     def __init__(self, value: str):
@@ -414,17 +417,48 @@ class SettingValue(CommandArg):
         self.original = value
 
     @classmethod
-    async def convert(cls, proxy: Any, value: str) -> SettingValue:
-        """Convert and normalize the value (uppercase)."""
+    async def convert(cls, ctx: CommandContext, value: str) -> SettingValue:
+        """
+        Convert and validate the setting value.
+
+        If a SettingPath is available in context, validates that the value
+        is one of the setting's allowed states.
+
+        Raises:
+            CommandException: If the value is not valid for the setting
+        """
+        setting_path = ctx.get_arg(SettingPath)
+
+        if setting_path is not None:
+            normalized = value.upper()
+            if normalized not in setting_path.setting.states:
+                valid_states = ", ".join(setting_path.setting.states.keys())
+                raise CommandException(
+                    TextComponent("Invalid value '")
+                    .append(TextComponent(value).color("gold"))
+                    .append("' for setting '")
+                    .append(TextComponent(setting_path.path).color("gold"))
+                    .append("'. Valid values: ")
+                    .append(TextComponent(valid_states).color("green"))
+                )
+
         return cls(value)
 
     @classmethod
-    async def suggest(cls, proxy: Any, partial: str) -> list[str]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """
-        Suggest setting values.
+        Suggest setting values based on the setting's allowed states.
 
-        Note: Without context of which setting, we can't provide specific suggestions.
-        The command handler should provide context-aware suggestions if needed.
+        If a SettingPath is available in context, suggests from the setting's
+        actual states. Otherwise, suggests common values (ON, OFF).
         """
+        setting_path = ctx.get_arg(SettingPath)
+
+        if setting_path is not None:
+            # Suggest from the setting's actual allowed states
+            states = list(setting_path.setting.states.keys())
+            return [s for s in states if s.lower().startswith(partial.lower())]
+
+        # Fallback to common values
         common = ["ON", "OFF"]
         return [v for v in common if v.lower().startswith(partial.lower())]
