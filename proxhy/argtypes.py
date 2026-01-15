@@ -60,7 +60,7 @@ class Player(CommandArg):
     """
 
     name: str
-    uuid: str | None
+    uuid: str
 
     @classmethod
     async def suggest(cls, proxy: Any, partial: str) -> list[str]:
@@ -112,10 +112,10 @@ class ServerPlayer(Player):
 
     Attributes:
         name: The player's display name
-        uuid: The player's UUID (if known from the server)
+        uuid: The player's UUID
     """
 
-    def __init__(self, name: str, uuid: str | None = None):
+    def __init__(self, name: str, uuid: str = ""):
         self.name = name
         self.uuid = uuid
 
