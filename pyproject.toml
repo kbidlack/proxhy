@@ -28,8 +28,8 @@ proxhy = "proxhy.main:main"
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["proxhy", "core", "plugins", "auth", "protocol", "broadcasting"]
+[tool.setuptools.packages.find]
+where = ["."]
 
 [tool.setuptools.package-data]
 "proxhy" = ["assets/*"]
