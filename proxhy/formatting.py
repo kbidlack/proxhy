@@ -1,5 +1,6 @@
 # nearly 500 lines of fake code
 # credit for most of the busywork goes to someone other than me
+from collections import defaultdict
 from copy import deepcopy
 from dataclasses import dataclass, field
 from math import floor
@@ -8,6 +9,12 @@ from typing import Literal
 from hypixel import Player
 
 from protocol.datatypes import TextComponent
+from proxhy.argtypes import Gamemode_T
+from proxhy.hypixels import (
+    BEDWARS_DREAM_MAPPING_SIMPLE,
+    BEDWARS_MAPPING_FULL,
+)
+from proxhy.utils import safe_div
 
 
 def get_rank(player: Player):
@@ -34,11 +41,21 @@ def get_rank(player: Player):
     return "§7"  # if there are any other weird ranks because you never know ig, also nons lol
 
 
+def get_rankname(player: Player):
+    rank = get_rank(player)
+    sep: str = "" if player.rank == "§7" else " "  # no space for non
+    return sep.join((f"{rank}", f"{player.name}"))
+
+
 def return_plus_color(player: Player):
     if player.plus_color:
         return player.plus_color.chat_code
     else:
         return "§c"
+
+
+def format_other(other):
+    return "§7" + str(other)
 
 
 # BEDWARS
@@ -453,6 +470,130 @@ def format_sw_star(level, player: Player):
     return stars
 
 
+def format_player_dict(data: dict, gamemode: Gamemode_T):
+    if gamemode == "bedwars":
+        return format_bedwars_dict(data)
+    else:
+        raise NotImplementedError("this is not implemented 🤯")
+
+
+def format_bedwars_dict(_data: dict):
+    _map_dict = {
+        "fkdr": format_bw_fkdr,
+        "kdr": format_bw_fkdr,
+        "bblr": format_other,
+        "wlr": format_bw_wlr,
+        "beds_broken_bedwars": format_bw_wins,  # beds; beds_broken, beds_destroyed
+        "beds_lost_bedwars": format_bw_wins,  # beds_lost; bedslost
+        "bw_unique_challenges_completed": format_other,  # challenges
+        "total_challenges_completed": format_other,  # total_challenges
+        "kills_bedwars": format_other,  # kills
+        "deaths_bedwars": format_other,  # deaths; dies
+        "final_kills_bedwars": format_bw_finals,  # finals; final_kills, fkills, fks
+        "final_deaths_bedwars": format_bw_finals,  # final_deaths; fdeaths
+        "entity_attack_kills_bedwars": format_other,  # entity_kills
+        "entity_attack_deaths_bedwars": format_other,  # entity_deaths
+        "entity_explosion_kills_bedwars": format_other,  # explosion_kills
+        "entity_explosion_deaths_bedwars": format_other,  # explosion_deaths
+        "fall_kills_bedwars": format_other,  # fall_kills
+        "fall_deaths_bedwars": format_other,  # falls; fall_deaths
+        "fire_kills_bedwars": format_other,  # fire_kills
+        "fire_deaths_bedwars": format_other,  # fire_deaths
+        "fire_tick_kills_bedwars": format_other,  # fire_tick_kills
+        "fire_tick_deaths_bedwars": format_other,  # fire_tick_deaths
+        "magic_kills_bedwars": format_other,  # magic_kills
+        "magic_deaths_bedwars": format_other,  # magic_deaths
+        "projectile_kills_bedwars": format_other,  # projectile_kills
+        "projectile_deaths_bedwars": format_other,  # projectile_deaths
+        "void_kills_bedwars": format_other,  # void_kills
+        "void_deaths_bedwars": format_other,  # voids
+        "drowning_deaths_bedwars": format_other,  # drowns
+        "suffocation_deaths_bedwars": format_other,  # suffocation_deaths
+        "suffocation_final_deaths_bedwars": format_bw_finals,  # suffocation_final_deaths
+        "entity_attack_final_kills_bedwars": format_bw_finals,  # entity_finals
+        "entity_attack_final_deaths_bedwars": format_bw_finals,  # entity_final_deaths
+        "entity_explosion_final_kills_bedwars": format_bw_finals,  # explosion_finals
+        "entity_explosion_final_deaths_bedwars": format_bw_finals,  # explosion_final_deaths
+        "fall_final_kills_bedwars": format_bw_finals,  # fall_finals; fall_final_kills
+        "fall_final_deaths_bedwars": format_bw_finals,  # fall_final_deaths; fall_fdeaths
+        "fire_final_kills_bedwars": format_bw_finals,  # fire_finals
+        "fire_final_deaths_bedwars": format_bw_finals,  # fire_final_deaths
+        "fire_tick_final_kills_bedwars": format_bw_finals,  # fire_tick_finals
+        "fire_tick_final_deaths_bedwars": format_bw_finals,  # fire_tick_final_deaths
+        "magic_final_kills_bedwars": format_bw_finals,  # magic_final_kills
+        "magic_final_deaths_bedwars": format_bw_finals,  # magic_final_deaths
+        "projectile_final_kills_bedwars": format_bw_finals,  # projectile_final_kills
+        "projectile_final_deaths_bedwars": format_bw_finals,  # projectile_final_deaths
+        "void_final_kills_bedwars": format_bw_finals,  # void_final_kills
+        "void_final_deaths_bedwars": format_bw_finals,  # void_final_deaths
+        "wins_bedwars": format_bw_wins,  # wins
+        "losses_bedwars": format_bw_wins,  # losses
+        "games_played_bedwars": format_bw_wins,  # games; plays
+        "winstreak": format_bw_wins,  # winstreak; ws
+        "iron_resources_collected_bedwars": format_other,  # iron
+        "gold_resources_collected_bedwars": format_other,  # gold
+        "diamond_resources_collected_bedwars": format_other,  # diamonds; dias
+        "emerald_resources_collected_bedwars": format_other,  # emeralds; ems
+        "resources_collected_bedwars": format_other,  # resources_collected; collects
+        "wrapped_present_resources_collected_bedwars": format_other,  # presents
+        "items_purchased_bedwars": format_other,  # purchases; items
+    }
+
+    keys = _map_dict.copy().keys()
+    data: defaultdict[str, int | float] = defaultdict(int, _data.copy())
+
+    # construct simplified values
+    # e.g. 'rush_final_kills' for sum of
+    # 'eight_two_rush_final_kills', 'eight_one_rush_final_kills', and 'four_four_rush_final_kills'
+    for mode in BEDWARS_DREAM_MAPPING_SIMPLE.values():  # e.g. 'rush'
+        for mkey in keys:  # e.g. 'final_kills'
+            total_stat_value = 0
+            value_key = f"{mode}_{mkey}"  # e.g. 'rush_final_kills'
+            _map_dict[value_key] = _map_dict[mkey]
+            for key in data:  # e.g. 'eight_two_rush_final_kills'
+                # if 'eight_two_rush_final_kills' ends with 'rush_final_kills'
+                if key.endswith(value_key):
+                    # rush final kills value += data['eight_two_rush_final_kills']
+                    total_stat_value += data[key]
+
+            data[value_key] = total_stat_value
+
+    for mode in list(BEDWARS_MAPPING_FULL.values()) + [""]:
+        if mode:
+            mode_ = mode + "_"
+        else:
+            mode_ = mode
+
+        for key in keys:  # TODO: preload this
+            _map_dict[f"{mode}_{key}"] = _map_dict[key]
+
+        kills = data[f"{mode_}kills_bedwars"]
+        deaths = data[f"{mode_}deaths_bedwars"]
+
+        finals = data[f"{mode_}final_kills_bedwars"]
+        final_deaths = data[f"{mode_}final_deaths_bedwars"]
+
+        beds = data[f"{mode_}beds_broken_bedwars"]
+        beds_lost = data[f"{mode_}beds_lost_bedwars"]
+
+        wins = data[f"{mode_}wins_bedwars"]
+        losses = data[f"{mode_}losses_bedwars"]
+
+        data[f"{mode_}fkdr"] = safe_div(finals, final_deaths)
+        data[f"{mode_}kdr"] = safe_div(kills, deaths)
+        data[f"{mode_}wlr"] = safe_div(wins, losses)
+        data[f"{mode_}bblr"] = safe_div(beds, beds_lost)
+
+    for key in data:
+        if func := _map_dict.get(key):
+            data[key] = func(data[key])
+
+    return data
+
+
+# LEGACY
+#  --------------------------------------
+#
 @dataclass
 class BedwarsStats:
     level: str = ""

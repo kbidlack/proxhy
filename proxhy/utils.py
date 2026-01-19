@@ -1,5 +1,8 @@
 import asyncio
+import inspect
+import operator
 from collections import namedtuple
+from typing import Optional
 
 from hypixel import (
     ApiError,
@@ -86,3 +89,16 @@ class _Client(Client):
         if not isinstance(name, str):
             raise InvalidPlayerId(name)
         return await self._get_profile(name)
+
+
+# https://github.com/duhby/hypixel.py/blob/84fa52731d38a5939da70cac8753c967d0b70e3f/hypixel/models/player/utils.py#L144
+def safe_div(a: int | float, b: int | float) -> float:
+    if not b:
+        return float(a)
+    else:
+        return round(a / b, 2)
+
+
+def current_ln() -> Optional[int]:
+    f_back_f_lineno = operator.attrgetter("f_back.f_lineno")
+    return f_back_f_lineno(inspect.currentframe())  # lmfao

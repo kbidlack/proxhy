@@ -10,7 +10,8 @@ from plugins.login import LoginPluginState
 from plugins.misc import MiscPluginState
 from plugins.settings import SettingsPluginState
 from plugins.spatial import SpatialPluginState
-from plugins.statcheck import StatCheckPluginState
+from plugins.statcheck.command import StatcheckCommandPluginState
+from plugins.statcheck.statcheck import StatCheckPluginState
 from plugins.window import WindowPluginState
 
 class ProxhyPlugin(
@@ -26,6 +27,7 @@ class ProxhyPlugin(
     SettingsPluginState,
     SpatialPluginState,
     StatCheckPluginState,
+    StatcheckCommandPluginState,
     WindowPluginState,
     Plugin,
 ):

@@ -9,6 +9,7 @@ from typing import (
     Awaitable,
     Callable,
     Literal,
+    Optional,
     Union,
     get_args,
     get_origin,
@@ -23,6 +24,51 @@ from proxhy.errors import CommandException
 # =============================================================================
 
 
+class LazyArgs:
+    """
+    Lazily converts command arguments on access.
+
+    Arguments are only converted when accessed via indexing or iteration,
+    avoiding unnecessary API calls during tab completion.
+    """
+
+    def __init__(
+        self,
+        ctx: CommandContext,
+        raw_args: list[str],
+        parameters: list[Parameter],
+    ):
+        self._ctx = ctx
+        self._raw_args = raw_args
+        self._parameters = parameters
+        self._cache: dict[int, Any] = {}
+        self._converted_count = min(len(raw_args), len(parameters))
+
+    def __len__(self) -> int:
+        return self._converted_count
+
+    async def get(self, index: int) -> Any:
+        """Get a converted argument by index, converting lazily if needed."""
+        if index < 0 or index >= self._converted_count:
+            raise IndexError(f"Argument index {index} out of range")
+
+        if index in self._cache:
+            return self._cache[index]
+
+        param = self._parameters[index]
+        if param.infinite:
+            raise ValueError("Cannot lazily convert infinite parameters")
+
+        old_param_index = self._ctx.param_index
+        self._ctx.param_index = index
+        try:
+            converted = await param.convert(self._ctx, self._raw_args[index])
+            self._cache[index] = converted
+            return converted
+        finally:
+            self._ctx.param_index = old_param_index
+
+
 @dataclass
 class CommandContext:
     """
@@ -33,19 +79,19 @@ class CommandContext:
 
     Attributes:
         proxy: The proxy instance (for accessing game state, APIs, etc.)
-        args: List of previously converted argument objects
+        args: LazyArgs instance for lazily converted arguments (use `await args.get(i)`)
         raw_args: List of raw string arguments (all arguments, including current)
         param_index: Index of the current parameter being converted/suggested
         command_name: Name of the command being executed
     """
 
     proxy: Any
-    args: list[Any] = field(default_factory=list)
+    args: LazyArgs | list[Any] = field(default_factory=list)
     raw_args: list[str] = field(default_factory=list)
     param_index: int = 0
     command_name: str = ""
 
-    def get_arg(self, type_: type) -> Any | None:
+    async def get_arg[T](self, type_: type[T]) -> Optional[T]:
         """
         Get the first converted argument of the specified type.
 
@@ -58,9 +104,18 @@ class CommandContext:
         Returns:
             The first argument matching the type, or None if not found
         """
-        for arg in self.args:
-            if isinstance(arg, type_):
-                return arg
+        if isinstance(self.args, LazyArgs):
+            for i in range(len(self.args)):
+                if self.args._parameters[i].type_hint == type_:
+                    try:
+                        arg = await self.args.get(i)
+                        return arg
+                    except (ValueError, CommandException):
+                        pass
+        else:
+            for arg in self.args:
+                if isinstance(arg, type_):
+                    return arg
         return None
 
 
@@ -127,7 +182,7 @@ class CommandArg(ABC):
         ...
 
     @classmethod
-    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
+    async def suggest[S: str](cls, ctx: CommandContext, partial: str) -> list[S]:
         """
         Provide tab completion suggestions for this type.
 
@@ -203,6 +258,12 @@ class Parameter:
         # Check if it's a CommandArg subclass
         if isinstance(type_hint, type) and issubclass(type_hint, CommandArg):
             return await type_hint.convert(ctx, value)
+
+        if type_hint is int or type_hint is float:
+            if not value.isdigit():
+                raise CommandException(
+                    f"Could not convert '{value}' to a{'n' if type_hint is int else ''} {type_hint.__name__}!"
+                )
 
         # Handle basic types
         if type_hint is int:
@@ -288,7 +349,6 @@ class Parameter:
             ]
         elif self.is_custom_type:
             suggestions = await self.type_hint.suggest(ctx, partial)
-
         return suggestions
 
 
@@ -440,33 +500,15 @@ class Command:
         else:
             param = self.parameters[arg_index]
 
-        # Build context with previously converted arguments for suggestions
-        # We need to convert previous args to provide proper context
-        converted_args: list[Any] = []
+        # Build context with lazily converted arguments for suggestions
         ctx = CommandContext(
             proxy=proxy,
-            args=converted_args,
             raw_args=args + [partial],
             param_index=arg_index,
             command_name=self.name,
         )
-
-        # Convert previous arguments to populate ctx.args
-        for i, prev_arg in enumerate(args):
-            if i >= len(self.parameters):
-                break
-            prev_param = self.parameters[i]
-            if prev_param.infinite:
-                break
-            try:
-                ctx.param_index = i
-                converted = await prev_param.convert(ctx, prev_arg)
-                converted_args.append(converted)
-            except (ValueError, CommandException):
-                # If conversion fails, skip - suggestions will work without full context
-                pass
-
-        ctx.param_index = arg_index
+        # Set up lazy args - conversions happen only when accessed
+        ctx.args = LazyArgs(ctx, args, self.parameters)
 
         # Delegate to Parameter.get_suggestions
         return await param.get_suggestions(ctx, partial)

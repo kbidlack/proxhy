@@ -9,6 +9,7 @@ from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import HypixelPlayer
 from proxhy.command import CommandGroup
 from proxhy.errors import CommandException
+from proxhy.formatting import get_rankname
 from proxhy.plugin import ProxhyPlugin
 
 
@@ -42,45 +43,40 @@ class AutoboopPlugin(ProxhyPlugin):
 
         @self.autoboop_group.command("add")
         async def _autoboop_add(self, player: HypixelPlayer):
-            from proxhy.formatting import FormattedPlayer
-
-            fplayer = FormattedPlayer(player._player)
+            rankname = get_rankname(player._player)
 
             with shelve.open(self.AB_DATA_PATH) as db:
-                if db.get(fplayer.name):
+                if db.get(player.name):
                     raise CommandException(
                         TextComponent("Player ")
-                        .append(fplayer.rankname)
+                        .append(rankname)
                         .appends("is already in autoboop!")
                     )
-                db[fplayer.name] = fplayer.rankname
+                db[player.name] = rankname
 
             return (
                 TextComponent("Added ")
                 .color("green")
-                .append(fplayer.rankname)
+                .append(rankname)
                 .appends(TextComponent("to autoboop!").color("green"))
             )
 
         @self.autoboop_group.command("remove", "rm")
         async def _autoboop_remove(self, player: HypixelPlayer):
-            from proxhy.formatting import FormattedPlayer
-
-            fplayer = FormattedPlayer(player._player)
-
+            rankname = get_rankname(player._player)
             with shelve.open(self.AB_DATA_PATH) as db:
-                if not db.get(fplayer.name):
+                if not db.get(player.name):
                     raise CommandException(
                         TextComponent("Player ")
-                        .append(fplayer.rankname)
+                        .append(rankname)
                         .appends("is not in autoboop!")
                     )
-                del db[fplayer.name]
+                del db[player.name]
 
             return (
                 TextComponent("Removed ")
                 .color("green")
-                .append(fplayer.rankname)
+                .append(rankname)
                 .appends(TextComponent("from autoboop!").color("green"))
             )
 

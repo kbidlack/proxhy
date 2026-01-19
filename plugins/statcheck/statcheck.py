@@ -1,7 +1,5 @@
 import asyncio
-import datetime
 import json
-import os
 import re
 import uuid
 from dataclasses import dataclass, field
@@ -33,11 +31,9 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.aliases import Gamemode
-from proxhy.argtypes import HypixelPlayer
 from proxhy.command import command
 from proxhy.errors import CommandException
-from proxhy.formatting import FormattedPlayer, format_bw_fkdr, format_bw_wlr
+from proxhy.formatting import FormattedPlayer
 from proxhy.gamestate import Team
 from proxhy.plugin import ProxhyPlugin
 
@@ -154,11 +150,11 @@ class StatCheckPluginState:
     adjacent_teams_highlighted: bool
     received_player_stats: asyncio.Event
     player_stats_lock: asyncio.Lock
-    log_path: Path
     _api_key_valid: bool | None
     _api_key_validated_at: float | None
     update_stats_complete: asyncio.Event
     hypixel_client: hypixel.Client
+    hypixel_api_key: str
 
 
 class StatCheckPlugin(ProxhyPlugin):
@@ -293,17 +289,6 @@ class StatCheckPlugin(ProxhyPlugin):
     def _build_player_display_name(
         self, player_name: str, fplayer: FormattedPlayer | Nick
     ) -> str:
-        """Build the display name for a player based on settings and stats.
-
-        Args:
-            player_name: The player's name
-            fplayer: The formatted player object or Nick object
-
-        Returns:
-            The formatted display name string with color codes
-        """
-
-        # Get team color
         try:
             color = self.get_team_color(player_name)
         except ValueError:
@@ -312,7 +297,6 @@ class StatCheckPlugin(ProxhyPlugin):
         if isinstance(fplayer, Nick):
             return f"{color['code']}§l{color['letter']}§r §5[NICK] {player_name}"
 
-        # Determine which FKDR to display
         if (
             self.settings.bedwars.tablist.is_mode_specific.get() == "ON"
             and self.game.mode
@@ -322,11 +306,9 @@ class StatCheckPlugin(ProxhyPlugin):
         else:
             fkdr = fplayer.bedwars.fkdr
 
-        # Determine which name to display
         show_rankname = self.settings.bedwars.tablist.show_rankname.get()
         name = fplayer.rankname if show_rankname == "ON" else fplayer.raw_name
 
-        # Build the display name
         display_name = " ".join(
             (
                 f"{fplayer.bedwars.level}{color['code']}",
@@ -335,7 +317,6 @@ class StatCheckPlugin(ProxhyPlugin):
             )
         )
 
-        # Add team prefix
         prefix = color["code"] + "§l" + color["letter"] + "§r"
         return prefix + " " + display_name
 
@@ -533,431 +514,6 @@ class StatCheckPlugin(ProxhyPlugin):
                     pass  # hypixel likes to remove players that aren't there
 
         self.client.send_packet(0x38, buff.getvalue())
-
-    @subscribe("login_success")
-    async def _statcheck_event_login_success(self, _):
-        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
-        asyncio.create_task(self.log_bedwars_stats("login"))
-
-    @subscribe("close")
-    async def _statcheck_event_close(self, _):
-        try:
-            if self.hypixel_client:
-                try:
-                    await asyncio.wait_for(
-                        self.log_bedwars_stats("logout"), timeout=2.0
-                    )
-                except asyncio.TimeoutError:
-                    pass
-                try:
-                    await asyncio.wait_for(self.hypixel_client.close(), timeout=1.0)
-                except asyncio.TimeoutError:
-                    pass  # force close anyways
-        except AttributeError:
-            pass  # TODO: log
-
-    # Helper methods for _sc_internal stat calculation
-
-    def _find_closest_stat_log(
-        self, ign: str, window: float
-    ) -> tuple[dict, datetime.datetime]:
-        """Find the closest stat log entry for a player within the time window.
-
-        Args:
-            ign: Player's username
-            window: Time window in days
-
-        Returns:
-            Tuple of (old_stats_dict, chosen_datetime)
-
-        Raises:
-            CommandException: If no suitable log entry is found
-        """
-        if not os.path.exists(self.log_path):
-            raise CommandException(
-                "No log file found; recent stats unavailable. For lifetime stats, use /sc <player>."
-            )
-
-        now = datetime.datetime.now()
-        target_time = now - datetime.timedelta(days=window)
-
-        # Read and parse the stat log file
-        entries = []
-        with open(self.log_path, "r") as f:
-            for line in f:
-                try:
-                    entry = json.loads(line.strip())
-                    if entry.get(
-                        "player", ""
-                    ).casefold() == ign.casefold() and entry.get("bedwars"):
-                        entry["dt"] = datetime.datetime.fromisoformat(
-                            entry["timestamp"]
-                        )
-                        entries.append(entry)
-                except Exception:
-                    continue
-
-        if not entries:
-            raise CommandException("No logged stats available for this player.")
-
-        # Filter entries: they must be dated at most 3x the given window
-        valid_entries = [
-            entry
-            for entry in entries
-            if now - entry["dt"] <= datetime.timedelta(days=window * 3)
-        ]
-        if not valid_entries:
-            raise CommandException("Insufficient logged data: logged stats too old.")
-
-        # Choose the entry whose timestamp is closest to the target time
-        chosen_entry = min(
-            valid_entries,
-            key=lambda entry: abs((entry["dt"] - target_time).total_seconds()),
-        )
-
-        return chosen_entry["bedwars"], chosen_entry["dt"]
-
-    def _calculate_stat_deltas(
-        self, current_stats: dict, old_stats: dict, required_keys: list[str]
-    ) -> dict:
-        """Calculate the difference between current and old stats.
-
-        Args:
-            current_stats: Current player stats
-            old_stats: Old player stats from log
-            required_keys: List of stat keys to calculate deltas for
-
-        Returns:
-            Dictionary mapping stat keys to their deltas
-
-        Raises:
-            CommandException: If stats are inconsistent (current < old)
-        """
-        diffs = {}
-        for key in required_keys:
-            try:
-                current_val = float(current_stats.get(key, 0))
-                old_val = float(old_stats.get(key, 0))
-                diff = current_val - old_val
-                if diff < 0:
-                    raise CommandException(
-                        "Logged cumulative values are inconsistent (current value lower than logged value)."
-                    )
-                diffs[key] = diff
-            except Exception:
-                diffs[key] = 0
-        return diffs
-
-    def _calculate_ratios(
-        self, kills: float, deaths: float, wins: float, losses: float
-    ) -> tuple[float, float]:
-        """Calculate FKDR and WLR from stat values.
-
-        Args:
-            kills: Final kills or kills
-            deaths: Final deaths or deaths
-            wins: Wins
-            losses: Losses
-
-        Returns:
-            Tuple of (fkdr, wlr) rounded to 2 decimal places
-        """
-        try:
-            fkdr = kills / deaths if deaths > 0 else float(kills)
-        except Exception:
-            fkdr = 0.0
-
-        try:
-            wlr = wins / losses if losses > 0 else float(wins)
-        except Exception:
-            wlr = 0.0
-
-        return round(fkdr, 2), round(wlr, 2)
-
-    def _format_date_with_ordinal(self, dt: datetime.datetime) -> str:
-        """Format a datetime as 'Month Dayth, Year (H:MM AM/PM)'.
-
-        Args:
-            dt: Datetime to format
-
-        Returns:
-            Formatted string like 'January 1st, 2024 (8:42 PM)'
-        """
-
-        def ordinal(n: int) -> str:
-            if 11 <= (n % 100) <= 13:
-                return f"{n}th"
-            last_digit = n % 10
-            if last_digit == 1:
-                return f"{n}st"
-            elif last_digit == 2:
-                return f"{n}nd"
-            elif last_digit == 3:
-                return f"{n}rd"
-            else:
-                return f"{n}th"
-
-        formatted_date = f"{dt.strftime('%B')} {ordinal(dt.day)}, {dt.strftime('%Y')}"
-        formatted_time = dt.strftime("%I:%M %p").lstrip("0")
-        return f"{formatted_date} ({formatted_time})"
-
-    def _calculate_mode_stats(
-        self,
-        mode: str,
-        current_stats: dict,
-        old_stats: dict,
-        non_dream_mapping: dict,
-        dream_mapping: dict,
-    ) -> tuple[float, float]:
-        """Calculate FKDR and WLR for a specific game mode.
-
-        Args:
-            mode: Mode name (e.g., "Solo", "Doubles", "Rush")
-            current_stats: Current player stats
-            old_stats: Old player stats from log
-            non_dream_mapping: Mapping for standard modes
-            dream_mapping: Mapping for dream modes
-
-        Returns:
-            Tuple of (fkdr, wlr) for the mode
-        """
-        if mode in non_dream_mapping:
-            prefix = non_dream_mapping[mode]
-            fk_key = f"{prefix}_final_kills_bedwars"
-            fd_key = f"{prefix}_final_deaths_bedwars"
-            wins_key = f"{prefix}_wins_bedwars"
-            losses_key = f"{prefix}_losses_bedwars"
-
-            diff_fk = float(current_stats.get(fk_key, 0)) - float(
-                old_stats.get(fk_key, 0)
-            )
-            diff_fd = float(current_stats.get(fd_key, 0)) - float(
-                old_stats.get(fd_key, 0)
-            )
-            diff_wins = float(current_stats.get(wins_key, 0)) - float(
-                old_stats.get(wins_key, 0)
-            )
-            diff_losses = float(current_stats.get(losses_key, 0)) - float(
-                old_stats.get(losses_key, 0)
-            )
-        else:
-            # For dream modes, aggregate over any key that includes the dream substring
-            dream_sub = dream_mapping[mode]
-            diff_fk = sum(
-                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                for key in current_stats
-                if key.endswith("_final_kills_bedwars") and f"_{dream_sub}_" in key
-            )
-            diff_fd = sum(
-                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                for key in current_stats
-                if key.endswith("_final_deaths_bedwars") and f"_{dream_sub}_" in key
-            )
-            diff_wins = sum(
-                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                for key in current_stats
-                if key.endswith("_wins_bedwars") and f"_{dream_sub}_" in key
-            )
-            diff_losses = sum(
-                float(current_stats.get(key, 0)) - float(old_stats.get(key, 0))
-                for key in current_stats
-                if key.endswith("_losses_bedwars") and f"_{dream_sub}_" in key
-            )
-
-        return self._calculate_ratios(diff_fk, diff_fd, diff_wins, diff_losses)
-
-    async def _sc_internal(
-        self,
-        player: Optional[HypixelPlayer] = None,
-        mode: str = "bedwars",
-        window: Optional[float] = -1.0,
-        *stats,
-        display_abridged=True,
-    ):
-        """
-        Calculates weekly FKDR and WLR by comparing the current cumulative Bedwars stats with the estimated
-        cumulative values from approximately one week ago. It then overrides the player's live FKDR and WLR attributes,
-        uses FormattedPlayer.format_stats to generate the main text, and sends a JSON chat message with a hover event.
-
-        The chosen log entry is the one whose timestamp is closest to one week ago,
-        provided its age is between 0 and 30 days old.
-
-        Also hovertext supports per-mode weekly stats for all bw modes with updated data
-        Modes that represent dreams variants (Ultimate, Lucky, Castle, Swap, Voidless) aggregate any split stats.
-
-        """
-
-        if not (isinstance(window, float) or window is None):
-            try:
-                window = float(window)
-            except ValueError:
-                raise CommandException(
-                    f"Received type {type(window)} for time window; could not convert to float."
-                )
-
-        if window == -1.0:
-            window = None
-
-        if (gamemode := Gamemode(mode)) != "bedwars":
-            raise CommandException("Currently only Bedwars stats are supported!")
-
-        # verify stats
-        if not stats:
-            if gamemode == "bedwars":
-                if window:
-                    stats = ("FKDR", "WLR")
-                else:
-                    stats = ("Finals", "FKDR", "Wins", "WLR")
-            elif gamemode == "skywars":
-                stats = ("Kills", "KDR", "Wins", "WLR")
-
-        # Retrieve current player stats - use provided player or fetch current user
-        try:
-            if player is not None:
-                current_player = player._player
-            else:
-                current_player = await self.hypixel_client.player(self.username)
-            current_stats = current_player._data.get("stats", {}).get("Bedwars", {})
-        except Exception as e:
-            raise CommandException(f"Failed to fetch current stats: {e}")
-
-        # Calculate time-based stats if window is specified
-        if window:
-            # Check that necessary cumulative keys exist
-            required_keys = [
-                "final_kills_bedwars",
-                "final_deaths_bedwars",
-                "wins_bedwars",
-                "losses_bedwars",
-            ]
-            if not all(key in current_stats for key in required_keys):
-                raise CommandException(
-                    "Current stats are missing required data for stat calculation!"
-                )
-
-            # Find the closest stat log entry within the time window
-            old_stats, chosen_date = self._find_closest_stat_log(
-                current_player.name, window
-            )
-
-            # Calculate stat deltas
-            diffs = self._calculate_stat_deltas(current_stats, old_stats, required_keys)
-
-            # Calculate weekly FKDR and WLR
-            weekly_fkdr, weekly_wlr = self._calculate_ratios(
-                diffs["final_kills_bedwars"],
-                diffs["final_deaths_bedwars"],
-                diffs["wins_bedwars"],
-                diffs["losses_bedwars"],
-            )
-
-            # Override the live FKDR and WLR attributes on the player object
-            current_player.bedwars.fkdr = weekly_fkdr
-            current_player.bedwars.wlr = weekly_wlr
-
-            # Re-initialize FormattedPlayer with the overwritten attributes
-            fplayer = FormattedPlayer(current_player)
-
-            # Build hover text header
-            formatted_date = self._format_date_with_ordinal(chosen_date)
-            hover_text = f"Recent stats for {fplayer.rankname}\nCalculated using data from {formatted_date}\n"
-        else:
-            # Lifetime stats
-            fplayer = FormattedPlayer(current_player)
-            hover_text = f"Lifetime Stats for {fplayer.rankname}§f:\n"
-            old_stats = {}
-
-        # Build per-mode stats for hover text
-        non_dream_mapping = {
-            "Solo": "eight_one",
-            "Doubles": "eight_two",
-            "3v3v3v3": "four_three",
-            "4v4v4v4": "four_four",
-            "4v4": "two_four",
-        }
-        dream_mapping = {
-            "Rush": "rush",
-            "Ultimate": "ultimate",
-            "Lucky": "lucky",
-            "Castle": "castle",
-            "Swap": "swap",
-            "Voidless": "voidless",
-        }
-
-        # List of modes in the order to appear
-        modes = ["Solo", "Doubles", "3v3v3v3", "4v4v4v4"]
-        if not display_abridged:
-            modes.extend(
-                ["4v4", "Rush", "Ultimate", "Lucky", "Castle", "Swap", "Voidless"]
-            )
-
-        mode_lines = []
-        dreams_linebreak_added = False
-
-        for mode in modes:
-            # Add linebreak before dream modes (if showing all modes)
-            if (
-                mode in dream_mapping
-                and not dreams_linebreak_added
-                and not display_abridged
-            ):
-                mode_lines.append("\n")
-                dreams_linebreak_added = True
-
-            # Calculate mode-specific stats using helper
-            mode_fkdr, mode_wlr = self._calculate_mode_stats(
-                mode, current_stats, old_stats, non_dream_mapping, dream_mapping
-            )
-
-            # Format with color codes
-            formatted_mode_fkdr = format_bw_fkdr(mode_fkdr)
-            formatted_mode_wlr = format_bw_wlr(mode_wlr)
-
-            mode_lines.append(
-                f"\n§c§l[{mode.upper()}]  §r §fFKDR:§r {formatted_mode_fkdr} §fWLR:§r {formatted_mode_wlr}"
-            )
-
-        if mode_lines:
-            hover_text += "".join(mode_lines)
-        if display_abridged:
-            hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
-
-        # Format the hover text and send the chat message
-        return fplayer.format_stats(gamemode, *stats).hover_text(hover_text)
-
-    @command("sc", "statcheck")
-    async def _command_statcheck(
-        self,
-        player: HypixelPlayer = None,  # type: ignore[assignment]
-        mode: str = "bedwars",
-        window: float = -1.0,
-        *stats: str,
-    ):
-        """Check player stats. Usage: /sc [player] [mode] [window_days]"""
-        return await self._sc_internal(player, mode, window, *stats)
-
-    @command("scw", "scweekly")
-    async def _command_scweekly(
-        self,
-        player: HypixelPlayer = None,  # type: ignore[assignment]
-        mode: str = "bedwars",
-        *stats: str,
-    ):
-        """Check player's weekly stats. Usage: /scw [player] [mode]"""
-        return await self._sc_internal(player, mode, 7.0, *stats)
-
-    @command("scfull")
-    async def _command_scfull(
-        self,
-        player: HypixelPlayer = None,  # type: ignore[assignment]
-        mode: str = "bedwars",
-        window: float = -1.0,
-        *stats: str,
-    ):
-        """Check player stats with all modes. Usage: /scfull [player] [mode] [window_days]"""
-        return await self._sc_internal(
-            player, mode, window, *stats, display_abridged=True
-        )
 
     async def _get_player(self, player: str) -> dict[str, Player]:
         """Get a player from cache or fetch from API."""
@@ -1191,7 +747,6 @@ class StatCheckPlugin(ProxhyPlugin):
                                 break
                         fplayer = player
 
-                    # Build display name using helper method
                     display_name = self._build_player_display_name(player.name, fplayer)
 
                     self.players_with_stats[player.name] = {
@@ -1374,52 +929,6 @@ class StatCheckPlugin(ProxhyPlugin):
             if base_color == target:
                 players.update(team.members)
         return list(players)
-
-    async def log_bedwars_stats(self, event: str) -> None:
-        """Log Bedwars stats to file if they've changed since the last log entry.
-
-        Args:
-            event: Event type ('login' or 'logout')
-        """
-        try:
-            # Fetch the latest player data via the API.
-            player = await self.hypixel_client.player(self.username)
-            # Extract the Bedwars statistics.
-            bedwars_stats = player._data.get("stats", {}).get("Bedwars", {})
-        except Exception:
-            # print(f"Failed to log stats on {event}: {e}") # TODO: log this
-            return
-
-        # Create the new log entry.
-        log_entry = {
-            "timestamp": datetime.datetime.now().isoformat(),
-            "event": event,
-            "player": self.username,
-            "bedwars": bedwars_stats,
-        }
-
-        # Check if the most recent log entry is identical in its 'bedwars' data.
-        if os.path.exists(self.log_path):
-            try:
-                with open(self.log_path, "r") as f:
-                    lines = f.readlines()
-                if lines:
-                    last_line = lines[-1].strip()
-                    last_entry = json.loads(last_line)
-                    # If the bedwars stats haven't changed, skip logging.
-                    if last_entry.get("bedwars") == bedwars_stats:
-                        return
-            except Exception:
-                # print(f"Error checking last log entry: {e}")
-                pass  # TODO: log this
-
-        # Append the new log entry as a JSON line.
-        try:
-            with open(self.log_path, "a") as f:
-                f.write(json.dumps(log_entry) + "\n")
-        except Exception:
-            # print(f"Error writing stat log: {e}")
-            pass  # TODO: log this
 
     async def stat_highlights(self):
         """Display top 3 enemy players and nicked players."""
@@ -1679,7 +1188,7 @@ class StatCheckPlugin(ProxhyPlugin):
         if self.hypixel_client:
             await self.hypixel_client.close()
 
-        self.hypixel_api_key = key
+        self.hypixel_api_key = key  # type: ignore
         self.hypixel_client = hypixel.Client(key)
         self._api_key_valid = True
         self._api_key_validated_at = asyncio.get_event_loop().time()

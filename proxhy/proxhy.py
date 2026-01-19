@@ -11,7 +11,8 @@ from plugins.login import LoginPlugin
 from plugins.misc import MiscPlugin
 from plugins.settings import SettingsPlugin
 from plugins.spatial import SpatialPlugin
-from plugins.statcheck import StatCheckPlugin
+from plugins.statcheck.command import StatcheckCommandPlugin
+from plugins.statcheck.statcheck import StatCheckPlugin
 from plugins.window import WindowPlugin
 
 plugins: tuple[type, ...] = (
@@ -27,6 +28,7 @@ plugins: tuple[type, ...] = (
     SettingsPlugin,
     SpatialPlugin,
     StatCheckPlugin,
+    StatcheckCommandPlugin,
     WindowPlugin,
 )
 
