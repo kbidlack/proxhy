@@ -1,11 +1,14 @@
 import asyncio
 import random
+import shelve
 import uuid as uuid_mod
+from pathlib import Path
 from typing import Optional
 
 import compass
 import pyroh
 from compass import CompassClient, ConnectionRequest
+from platformdirs import user_config_dir
 
 import auth
 from broadcasting.proxy import BroadcastPeerProxy
@@ -35,6 +38,7 @@ from .broadcastee.proxy import broadcastee_plugin_list
 
 
 class BroadcastPluginState:
+    BC_DATA_PATH: Path
     clients: list[BroadcastPeerProxy]
     broadcast_invites: dict[str, compass.ConnectionRequest]
     broadcast_requests: set[str]
@@ -53,6 +57,12 @@ compass_client = CompassClient(server_node_id=COMPASS_SERVER_NODE_ID)
 
 class BroadcastPlugin(ProxhyPlugin):
     def _init_broadcasting(self):
+        self.BC_DATA_PATH = Path(user_config_dir("proxhy")) / "broadcast.db"
+
+        with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
+            if not db.get("trusted"):
+                db["trusted"] = dict()  # uuid: name
+
         self.clients: list[BroadcastPeerProxy] = []
         self.broadcast_invites: dict[str, compass.ConnectionRequest] = {}
         self.broadcast_requests: set[str] = set()
@@ -359,6 +369,71 @@ class BroadcastPlugin(ProxhyPlugin):
 
         self.command_registry.register(bc)
 
+        trust = bc.group("trust")
+
+        @trust.command("add")
+        async def _command_broadcast_trust_add(
+            self: BroadcastPlugin, player: MojangPlayer
+        ):
+            with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
+                if player.uuid in db["trusted"]:
+                    raise CommandException(
+                        TextComponent(player.name)
+                        .color("aqua")
+                        .appends("is already in your trusted player list!")
+                    )
+                db["trusted"][player.uuid] = player.name
+
+            self.client.chat(
+                TextComponent("Added")
+                .color("green")
+                .appends(TextComponent(player.name).color("aqua"))
+                .appends("to trusted players!")
+            )
+
+        @trust.command("remove")
+        async def _command_broadcast_untrust(
+            self: BroadcastPlugin, player: MojangPlayer
+        ):
+            with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
+                if player.uuid not in db["trusted"]:
+                    raise CommandException(
+                        TextComponent(player.name)
+                        .color("aqua")
+                        .appends("is not in your trusted players list!")
+                    )
+                del db["trusted"][player.uuid]
+
+            self.client.chat(
+                TextComponent("Removed")
+                .color("red")
+                .appends(TextComponent(player.name).color("aqua"))
+                .appends("from trusted players!")
+            )
+
+        @trust.command("list")
+        async def _command_broadcast_trust_list(self: BroadcastPlugin):
+            with shelve.open(self.BC_DATA_PATH) as db:
+                players = db["trusted"].values()
+
+                if not players:
+                    return TextComponent(
+                        "There are no players in your trusted list!"
+                    ).color("green")
+
+                self.client.chat(
+                    TextComponent("Players in broadcast trusted list:").color("green")
+                )
+
+                msg = TextComponent("> ").color("green")
+                for i, name in enumerate(players):
+                    if i != 0:
+                        msg.append(TextComponent(", ").color("green"))
+                    msg.append(TextComponent(name).color("aqua"))
+                return msg
+
+        self.command_registry.register(trust)
+
     async def _join_broadcast_by_node_id(self, node_id: str):
         # TODO: handle errors here properly
         reader, writer = await pyroh.connect(
@@ -564,19 +639,27 @@ class BroadcastPlugin(ProxhyPlugin):
                 lambda: asyncio.create_task(self._expire_broadcast_request(request_id)),
             )
         elif request.reason == "proxhy.broadcast_request":
-            self.client.chat(
-                self._build_broadcast_request_message(
-                    request.username,
-                    "wants to join your broadcast! You have 60 seconds to accept.",
-                    "Accept",
-                    f"/bc accept {request_id}",
-                    "Let ",
+            with shelve.open(self.BC_DATA_PATH) as db:
+                trusted: set[str] = db["trusted"]
+
+            if request.uuid in trusted:
+                await self.run_proxhy_command(f"/bc accept {request_id}")
+            else:
+                self.client.chat(
+                    self._build_broadcast_request_message(
+                        request.username,
+                        "wants to join your broadcast! You have 60 seconds to accept.",
+                        "Accept",
+                        f"/bc accept {request_id}",
+                        "Let ",
+                    )
                 )
-            )
-            asyncio.get_running_loop().call_later(
-                60,
-                lambda: asyncio.create_task(self._expire_broadcast_request(request_id)),
-            )
+                asyncio.get_running_loop().call_later(
+                    60,
+                    lambda: asyncio.create_task(
+                        self._expire_broadcast_request(request_id)
+                    ),
+                )
         else:
             # TODO: support this...how?
             # or even better, why?

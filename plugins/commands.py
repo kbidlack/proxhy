@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import Union
+from typing import Any, Callable, Coroutine, Union
 
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Buffer, String, TextComponent, VarInt
@@ -12,6 +12,7 @@ from proxhy.plugin import ProxhyPlugin
 class CommandsPluginState:
     command_registry: CommandRegistry
     suggestions: asyncio.Queue[list[str]]
+    run_proxhy_command: Callable[[str], Coroutine[Any, Any, None]]
 
 
 class CommandsPlugin(ProxhyPlugin):
@@ -98,6 +99,10 @@ class CommandsPlugin(ProxhyPlugin):
                         self.client.chat(output)
         else:
             self.server.send_packet(0x01, buff.getvalue())
+
+    async def run_proxhy_command(self, command: str):  # pyright: ignore[reportIncompatibleMethodOverride]
+        # TODO: catch command exceptions properly here instead of forwarding to user?
+        await self._commands_event_chat_client_command(Buffer(String.pack(command)))
 
     @listen_client(0x14)
     async def packet_tab_complete(self, buff: Buffer):
