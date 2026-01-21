@@ -356,7 +356,7 @@ class BroadcastPlugin(ProxhyPlugin):
         @bc.command("server")
         async def _command_broadcast_server(self: BroadcastPlugin):
             # TODO: add more info?
-            self.client.chat(
+            return (
                 TextComponent("Server Node ID:")
                 .color("green")
                 .appends(

@@ -127,16 +127,10 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         else:
             # another player -- check that they're spawned nearby
             if target.uuid is None:
-                self.client.chat(
-                    TextComponent(f"Player '{target.name}' is not nearby!").color("red")
-                )
-                return
+                raise CommandException(f"Player '{target.name}' is not nearby!")
             player = self.proxy.gamestate.get_player_by_uuid(target.uuid)
             if not player:
-                self.client.chat(
-                    TextComponent(f"Player '{target.name}' is not nearby!").color("red")
-                )
-                return
+                raise CommandException(f"Player '{target.name}' is not nearby!")
             eid = player.entity_id
 
         self.spec_eid = eid
@@ -182,7 +176,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             return (
                 TextComponent("Teleported to ")
                 .color("green")
-                .append(TextComponent(target.name).color("gold"))
+                .append(TextComponent(target.name).color("aqua"))
             )
 
         # target is a float (x coordinate)
@@ -221,10 +215,8 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
-        self.client.chat(
-            TextComponent(f"Turned flight {'on' if self.flight else 'off'}!").color(
-                "green"
-            )
+        return TextComponent(f"Turned flight {'on' if self.flight else 'off'}!").color(
+            "green"
         )
 
 
