@@ -197,15 +197,11 @@ class StatCheckPlugin(ProxhyPlugin):
             ]
 
             real_players = set()
-            for player in (
-                set(self.players.values())
-                | set(self.dead.keys())
-                | set(self.final_dead.keys())
-            ):
+            for player in set(self.players.values()):
                 if any(player in team.members for team in real_player_teams):
                     real_players.add(player)
 
-            return real_players
+            return real_players | self.dead.keys() | self.final_dead.keys()
         else:
             return set(self.players.values())
 
