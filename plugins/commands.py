@@ -115,14 +115,15 @@ class CommandsPlugin(ProxhyPlugin):
         text = buff.unpack(String)
 
         precommand = None
+        forward = True
         suggestions: list[str] = []
 
         # generate autocomplete suggestions
         if text.startswith("//"):
-            precommand = text.split()[0].removeprefix("//")
+            precommand = text.split()[0].removeprefix("//").casefold()
             prefix = "//"
         elif text.startswith("/"):
-            precommand = text.split()[0].removeprefix("/")
+            precommand = text.split()[0].removeprefix("/").casefold()
             prefix = "/"
         else:
             prefix = ""
@@ -132,10 +133,10 @@ class CommandsPlugin(ProxhyPlugin):
 
             if " " in text:
                 # User has typed at least the command name and started typing args
-                cmd_name = parts[0].removeprefix("/").removeprefix("/").casefold()
-                command = self.command_registry.get(cmd_name)
+                command = self.command_registry.get(precommand)
 
                 if command:
+                    forward = False
                     # Determine what's been typed
                     # text = "/cmd arg1 arg2 part" -> args = ["arg1", "arg2"], partial = "part"
                     # text = "/cmd arg1 arg2 " -> args = ["arg1", "arg2"], partial = ""
@@ -159,8 +160,15 @@ class CommandsPlugin(ProxhyPlugin):
                     if cmd.startswith(precommand.lower())
                 ]
 
-        self.suggestions.put_nowait(suggestions)
-        return self.server.send_packet(0x14, buff.getvalue())
+        if forward:
+            self.suggestions.put_nowait(suggestions)
+            self.server.send_packet(0x14, buff.getvalue())
+        else:
+            self.client.send_packet(
+                0x3A,
+                VarInt.pack(len(suggestions)),
+                *(String.pack(s) for s in suggestions),
+            )
 
     @listen_server(0x3A)
     async def packet_server_tab_complete(self, buff: Buffer):
