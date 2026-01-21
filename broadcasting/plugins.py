@@ -96,11 +96,24 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             UUID.pack(uuid.UUID(self.uuid)),
         )
 
+    @listen(0x0B)
+    async def packet_entity_action(self, buff: Buffer):
+        if eid := buff.unpack(VarInt) != self.eid:
+            print(
+                f"0x0B: Sent EID and self EID mismatch? {eid} / {self.eid}"
+            )  # TODO: log this
+            return
+
+        action_id = buff.unpack(VarInt)
+        if action_id == 0 and self.spec_eid is not None:
+            await self._command_spectate(None)
+
     @command("spectate", "spec")
     async def _command_spectate(self, target: ServerPlayer | None = None) -> None:
         if target is None:
             if self.spec_eid is not None:
                 self.client.send_packet(0x43, VarInt.pack(self.eid))
+                self.spec_eid = None
                 return
             else:
                 raise CommandException("Please provide a target player!")
