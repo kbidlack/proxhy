@@ -297,11 +297,11 @@ class BroadcastPlugin(ProxhyPlugin):
 
             try:
                 return await req_task
-            except compass.ProtocolError:
+            except compass.ProtocolError as e:
                 raise CommandException(
                     TextComponent("Unable to connect to ")
                     .append(TextComponent(name).color("blue"))
-                    .append(" due to a compass protocol error :(")
+                    .append(f" due to a compass protocol error :( ({e.reason})")
                 )
             except asyncio.TimeoutError:
                 raise CommandException(
