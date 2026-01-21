@@ -87,7 +87,13 @@ class CommandsPlugin(ProxhyPlugin):
 
                 err.message = err.message.bold(False)
 
-                error_msg = TextComponent("∎ ").bold().color("blue").append(err.message)
+                error_msg = (
+                    TextComponent("∎ ")
+                    .bold()
+                    .color("blue")
+                    .append(err.message)
+                    .hover_text(message)
+                )
                 self.client.chat(error_msg)
             else:
                 if output:
