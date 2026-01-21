@@ -31,7 +31,7 @@ class SettingsPlugin(ProxhyPlugin):
         self.settings_window = SettingsMenu(self)
         self.settings_window.open()
 
-    @command("setting")
+    @command("setting", "set")
     async def _command_setting(
         self,
         setting: SettingPath = None,  # type: ignore
