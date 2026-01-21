@@ -462,15 +462,20 @@ class BroadcastPlugin(ProxhyPlugin):
 
     @subscribe("login_success")
     async def _broadcast_event_login_success(self, _):
+        bc_pyroh_server_task = asyncio.create_task(
+            self.initialize_broadcast_pyroh_server()
+        )
+
         if self.dev_mode:
             self.client.chat(
                 TextComponent("==> Dev Mode Activated <==").color("green").bold()
             )  # TODO: move to somewhere more appropriate
         else:
-            asyncio.create_task(self.initialize_cc())
+            bc_pyroh_server_task.add_done_callback(
+                lambda _: asyncio.create_task(self.initialize_cc())
+            )
 
         self._transformer.init_from_gamestate(self.uuid)
-        asyncio.create_task(self.initialize_broadcast_pyroh_server())
 
     async def initialize_broadcast_pyroh_server(self):
         self.broadcast_pyroh_server = await pyroh.serve(

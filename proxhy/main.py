@@ -118,7 +118,7 @@ async def handle_client(reader: StreamReader, writer: StreamWriter):
         connect_host=(args.remote_host, args.remote_port),
         autostart=False,
         fake_connect_host=(args.fake_host, args.fake_port),
-        dev_mode=True,
+        dev_mode=args.dev,
     )
     instances.append(proxy)
 
