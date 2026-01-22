@@ -290,8 +290,8 @@ class BroadcastPlugin(ProxhyPlugin):
             self.client.chat(
                 TextComponent(sent_msg)
                 .color("green")
-                .append(TextComponent(name).color("aqua"))
-                .appends("! They have 60 seconds to accept.")
+                .appends(TextComponent(name).color("aqua"))
+                .append("! They have 60 seconds to accept.")
             )
 
             self.broadcast_requests.add(name)
@@ -327,7 +327,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 reason="proxhy.broadcast",
                 command="invite",
                 already_pending_msg="has already been invited to the broadcast!",
-                sent_msg="Invited ",
+                sent_msg="Invited",
                 expired_msg="The broadcast invite to ",
             )
 
@@ -339,7 +339,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 reason="proxhy.broadcast_request",
                 command="request",
                 already_pending_msg="has already been sent a request!",
-                sent_msg="Requested to join ",
+                sent_msg="Requested to join",
                 expired_msg="The broadcast request to ",
             )
             # If we get here, the request was accepted - join their broadcast
