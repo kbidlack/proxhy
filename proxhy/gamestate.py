@@ -1957,10 +1957,9 @@ class GameState:
 
     def _handle_player_list_header_and_footer(self, buff: Buffer) -> None:
         """Handle Player List Header And Footer packet (0x47)."""
-        header = buff.unpack(Chat)
-        footer = buff.unpack(Chat)
-        self.tab_header = str(header) if header else ""
-        self.tab_footer = str(footer) if footer else ""
+        # Store raw JSON to preserve formatting/colors
+        self.tab_header = buff.unpack(String)
+        self.tab_footer = buff.unpack(String)
 
     def _handle_resource_pack_send(self, buff: Buffer) -> None:
         """Handle Resource Pack Send packet (0x48)."""
@@ -2281,7 +2280,8 @@ class GameState:
 
     def _build_player_list_header_footer(self) -> Packet:
         """Build Player List Header And Footer packet (0x47)."""
-        data = Chat.pack(self.tab_header) + Chat.pack(self.tab_footer)
+        # tab_header/tab_footer are raw JSON strings
+        data = String.pack(self.tab_header) + String.pack(self.tab_footer)
         return (0x47, data)
 
     def _build_scoreboard_objectives(self) -> list[Packet]:

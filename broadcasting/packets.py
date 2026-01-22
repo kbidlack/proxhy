@@ -69,7 +69,7 @@ BC_SPEC_ALLOW = (
     0x44,  # World Border - world border updates
     0x45,  # Title - title/subtitle/actionbar text
     # 0x46,  # Set Compression - connection-specific
-    # 0x47,  # Player List Header/Footer - tab list header
+    0x47,  # Player List Header/Footer - tab list header
     0x48,  # Resource Pack Send - resource pack info
     # 0x49,  # Update Entity NBT - detailed entity data
 )
