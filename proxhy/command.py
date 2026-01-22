@@ -303,6 +303,15 @@ class Parameter:
                     continue
 
             # All types failed - raise an error with details
+            # If there's only one non-None type and it raised a CommandException,
+            # use that error directly (it's likely more user-friendly)
+            non_none_errors = [(t, e) for t, e in errors if t is not type(None)]
+            if len(non_none_errors) == 1 and isinstance(
+                non_none_errors[0][1], CommandException
+            ):
+                raise non_none_errors[0][1]
+
+            # Multiple types failed - show generic message
             type_names = [
                 t.__name__ if hasattr(t, "__name__") else str(t)
                 for t in self.union_types
