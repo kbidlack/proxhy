@@ -398,6 +398,19 @@ class PlayerTransformer:
             elif packet_id in packets.BC_SPEC_ALLOW:
                 self._announce(packet_id, b"".join(data))
 
+        elif packet_id == 0x0D:  # Collect Item
+            collected_eid = buff.unpack(VarInt)
+            collector_eid = buff.unpack(VarInt)
+
+            # Transform collector entity ID if it's the broadcaster
+            if collector_eid == self.gamestate.player_entity_id:
+                self._announce_player(
+                    packet_id,
+                    VarInt.pack(collected_eid) + VarInt.pack(self._player_eid),
+                )
+            else:
+                self._announce(packet_id, b"".join(data))
+
         elif packet_id == 0x1C:  # Entity Metadata
             entity_id = buff.unpack(VarInt)
 
@@ -450,6 +463,18 @@ class PlayerTransformer:
                 self._announce(packet_id, b"".join(data))
 
         elif packet_id == 0x1E:  # Remove Entity Effect
+            entity_id = buff.unpack(VarInt)
+
+            if entity_id == self.gamestate.player_entity_id:
+                rest = buff.read()
+                self._announce_player(
+                    packet_id,
+                    VarInt.pack(self._player_eid) + rest,
+                )
+            elif packet_id in packets.BC_SPEC_ALLOW:
+                self._announce(packet_id, b"".join(data))
+
+        elif packet_id == 0x49:  # Update Entity NBT
             entity_id = buff.unpack(VarInt)
 
             if entity_id == self.gamestate.player_entity_id:

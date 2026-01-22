@@ -11,7 +11,7 @@ BC_SPEC_ALLOW = (
     0x0A,  # Use Bed - show when player sleeps
     0x0B,  # Animation - player animations (arm swing, damage, etc.)
     0x0C,  # Spawn Player - show other players
-    # 0x0D,  # Collect Item - player-specific pickup
+    0x0D,  # Collect Item - item pickup animations
     0x0E,  # Spawn Object - entities like arrows, items
     0x0F,  # Spawn Mob - mobs in world
     0x10,  # Spawn Painting - world decorations
@@ -49,7 +49,7 @@ BC_SPEC_ALLOW = (
     # 0x30,  # Window Items - player inventory
     # 0x31,  # Window Property - player-specific (furnace progress, etc)
     # 0x32,  # Confirm Transaction - player-specific
-    # 0x33,  # Update Sign - world update, but maybe not critical
+    0x33,  # Update Sign - sign text updates
     0x34,  # Maps - map data
     0x35,  # Update Block Entity - tile entity data (signs, chests)
     # 0x36,  # Sign Editor Open - player-specific
@@ -63,7 +63,7 @@ BC_SPEC_ALLOW = (
     0x3E,  # Teams - team information (critical for Bedwars)
     0x3F,  # Plugin Message - custom data (might be important)
     0x40,  # Disconnect - connection close
-    # 0x41,  # Server Difficulty - maybe useful?
+    0x41,  # Server Difficulty - sync difficulty display
     0x42,  # Combat Event - combat information
     0x43,  # Camera - camera entity
     0x44,  # World Border - world border updates
@@ -71,5 +71,5 @@ BC_SPEC_ALLOW = (
     # 0x46,  # Set Compression - connection-specific
     0x47,  # Player List Header/Footer - tab list header
     0x48,  # Resource Pack Send - resource pack info
-    # 0x49,  # Update Entity NBT - detailed entity data
+    0x49,  # Update Entity NBT - detailed entity data (item frames, armor stands, etc)
 )
