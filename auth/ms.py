@@ -1,12 +1,36 @@
-import os
-import re
+"""
+Microsoft Authentication for Minecraft.
+
+This module implements the Microsoft OAuth2 authentication flow for Minecraft
+using the Azure AD device code flow (recommended) or authorization code flow.
+
+Based on:
+- https://wiki.vg/Microsoft_Authentication_Scheme
+- https://codeberg.org/JakobDev/minecraft-launcher-lib
+
+Flow:
+1. Get device code from Azure AD
+2. User authenticates at microsoft.com/link
+3. Poll for access token
+4. Authenticate with Xbox Live
+5. Get XSTS token
+6. Authenticate with Minecraft
+7. Verify game ownership and get profile
+"""
+
+from __future__ import annotations
+
+import secrets
 import time
-from typing import Dict, TypedDict
-from urllib.parse import parse_qsl, urlsplit
+from typing import TYPE_CHECKING, TypedDict
+from urllib.parse import parse_qs, urlencode, urlparse
 
 import aiohttp
 
 from .errors import AuthException, InvalidCredentials, NotPremium
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 
 class LoginResult(TypedDict):
@@ -18,623 +42,847 @@ class LoginResult(TypedDict):
     refresh_token: str
 
 
-# Endpoints
-_LIVE_AUTHORIZE = (
-    "https://login.live.com/oauth20_authorize.srf"
-    "?client_id=000000004C12AE6F"
-    "&redirect_uri=https://login.live.com/oauth20_desktop.srf"
-    "&scope=service::user.auth.xboxlive.com::MBI_SSL"
-    "&response_type=token"
-    "&prompt=login"
-    "&mkt=en-US"
+class DeviceCodeResponse(TypedDict):
+    """Response from device code request."""
+
+    user_code: str
+    device_code: str
+    verification_uri: str
+    expires_in: int
+    interval: int
+    message: str
+
+
+class SecureLoginData(TypedDict):
+    """Secure login data with PKCE and state parameters."""
+
+    login_url: str
+    state: str
+    code_verifier: str
+
+
+# Azure AD OAuth2 endpoints
+AZURE_TOKEN_URL = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token"
+AZURE_AUTHORIZE_URL = (
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize"
+)
+AZURE_DEVICE_CODE_URL = (
+    "https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode"
 )
 
+# Xbox and Minecraft endpoints
+XBL_AUTH_URL = "https://user.auth.xboxlive.com/user/authenticate"
+XSTS_AUTH_URL = "https://xsts.auth.xboxlive.com/xsts/authorize"
+MC_LOGIN_URL = "https://api.minecraftservices.com/authentication/login_with_xbox"
+MC_ENTITLEMENTS_URL = "https://api.minecraftservices.com/entitlements/mcstore"
+MC_PROFILE_URL = "https://api.minecraftservices.com/minecraft/profile"
 
-_XBL_USER_AUTH = "https://user.auth.xboxlive.com/user/authenticate"
-_XSTS_AUTHORIZE = "https://xsts.auth.xboxlive.com/xsts/authorize"
-_MC_LOGIN_WITH_XBOX = "https://api.minecraftservices.com/authentication/login_with_xbox"
-_MC_ENTITLEMENTS = "https://api.minecraftservices.com/entitlements/mcstore"
-_MC_PROFILE = "https://api.minecraftservices.com/minecraft/profile"
-AUTH_DEBUG = 0  # set to 1 if you want to debug errors
+# OAuth2 scopes
+SCOPE = "XboxLive.signin offline_access"
 
-
-def _dbg_dump(name: str, content: str | bytes) -> None:
-    # Enable if either env var AUTH_DEBUG is set (not "0") OR the module constant AUTH_DEBUG is truthy
-    enabled = os.getenv("AUTH_DEBUG")
-    if enabled is None:
-        enabled = globals().get("AUTH_DEBUG", 0)
-    if not str(enabled) or str(enabled) == "0":
-        return
-
-    # Where to write: use DEBUG_PATH if you set it; otherwise use current working dir
-    base = globals().get("DEBUG_PATH", None)
-    if not base:
-        base = os.getcwd()
-
-    os.makedirs(base, exist_ok=True)  # ensure folder exists
-    path = os.path.join(base, f"{int(time.time())}_{name}")
-
-    mode = "wb" if isinstance(content, (bytes, bytearray)) else "w"
-    with open(path, mode, encoding=None if mode == "wb" else "utf-8") as f:
-        f.write(content)
+# Default timeout
+DEFAULT_TIMEOUT = 30.0
 
 
-def _extract_login_form(html: str) -> tuple[str, str]:
+def get_login_url(client_id: str, redirect_uri: str) -> str:
     """
-    Extract PPFT and urlPost from multiple known Microsoft variants.
-
-    Tries, in order:
-    - JSON-style: "sFTTag":{"value":"..."} and "urlPost":"https://..."
-    - JS-style:   sFTTag:{value:'...'}    and urlPost:'https://...'
-    - HTML form:  <input name="PPFT" value="..."> and <form ... method=post action="...">
-    Then retries after unescaping \\u0026, \\u002F, and \\/ sequences commonly found in inline JSON.
-    """
-
-    _dbg_dump("authorize.html", html)
-
-    def _try_extract(h: str) -> tuple[str | None, str | None]:
-        ppft = urlpost = None
-
-        # --- JSON-like ---
-        if ppft is None:
-            m = re.search(r'"sFTTag"\s*:\s*\{\s*"value"\s*:\s*"([^"]+)"', h)
-            if m:
-                ppft = m.group(1)
-        if urlpost is None:
-            m = re.search(r'"urlPost"\s*:\s*"([^"]+)"', h)
-            if m:
-                urlpost = m.group(1)
-
-        # --- Double-escaped JSON (e.g., \" and \\/ ) ---
-        if ppft is None:
-            m = re.search(r'\\"sFTTag\\"\s*:\s*\{\s*\\"value\\"\s*:\s*\\"([^"]+)\\"', h)
-            if m:
-                ppft = m.group(1)
-        if urlpost is None:
-            m = re.search(r'\\"urlPost\\"\s*:\s*\\"([^"]+)\\"', h)
-            if m:
-                urlpost = m.group(1)
-
-        # --- JS-like (single quotes) ---
-        if ppft is None:
-            m = re.search(r"sFTTag\s*:\s*\{\s*value\s*:\s*'([^']+)'", h)
-            if m:
-                ppft = m.group(1)
-        if ppft is None:
-            # very old inline pattern: sFTTag:'<input ... value="...">'
-            m = re.search(r"sFTTag:\s*'[^>]*\bvalue=\"([^\"]+)\"", h)
-            if m:
-                ppft = m.group(1)
-        if urlpost is None:
-            m = re.search(r"urlPost\s*:\s*'([^']+)'", h)
-            if m:
-                urlpost = m.group(1)
-
-        # --- HTML form fallbacks ---
-        if ppft is None:
-            m = re.search(r'name="PPFT"[^>]*value="([^"]+)"', h, flags=re.I)
-            if m:
-                ppft = m.group(1)
-        if urlpost is None:
-            # Prefer POST action
-            m = re.search(
-                r'<form[^>]+method=["\']post["\'][^>]*action=["\']([^"\']+)["\']',
-                h,
-                flags=re.I,
-            )
-            if m:
-                urlpost = m.group(1)
-        if urlpost is None:
-            # Any form action as last resort
-            m = re.search(r'<form[^>]*action=["\']([^"\']+)["\']', h, flags=re.I)
-            if m:
-                urlpost = m.group(1)
-
-        # --- super loose fallback just in case: look for ppsecure/post.srf in the page ---
-        if urlpost is None:
-            m = re.search(r'https://login\.live\.com/ppsecure/post\.srf[^"\'<> ]*', h)
-            if m:
-                urlpost = m.group(0)
-
-        return ppft, urlpost
-
-    ppft, urlpost = _try_extract(html)
-
-    # Retry after unescaping common inline escapes
-    if not (ppft and urlpost):
-        unescaped = (
-            html.replace("\\u0026", "&")
-            .replace("\\u002F", "/")
-            .replace("\\/", "/")
-            .replace('\\"', '"')
-        )
-        ppft, urlpost = _try_extract(unescaped)
-
-    if not (ppft and urlpost):
-        raise AuthException(
-            "Could not locate PPFT/urlPost on authorize page.",
-            code="MSA-FORM-PARSE",
-            detail="Tried JSON/JS/HTML + unescaped variants; also ppsecure/post.srf fallback.",
-        )
-    return ppft, urlpost
-
-
-def _parse_fragment(url: str) -> Dict[str, str]:
-    if "#" not in url:
-        return {}
-    frag = url.split("#", 1)[1]
-    parsed = dict(parse_qsl(frag))
-    # URL decode the tokens if present
-    if "access_token" in parsed:
-        from urllib.parse import unquote
-
-        parsed["access_token"] = unquote(parsed["access_token"])
-    if "refresh_token" in parsed:
-        from urllib.parse import unquote
-
-        parsed["refresh_token"] = unquote(parsed["refresh_token"])
-    return parsed
-
-
-async def _follow_for_fragment(
-    session: aiohttp.ClientSession, start_url: str, timeout: float
-) -> Dict[str, str]:
-    # Follow up to 10 redirects without auto-redirects so we can read Location fragments.
-    url = start_url
-    for _ in range(10):
-        async with session.get(
-            url, timeout=aiohttp.ClientTimeout(total=timeout), allow_redirects=False
-        ) as r:
-            loc = r.headers.get("Location")
-            if not loc:
-                if r.headers.get("Content-Type", "").startswith("text/html"):
-                    html = await r.text()
-                    _dbg_dump("desktop_srf.html", html)
-                    m = re.search(r"access_token=([^&\"'<>]+)", html)
-                    if m:
-                        result = {"access_token": m.group(1)}
-                        # Also look for refresh token
-                        m_refresh = re.search(r"refresh_token=([^&\"'<>]+)", html)
-                        if m_refresh:
-                            result["refresh_token"] = m_refresh.group(1)
-                        return result
-                break
-            if "#" in loc and "access_token=" in loc:
-                return _parse_fragment(loc)
-            if not loc.lower().startswith("http"):
-                parts = urlsplit(url)
-                loc = f"{parts.scheme}://{parts.netloc}{loc}"
-            url = loc
-    return {}
-
-
-def _looks_like_password_error(text: str) -> bool:
-    needles = [
-        "Your account or password is incorrect",
-        "That Microsoft account doesn't exist",
-        "Enter a valid email address",
-    ]
-    text_lower = text.lower()
-    return any(n.lower() in text_lower for n in needles)
-
-
-def _looks_like_interactive_challenge(text: str) -> bool:
-    needles = [
-        "Help us protect your account",
-        "Microsoft Authenticator",
-        "Enter code",
-        "We've sent a sign-in request",
-        "Stay signed in?",
-        "kmsi",
-        "Approve sign in",
-        "Verify your identity",
-    ]
-    text_lower = text.lower()
-    return any(n.lower() in text_lower for n in needles)
-
-
-async def _ms_login_with_password(
-    email: str, password: str, timeout: float = 30.0
-) -> Dict[str, str]:
-    async with aiohttp.ClientSession(
-        headers={
-            "User-Agent": "Mozilla/5.0",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-    ) as session:
-        async with session.get(
-            _LIVE_AUTHORIZE, timeout=aiohttp.ClientTimeout(total=timeout)
-        ) as r:
-            r.raise_for_status()
-            html = await r.text()
-            ppft, urlpost = _extract_login_form(html)
-
-        data = {"login": email, "loginfmt": email, "passwd": password, "PPFT": ppft}
-        async with session.post(
-            urlpost, data=data, timeout=aiohttp.ClientTimeout(total=timeout)
-        ) as r2:
-            txt = await r2.text() or ""
-            _dbg_dump("post_resp.html", txt)
-
-            if _looks_like_password_error(txt):
-                raise InvalidCredentials(
-                    "Your account or password is incorrect.", code="MSA-WRONG-PASSWORD"
-                )
-
-            if _looks_like_interactive_challenge(txt):
-                # Cannot complete interactive steps in a headless/password-only flow.
-                raise InvalidCredentials(
-                    "Account requires interactive verification (2FA/KMSI/CAPTCHA).",
-                    code="MSA-INTERACTIVE",
-                )
-
-            # 1) Check redirect history for a fragment
-            for h in list(r2.history) + [r2]:
-                loc = getattr(h, "headers", {}).get("Location")
-                if loc and "#" in loc and "access_token=" in loc:
-                    return _parse_fragment(loc)
-
-            # 2) Check the URL itself
-            if "#" in str(r2.url):
-                frag = _parse_fragment(str(r2.url))
-                if "access_token" in frag:
-                    return frag
-
-            # 3) Manually re-follow to capture Location fragments
-            frag = await _follow_for_fragment(session, _LIVE_AUTHORIZE, timeout=timeout)
-            if "access_token" in frag:
-                return frag
-
-            # No token visible
-            raise AuthException(
-                "Microsoft login finished without returning an access_token.",
-                code="MSA-NO-TOKEN",
-            )
-
-
-async def refresh_ms_token(refresh_token: str, timeout: float = 30.0) -> Dict[str, str]:
-    """
-    Refresh a Microsoft access token using a refresh token.
+    Generate a Microsoft OAuth2 login URL.
 
     Args:
-        refresh_token: The refresh token obtained from a previous login
+        client_id: Your Azure application client ID
+        redirect_uri: The redirect URI configured in your Azure app
+
+    Returns:
+        The URL to redirect users to for login
+    """
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": SCOPE,
+        "response_mode": "query",
+    }
+    return f"{AZURE_AUTHORIZE_URL}?{urlencode(params)}"
+
+
+def get_secure_login_data(client_id: str, redirect_uri: str) -> SecureLoginData:
+    """
+    Generate secure login data with PKCE and state parameters.
+
+    This is the recommended approach as it prevents CSRF and authorization
+    code injection attacks.
+
+    Args:
+        client_id: Your Azure application client ID
+        redirect_uri: The redirect URI configured in your Azure app
+
+    Returns:
+        Dictionary containing login_url, state, and code_verifier
+    """
+    import base64
+    import hashlib
+
+    state = generate_state()
+    code_verifier = secrets.token_urlsafe(32)
+
+    # Generate code_challenge from code_verifier
+    code_challenge = (
+        base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest())
+        .decode()
+        .rstrip("=")
+    )
+
+    params = {
+        "client_id": client_id,
+        "response_type": "code",
+        "redirect_uri": redirect_uri,
+        "scope": SCOPE,
+        "response_mode": "query",
+        "state": state,
+        "code_challenge": code_challenge,
+        "code_challenge_method": "S256",
+    }
+
+    return {
+        "login_url": f"{AZURE_AUTHORIZE_URL}?{urlencode(params)}",
+        "state": state,
+        "code_verifier": code_verifier,
+    }
+
+
+def generate_state() -> str:
+    """Generate a random state string for CSRF protection."""
+    return secrets.token_urlsafe(16)
+
+
+def url_contains_auth_code(url: str) -> bool:
+    """Check if a URL contains an authorization code."""
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+    return "code" in params
+
+
+def parse_auth_code_url(url: str, expected_state: str | None = None) -> str:
+    """
+    Extract the authorization code from a redirect URL.
+
+    Args:
+        url: The redirect URL containing the code
+        expected_state: If provided, verify the state parameter matches
+
+    Returns:
+        The authorization code
+
+    Raises:
+        AuthException: If code is missing or state doesn't match
+    """
+    parsed = urlparse(url)
+    params = parse_qs(parsed.query)
+
+    if "error" in params:
+        error = params["error"][0]
+        description = params.get("error_description", ["Unknown error"])[0]
+        raise AuthException(
+            f"OAuth error: {error} - {description}",
+            code="OAUTH-ERROR",
+        )
+
+    if "code" not in params:
+        raise AuthException(
+            "Authorization code not found in URL",
+            code="OAUTH-NO-CODE",
+        )
+
+    if expected_state is not None:
+        state = params.get("state", [None])[0]
+        if state != expected_state:
+            raise AuthException(
+                "State parameter mismatch (possible CSRF attack)",
+                code="OAUTH-STATE-MISMATCH",
+            )
+
+    return params["code"][0]
+
+
+async def request_device_code(
+    client_id: str,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> DeviceCodeResponse:
+    """
+    Request a device code for the device code flow.
+
+    This is the recommended flow for CLI applications. The user will be
+    prompted to visit a URL and enter a code.
+
+    Args:
+        client_id: Your Azure application client ID
         timeout: Request timeout in seconds
 
     Returns:
-        Dictionary containing the new access_token and potentially a new refresh_token
-
-    Raises:
-        AuthException: If the refresh fails
-        InvalidCredentials: If the refresh token is invalid
+        Dictionary containing user_code, device_code, verification_uri, etc.
     """
-    # For the password flow, we need to use the token refresh endpoint
-    refresh_url = "https://login.live.com/oauth20_token.srf"
-
     data = {
-        "client_id": "000000004C12AE6F",
-        "grant_type": "refresh_token",
-        "refresh_token": refresh_token,
-        "redirect_uri": "https://login.live.com/oauth20_desktop.srf",
-        "scope": "service::user.auth.xboxlive.com::MBI_SSL",
+        "client_id": client_id,
+        "scope": SCOPE,
     }
 
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            refresh_url,
+            AZURE_DEVICE_CODE_URL,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
             timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as r:
-            if r.status == 400:
+        ) as resp:
+            if not resp.ok:
+                text = await resp.text()
+                raise AuthException(
+                    f"Failed to request device code: {resp.status}",
+                    code="DEVICE-CODE-FAILED",
+                    detail=text,
+                )
+
+            result = await resp.json()
+            return {
+                "user_code": result["user_code"],
+                "device_code": result["device_code"],
+                "verification_uri": result["verification_uri"],
+                "expires_in": result["expires_in"],
+                "interval": result["interval"],
+                "message": result.get(
+                    "message",
+                    f"Go to {result['verification_uri']} and enter code: {result['user_code']}",
+                ),
+            }
+
+
+async def poll_device_code(
+    client_id: str,
+    device_code: str,
+    interval: int = 5,
+    expires_in: int = 900,
+    timeout: float = DEFAULT_TIMEOUT,
+    on_pending: Callable[[], None] | None = None,
+) -> dict[str, str]:
+    """
+    Poll for the device code authentication result.
+
+    Args:
+        client_id: Your Azure application client ID
+        device_code: The device code from request_device_code
+        interval: Polling interval in seconds
+        expires_in: When the device code expires
+        timeout: Request timeout in seconds
+        on_pending: Optional callback called while waiting for user
+
+    Returns:
+        Dictionary containing access_token and refresh_token
+    """
+    start_time = time.time()
+
+    data = {
+        "client_id": client_id,
+        "grant_type": "urn:ietf:params:oauth:grant-type:device_code",
+        "device_code": device_code,
+    }
+
+    async with aiohttp.ClientSession() as session:
+        while True:
+            if time.time() - start_time > expires_in:
+                raise AuthException(
+                    "Device code expired",
+                    code="DEVICE-CODE-EXPIRED",
+                )
+
+            async with session.post(
+                AZURE_TOKEN_URL,
+                data=data,
+                headers={"Content-Type": "application/x-www-form-urlencoded"},
+                timeout=aiohttp.ClientTimeout(total=timeout),
+            ) as resp:
+                result = await resp.json()
+
+                if resp.ok:
+                    return {
+                        "access_token": result["access_token"],
+                        "refresh_token": result.get("refresh_token", ""),
+                    }
+
+                error = result.get("error", "")
+
+                if error == "authorization_pending":
+                    if on_pending:
+                        on_pending()
+                    await _async_sleep(interval)
+                    continue
+                elif error == "slow_down":
+                    interval += 5
+                    await _async_sleep(interval)
+                    continue
+                elif error == "authorization_declined":
+                    raise AuthException(
+                        "User declined authorization",
+                        code="DEVICE-CODE-DECLINED",
+                    )
+                elif error == "expired_token":
+                    raise AuthException(
+                        "Device code expired",
+                        code="DEVICE-CODE-EXPIRED",
+                    )
+                else:
+                    description = result.get("error_description", "Unknown error")
+                    raise AuthException(
+                        f"Device code polling failed: {description}",
+                        code="DEVICE-CODE-FAILED",
+                        detail=str(result),
+                    )
+
+
+async def _async_sleep(seconds: float) -> None:
+    """Async sleep helper."""
+    import asyncio
+
+    await asyncio.sleep(seconds)
+
+
+async def get_authorization_token(
+    client_id: str,
+    redirect_uri: str,
+    auth_code: str,
+    code_verifier: str | None = None,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> dict[str, str]:
+    """
+    Exchange an authorization code for tokens.
+
+    Args:
+        client_id: Your Azure application client ID
+        redirect_uri: The redirect URI used in the authorization request
+        auth_code: The authorization code from the redirect
+        code_verifier: The PKCE code verifier (if using secure login)
+        timeout: Request timeout in seconds
+
+    Returns:
+        Dictionary containing access_token and refresh_token
+    """
+    data = {
+        "client_id": client_id,
+        "grant_type": "authorization_code",
+        "code": auth_code,
+        "redirect_uri": redirect_uri,
+        "scope": SCOPE,
+    }
+
+    if code_verifier:
+        data["code_verifier"] = code_verifier
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            AZURE_TOKEN_URL,
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            if not resp.ok:
+                result = await resp.json()
+                error = result.get("error", "unknown")
+                description = result.get("error_description", "")
+                raise AuthException(
+                    f"Failed to get authorization token: {error}",
+                    code="OAUTH-TOKEN-FAILED",
+                    detail=description,
+                )
+
+            result = await resp.json()
+            return {
+                "access_token": result["access_token"],
+                "refresh_token": result.get("refresh_token", ""),
+            }
+
+
+async def refresh_authorization_token(
+    client_id: str,
+    refresh_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> dict[str, str]:
+    """
+    Refresh an access token using a refresh token.
+
+    Args:
+        client_id: Your Azure application client ID
+        refresh_token: The refresh token from a previous login
+        timeout: Request timeout in seconds
+
+    Returns:
+        Dictionary containing access_token and refresh_token
+    """
+    data = {
+        "client_id": client_id,
+        "grant_type": "refresh_token",
+        "refresh_token": refresh_token,
+        "scope": SCOPE,
+    }
+
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            AZURE_TOKEN_URL,
+            data=data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            if resp.status == 400:
                 try:
-                    error_data = await r.json()
-                    error_desc = error_data.get("error_description", "")
-                    if (
-                        "invalid_grant" in error_desc.lower()
-                        or "expired" in error_desc.lower()
-                    ):
+                    result = await resp.json()
+                    error = result.get("error", "")
+                    if error in ("invalid_grant", "expired_token"):
                         raise InvalidCredentials(
-                            "Refresh token is invalid or expired.",
+                            "Refresh token is invalid or expired",
                             code="MSA-REFRESH-EXPIRED",
                         )
+                except InvalidCredentials:
+                    raise
                 except Exception:
                     pass
                 raise InvalidCredentials(
-                    "Failed to refresh token: invalid refresh token.",
+                    "Failed to refresh token",
                     code="MSA-REFRESH-INVALID",
                 )
 
-            if not r.ok:
-                try:
-                    detail = await r.json()
-                except Exception:
-                    detail = await r.text()
+            if not resp.ok:
+                text = await resp.text()
                 raise AuthException(
-                    f"Token refresh failed: {r.status}",
+                    f"Token refresh failed: {resp.status}",
                     code="MSA-REFRESH-FAILED",
-                    detail=str(detail),
+                    detail=text,
                 )
 
-            data = await r.json()
-            result = {}
-
-            if "access_token" in data:
-                result["access_token"] = data["access_token"]
-            if "refresh_token" in data:
-                result["refresh_token"] = data["refresh_token"]
-
-            if not result.get("access_token"):
-                raise AuthException(
-                    "Refresh response missing access_token.",
-                    code="MSA-REFRESH-MALFORMED",
-                )
-
-            return result
+            result = await resp.json()
+            return {
+                "access_token": result["access_token"],
+                "refresh_token": result.get("refresh_token", ""),
+            }
 
 
-async def _xbox_live_auth(
-    ms_access_token: str, timeout: float = 15.0
+async def authenticate_with_xbl(
+    access_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
 ) -> tuple[str, str]:
-    async def do_req(
-        session: aiohttp.ClientSession, ticket: str
-    ) -> aiohttp.ClientResponse:
-        payload = {
-            "Properties": {
-                "AuthMethod": "RPS",
-                "SiteName": "user.auth.xboxlive.com",
-                "RpsTicket": ticket,
-            },
-            "RelyingParty": "http://auth.xboxlive.com",
-            "TokenType": "JWT",
-        }
-        return await session.post(
-            _XBL_USER_AUTH,
-            json=payload,
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        )
+    """
+    Authenticate with Xbox Live using a Microsoft access token.
+
+    Args:
+        access_token: Microsoft OAuth2 access token
+        timeout: Request timeout in seconds
+
+    Returns:
+        Tuple of (xbl_token, user_hash)
+    """
+    payload = {
+        "Properties": {
+            "AuthMethod": "RPS",
+            "SiteName": "user.auth.xboxlive.com",
+            "RpsTicket": f"d={access_token}",
+        },
+        "RelyingParty": "http://auth.xboxlive.com",
+        "TokenType": "JWT",
+    }
 
     async with aiohttp.ClientSession() as session:
-        last_response = None
-        for ticket in (f"d={ms_access_token}", ms_access_token):
-            async with await do_req(session, ticket) as r:
-                last_response = r
-                if r.ok:
-                    data = await r.json()
-                    token = data.get("Token")
-                    try:
-                        uhs = data["DisplayClaims"]["xui"][0]["uhs"]
-                    except Exception as e:
-                        raise AuthException(
-                            f"Xbox Live response missing user hash: {e}",
-                            code="XBL-MALFORMED",
-                        )
-                    if not token or not uhs:
-                        raise AuthException(
-                            "Xbox Live response missing token/uhs.",
-                            code="XBL-MALFORMED",
-                        )
-                    return token, uhs
+        async with session.post(
+            XBL_AUTH_URL,
+            json=payload,
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            if not resp.ok:
+                text = await resp.text()
+                raise AuthException(
+                    f"Xbox Live authentication failed: {resp.status}",
+                    code="XBL-FAILED",
+                    detail=text,
+                )
 
-        try:
-            detail = await last_response.json() if last_response else None
-        except Exception:
-            detail = await last_response.text() if last_response else "no response"
-        raise AuthException(
-            "Xbox Live authentication failed.", code="XBL-FAILED", detail=str(detail)
-        )
+            data = await resp.json()
+            token = data.get("Token")
+
+            try:
+                user_hash = data["DisplayClaims"]["xui"][0]["uhs"]
+            except (KeyError, IndexError) as e:
+                raise AuthException(
+                    f"Xbox Live response missing user hash: {e}",
+                    code="XBL-MALFORMED",
+                )
+
+            if not token:
+                raise AuthException(
+                    "Xbox Live response missing token",
+                    code="XBL-MALFORMED",
+                )
+
+            return token, user_hash
 
 
-async def _xsts_authorize(xbl_token: str, timeout: float = 15.0) -> tuple[str, str]:
+async def authenticate_with_xsts(
+    xbl_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> tuple[str, str]:
+    """
+    Get an XSTS token using an Xbox Live token.
+
+    Args:
+        xbl_token: Xbox Live token from authenticate_with_xbl
+        timeout: Request timeout in seconds
+
+    Returns:
+        Tuple of (xsts_token, user_hash)
+    """
     payload = {
-        "Properties": {"SandboxId": "RETAIL", "UserTokens": [xbl_token]},
+        "Properties": {
+            "SandboxId": "RETAIL",
+            "UserTokens": [xbl_token],
+        },
         "RelyingParty": "rp://api.minecraftservices.com/",
         "TokenType": "JWT",
     }
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            _XSTS_AUTHORIZE,
+            XSTS_AUTH_URL,
             json=payload,
-            headers={"Content-Type": "application/json", "Accept": "application/json"},
+            headers={
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            },
             timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as r:
-            if r.status == 401:
-                try:
-                    data = await r.json()
-                    xerr = data.get("XErr")
-                except Exception:
-                    xerr = None
-                if xerr == 2148916238:
-                    raise AuthException(
-                        "Xbox Live: child account; must be added to a family.",
-                        code="XSTS-CHILD",
-                    )
-                if xerr == 2148916233:
-                    raise AuthException(
-                        "Xbox Live: no Xbox profile; sign in to Xbox once then retry.",
-                        code="XSTS-NOPROFILE",
-                    )
-                raise AuthException("XSTS authorization failed (401).", code="XSTS-401")
-            r.raise_for_status()
-            data = await r.json()
-            token = data.get("Token")
-            try:
-                uhs = data["DisplayClaims"]["xui"][0]["uhs"]
-            except Exception as e:
+        ) as resp:
+            if resp.status == 401:
+                data = await resp.json()
+                xerr = data.get("XErr")
+
+                error_messages = {
+                    2148916227: "This account has been banned from Xbox",
+                    2148916233: "No Xbox account exists. Sign in to Xbox first.",
+                    2148916235: "Xbox Live is not available in your region",
+                    2148916236: "Adult verification required (South Korea)",
+                    2148916237: "Adult verification required (South Korea)",
+                    2148916238: "Child account must be added to a Family",
+                }
+
+                message = error_messages.get(xerr, "XSTS authorization failed")
+                raise AuthException(message, code=f"XSTS-{xerr or 401}")
+
+            if not resp.ok:
+                text = await resp.text()
                 raise AuthException(
-                    f"XSTS response missing user hash: {e}", code="XSTS-MALFORMED"
+                    f"XSTS authorization failed: {resp.status}",
+                    code="XSTS-FAILED",
+                    detail=text,
                 )
+
+            data = await resp.json()
+            token = data.get("Token")
+
+            try:
+                user_hash = data["DisplayClaims"]["xui"][0]["uhs"]
+            except (KeyError, IndexError) as e:
+                raise AuthException(
+                    f"XSTS response missing user hash: {e}",
+                    code="XSTS-MALFORMED",
+                )
+
             if not token:
                 raise AuthException(
-                    "XSTS response missing token.", code="XSTS-MALFORMED"
+                    "XSTS response missing token",
+                    code="XSTS-MALFORMED",
                 )
-            return token, uhs
+
+            return token, user_hash
 
 
-async def _mc_login_with_xbox(uhs: str, xsts_token: str, timeout: float = 15.0) -> str:
-    ident = f"XBL3.0 x={uhs};{xsts_token}"
-    payload = {"identityToken": ident, "ensureLegacyEnabled": True}
+async def authenticate_with_minecraft(
+    user_hash: str,
+    xsts_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> str:
+    """
+    Authenticate with Minecraft using XSTS credentials.
+
+    Args:
+        user_hash: User hash from XSTS authentication
+        xsts_token: XSTS token
+        timeout: Request timeout in seconds
+
+    Returns:
+        Minecraft access token
+    """
+    payload = {
+        "identityToken": f"XBL3.0 x={user_hash};{xsts_token}",
+        "ensureLegacyEnabled": True,
+    }
+
     async with aiohttp.ClientSession() as session:
         async with session.post(
-            _MC_LOGIN_WITH_XBOX,
+            MC_LOGIN_URL,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as r:
-            if not r.ok:
-                error_text = await r.text()
+        ) as resp:
+            if not resp.ok:
+                text = await resp.text()
                 raise AuthException(
-                    f"Minecraft login_with_xbox failed: {r.status}",
-                    code="MC-LOGIN",
-                    detail=error_text,
+                    f"Minecraft authentication failed: {resp.status}",
+                    code="MC-LOGIN-FAILED",
+                    detail=text,
                 )
-            data = await r.json()
-            access = data.get("access_token")
-            if not access:
+
+            data = await resp.json()
+            access_token = data.get("access_token")
+
+            if not access_token:
                 raise AuthException(
-                    "Minecraft login did not return access_token.",
+                    "Minecraft response missing access token",
                     code="MC-LOGIN-MALFORMED",
                 )
-            return access
+
+            return access_token
 
 
-async def _mc_check_ownership(mc_access_token: str, timeout: float = 15.0) -> bool:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            _MC_ENTITLEMENTS,
-            headers={"Authorization": f"Bearer {mc_access_token}"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as r:
-            if not r.ok:
-                try:
-                    detail = await r.json()
-                except Exception:
-                    detail = await r.text()
-                raise AuthException(
-                    "Entitlements check failed.",
-                    code="MC-ENTITLEMENTS",
-                    detail=str(detail),
-                )
-            data = await r.json()
-            items = data.get("items") or []
-            return any(
-                it.get("name") in ("product_minecraft", "game_minecraft")
-                for it in items
-            ) or bool(items)
-
-
-async def _mc_profile(mc_access_token: str, timeout: float = 15.0) -> tuple[str, str]:
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            _MC_PROFILE,
-            headers={"Authorization": f"Bearer {mc_access_token}"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as r:
-            if r.status == 404:
-                raise NotPremium(
-                    "Minecraft profile not found; account may not own Java Edition.",
-                    code="MC-NOT-PREMIUM",
-                )
-            if not r.ok:
-                try:
-                    detail = await r.json()
-                except Exception:
-                    detail = await r.text()
-                raise AuthException(
-                    "Failed to fetch Minecraft profile.",
-                    code="MC-PROFILE",
-                    detail=str(detail),
-                )
-            data = await r.json()
-            return data.get("name", ""), data.get("id", "")
-
-
-async def login(email: str, password: str) -> LoginResult:
+async def check_ownership(
+    mc_access_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> bool:
     """
-    Login with Microsoft account credentials.
+    Check if the account owns Minecraft: Java Edition.
 
     Args:
-        email: Microsoft account email
-        password: Microsoft account password
+        mc_access_token: Minecraft access token
+        timeout: Request timeout in seconds
 
     Returns:
-        Dictionary containing:
-        - access_token: Minecraft access token
-        - username: Minecraft username
-        - uuid: Minecraft UUID
-        - refresh_token: Microsoft refresh token (may be empty if not provided)
-
-    Raises:
-        AuthException: If authentication fails
-        InvalidCredentials: If credentials are invalid
-        NotPremium: If the account doesn't own Minecraft
+        True if the account owns the game
     """
-    token_data = await _ms_login_with_password(email, password)
-    xbl_token, _ = await _xbox_live_auth(token_data["access_token"])
-    xsts_token, uhs = await _xsts_authorize(xbl_token)
-    mc_access_token = await _mc_login_with_xbox(uhs, xsts_token)
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            MC_ENTITLEMENTS_URL,
+            headers={"Authorization": f"Bearer {mc_access_token}"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            if not resp.ok:
+                text = await resp.text()
+                raise AuthException(
+                    f"Entitlements check failed: {resp.status}",
+                    code="MC-ENTITLEMENTS-FAILED",
+                    detail=text,
+                )
 
-    if not await _mc_check_ownership(mc_access_token):
+            data = await resp.json()
+            items = data.get("items", [])
+
+            # Check for Minecraft Java Edition ownership
+            java_products = ("product_minecraft", "game_minecraft")
+            return any(item.get("name") in java_products for item in items) or bool(
+                items
+            )  # Fallback: any items means some ownership
+
+
+async def get_profile(
+    mc_access_token: str,
+    timeout: float = DEFAULT_TIMEOUT,
+) -> tuple[str, str]:
+    """
+    Get the Minecraft profile (username and UUID).
+
+    Args:
+        mc_access_token: Minecraft access token
+        timeout: Request timeout in seconds
+
+    Returns:
+        Tuple of (username, uuid)
+    """
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            MC_PROFILE_URL,
+            headers={"Authorization": f"Bearer {mc_access_token}"},
+            timeout=aiohttp.ClientTimeout(total=timeout),
+        ) as resp:
+            if resp.status == 404:
+                raise NotPremium(
+                    "Minecraft profile not found. Account may not own Java Edition.",
+                    code="MC-NOT-PREMIUM",
+                )
+
+            if not resp.ok:
+                text = await resp.text()
+                raise AuthException(
+                    f"Failed to get Minecraft profile: {resp.status}",
+                    code="MC-PROFILE-FAILED",
+                    detail=text,
+                )
+
+            data = await resp.json()
+            username = data.get("name", "")
+            uuid = data.get("id", "")
+
+            if not username or not uuid:
+                raise AuthException(
+                    "Minecraft profile incomplete (missing name/id)",
+                    code="MC-PROFILE-INCOMPLETE",
+                )
+
+            return username, uuid
+
+
+async def complete_login(
+    client_id: str,
+    ms_access_token: str,
+    ms_refresh_token: str = "",
+) -> LoginResult:
+    """
+    Complete the full Minecraft authentication after obtaining Microsoft tokens.
+
+    This handles the Xbox Live -> XSTS -> Minecraft flow.
+
+    Args:
+        client_id: Your Azure application client ID (for future refresh)
+        ms_access_token: Microsoft OAuth2 access token
+        ms_refresh_token: Microsoft OAuth2 refresh token
+
+    Returns:
+        LoginResult with Minecraft access_token, username, uuid, and refresh_token
+    """
+    # Xbox Live authentication
+    xbl_token, _ = await authenticate_with_xbl(ms_access_token)
+
+    # XSTS token
+    xsts_token, user_hash = await authenticate_with_xsts(xbl_token)
+
+    # Minecraft authentication
+    mc_access_token = await authenticate_with_minecraft(user_hash, xsts_token)
+
+    # Verify ownership
+    if not await check_ownership(mc_access_token):
         raise NotPremium(
-            "This Microsoft account does not own Minecraft: Java Edition.",
+            "This account does not own Minecraft: Java Edition",
             code="MC-NOT-PREMIUM",
         )
 
-    username, uuid_ = await _mc_profile(mc_access_token)
-    if not username or not uuid_:
-        raise AuthException(
-            "Minecraft profile incomplete (missing name/id).",
-            code="MC-PROFILE-INCOMPLETE",
-        )
+    # Get profile
+    username, uuid = await get_profile(mc_access_token)
 
     return {
         "access_token": mc_access_token,
         "username": username,
-        "uuid": uuid_,
-        "refresh_token": token_data.get("refresh_token", ""),
+        "uuid": uuid,
+        "refresh_token": ms_refresh_token,
     }
+
+
+async def complete_refresh(
+    client_id: str,
+    refresh_token: str,
+) -> LoginResult:
+    """
+    Refresh authentication using a stored refresh token.
+
+    Args:
+        client_id: Your Azure application client ID
+        refresh_token: The refresh token from a previous login
+
+    Returns:
+        LoginResult with new tokens and profile
+    """
+    # Refresh Microsoft token
+    tokens = await refresh_authorization_token(client_id, refresh_token)
+
+    # Complete login with new tokens
+    return await complete_login(
+        client_id,
+        tokens["access_token"],
+        tokens["refresh_token"],
+    )
+
+
+# ============================================================================
+# Legacy API compatibility
+# ============================================================================
+
+# Default client ID - users should provide their own
+_DEFAULT_CLIENT_ID: str | None = None
+
+
+def set_client_id(client_id: str) -> None:
+    """
+    Set the default Azure client ID for authentication.
+
+    This must be called before using login() or login_with_refresh_token().
+
+    Args:
+        client_id: Your Azure application client ID
+    """
+    global _DEFAULT_CLIENT_ID
+    _DEFAULT_CLIENT_ID = client_id
+
+
+def get_client_id() -> str:
+    """Get the configured client ID or raise an error."""
+    if _DEFAULT_CLIENT_ID is None:
+        raise AuthException(
+            "No client ID configured. Call auth.ms.set_client_id() first.",
+            code="NO-CLIENT-ID",
+        )
+    return _DEFAULT_CLIENT_ID
+
+
+async def login(email: str, password: str) -> LoginResult:
+    """
+    Legacy login function - NOT SUPPORTED with Azure OAuth2.
+
+    Microsoft no longer supports password-based authentication for consumer
+    accounts through Azure AD. Use the device code flow instead.
+
+    Args:
+        email: Ignored
+        password: Ignored
+
+    Raises:
+        AuthException: Always raises explaining the migration
+    """
+    raise AuthException(
+        "Password-based login is no longer supported. "
+        "Use the device code flow: await auth.ms.request_device_code(client_id)",
+        code="PASSWORD-LOGIN-DEPRECATED",
+    )
 
 
 async def login_with_refresh_token(refresh_token: str) -> LoginResult:
     """
-    Login using a refresh token instead of email/password.
+    Login using a refresh token.
+
+    Requires set_client_id() to be called first.
 
     Args:
         refresh_token: The refresh token from a previous login
 
     Returns:
-        Dictionary containing:
-        - access_token: Minecraft access token
-        - username: Minecraft username
-        - uuid: Minecraft UUID
-        - refresh_token: New Microsoft refresh token (may be empty if not provided)
-
-    Raises:
-        AuthException: If authentication fails
-        InvalidCredentials: If the refresh token is invalid
-        NotPremium: If the account doesn't own Minecraft
+        LoginResult with new tokens and profile
     """
-    token_data = await refresh_ms_token(refresh_token)
-    xbl_token, _ = await _xbox_live_auth(token_data["access_token"])
-    xsts_token, uhs = await _xsts_authorize(xbl_token)
-    mc_access_token = await _mc_login_with_xbox(uhs, xsts_token)
+    client_id = get_client_id()
+    return await complete_refresh(client_id, refresh_token)
 
-    if not await _mc_check_ownership(mc_access_token):
-        raise NotPremium(
-            "This Microsoft account does not own Minecraft: Java Edition.",
-            code="MC-NOT-PREMIUM",
-        )
 
-    username, uuid_ = await _mc_profile(mc_access_token)
-    if not username or not uuid_:
-        raise AuthException(
-            "Minecraft profile incomplete (missing name/id).",
-            code="MC-PROFILE-INCOMPLETE",
-        )
+async def refresh_ms_token(refresh_token: str) -> dict[str, str]:
+    """
+    Refresh a Microsoft access token.
 
-    return {
-        "access_token": mc_access_token,
-        "username": username,
-        "uuid": uuid_,
-        "refresh_token": token_data.get("refresh_token", ""),
-    }
+    Requires set_client_id() to be called first.
+
+    Args:
+        refresh_token: The refresh token from a previous login
+
+    Returns:
+        Dictionary containing access_token and refresh_token
+    """
+    client_id = get_client_id()
+    return await refresh_authorization_token(client_id, refresh_token)

@@ -6,6 +6,7 @@ import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
+import auth
 from core.proxy import Proxy
 from proxhy.proxhy import Proxhy
 
@@ -17,6 +18,8 @@ else:
 loop_impl.install()
 
 instances: list[Proxy] = []
+
+auth.set_client_id("6dd7ede8-1d77-4fff-a7ea-6e07c09d6163")
 
 
 def parse_args():

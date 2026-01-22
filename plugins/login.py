@@ -12,7 +12,7 @@ import aiohttp
 import hypixel
 
 import auth
-from auth.errors import AuthException, InvalidCredentials, NotPremium
+from auth.errors import AuthException
 from core.cache import Cache
 from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
@@ -32,8 +32,6 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
-from proxhy.command import command
-from proxhy.errors import CommandException
 from proxhy.plugin import ProxhyPlugin
 
 
@@ -41,6 +39,7 @@ class LoginPluginState:
     logged_in: bool
     logging_in: bool
     regenerating_credentials: bool
+    device_code_task: Optional[asyncio.Task]
     server_list_ping: dict
     access_token: str
     username: str
@@ -48,6 +47,7 @@ class LoginPluginState:
     secret: bytes
     secret_task: Optional[asyncio.Task]
     keep_alive_task: Optional[asyncio.Task]
+    transferring_to_server: bool
 
 
 class LoginPlugin(ProxhyPlugin):
@@ -55,6 +55,8 @@ class LoginPlugin(ProxhyPlugin):
         self.logged_in = False
         self.logging_in = False
         self.regenerating_credentials = False
+        self.device_code_task = None
+        self.transferring_to_server = False
 
         # load favicon
         # https://github.com/barneygale/quarry/blob/master/quarry/net/server.py/#L356-L357
@@ -85,6 +87,7 @@ class LoginPlugin(ProxhyPlugin):
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
         self.logged_in = True
+        self.transferring_to_server = False
 
         # parse and store uuid from login success packet
         # for localhost/offline mode when uuid isnt set during auth
@@ -147,8 +150,13 @@ class LoginPlugin(ProxhyPlugin):
                 self.CONNECT_HOST[0], self.CONNECT_HOST[1]
             )
         except ConnectionRefusedError:
+            if self.transferring_to_server:
+                packet_id = 0x40  # client is on play state
+                self.transferring_to_server = False
+            else:
+                packet_id = 0x00
             self.client.send_packet(
-                0x00,
+                packet_id,
                 Chat.pack(
                     TextComponent(
                         f"Failed to connect to {self.CONNECT_HOST[0]}:{self.CONNECT_HOST[1]}"
@@ -189,40 +197,72 @@ class LoginPlugin(ProxhyPlugin):
 
         self.server.send_packet(0x00, String(self.username))
 
-    @command("login")
-    async def _command_login(self, email: str, password: str):
-        if (not self.logging_in) or self.regenerating_credentials:
-            raise CommandException("You can't use that right now!")
-
-        login_msg = TextComponent("Logging in...").color("gold")
-        self.client.chat(login_msg)
-
+    async def _start_device_code_flow(self):
         try:
-            access_token, username, uuid = await auth.login(email, password)
-        except InvalidCredentials:
-            raise CommandException("Login failed; invalid credentials!")
-        except NotPremium:
-            raise CommandException("This account is not premium!")
+            device = await auth.request_device_code()
+
+            self.client.chat(
+                TextComponent("To log in, visit")
+                .color("gold")
+                .appends(
+                    TextComponent(device["verification_uri"])
+                    .color("aqua")
+                    .click_event("open_url", device["verification_uri"])
+                    .hover_text(TextComponent("Open in browser").color("yellow"))
+                )
+                .appends("and enter code")
+                .appends(
+                    TextComponent(device["user_code"])
+                    .color("green")
+                    .bold()
+                    .click_event("suggest_command", device["user_code"])
+                    .hover_text(
+                        TextComponent("Copy")
+                        .color("yellow")
+                        .appends(
+                            TextComponent(device["user_code"]).color("green").bold()
+                        )
+                    )
+                )
+            )
+
+            def on_pending():
+                pass
+
+            access_token, username, uuid = await auth.complete_device_code_login(
+                device["device_code"],
+                interval=device.get("interval", 5),
+                expires_in=device.get("expires_in", 900),
+                on_pending=on_pending,
+            )
+
+            if username != self.username:
+                self.client.send_packet(
+                    0x40,
+                    Chat.pack(
+                        TextComponent("Wrong account! Logged into")
+                        .color("red")
+                        .appends(TextComponent(username).color("aqua"))
+                        .append("; expected")
+                        .appends(TextComponent(self.username).color("aqua"))
+                    ),
+                )
+                return
+
+            self.access_token = access_token
+            self.uuid = uuid
+
+            success_msg = TextComponent(
+                f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
+            ).color("green")
+            self.client.chat(success_msg)
+            self.state = State.LOGIN
+            self.transferring_to_server = True
+
+            await self.packet_login_start(Buffer(String.pack(self.username)))
+
         except AuthException as e:
-            raise CommandException(
-                f"An unknown error occurred while logging in! Try again? {e}"
-            )
-
-        if username != self.username:
-            raise CommandException(
-                f"Wrong account! Logged into {username}; expected {self.username}"
-            )
-
-        self.access_token = access_token
-        self.uuid = uuid
-
-        success_msg = TextComponent(
-            f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
-        ).color("green")
-        self.client.chat(success_msg)
-        self.state = State.LOGIN
-
-        await self.packet_login_start(Buffer(String.pack(self.username)))
+            self.client.chat(TextComponent(f"Authentication failed: {e}").color("red"))
 
     async def login_keep_alive(self):
         while True:
@@ -239,6 +279,12 @@ class LoginPlugin(ProxhyPlugin):
             self.keep_alive_task.cancel()
             try:
                 await self.keep_alive_task
+            except asyncio.CancelledError:
+                pass
+        if self.device_code_task and not self.device_code_task.done():
+            self.device_code_task.cancel()
+            try:
+                await self.device_code_task
             except asyncio.CancelledError:
                 pass
 
@@ -288,7 +334,7 @@ class LoginPlugin(ProxhyPlugin):
 
         if reason == "logging_in":
             self.client.chat("You have not logged into Proxhy with this account yet!")
-            self.client.chat("Use /login <email> <password> to log in.")
+            self.device_code_task = asyncio.create_task(self._start_device_code_flow())
         else:
             self.regenerating_credentials = True
             self.client.set_title(
