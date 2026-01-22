@@ -466,9 +466,10 @@ class PlayerTransformer:
             slot = buff.unpack(Short)
             slot_data = buff.unpack(Slot)
 
-            # Check if this affects the currently held item
-            # Window 0 is player inventory, slots 36-44 are hotbar (36 + held_slot)
+            # Window 0 is player inventory
             if window_id == 0:
+                # Check if this affects the currently held item
+                # Slots 36-44 are hotbar (36 + held_slot)
                 hotbar_slot = slot - 36
                 if (
                     0 <= hotbar_slot <= 8
@@ -482,7 +483,60 @@ class PlayerTransformer:
                         + Short.pack(EQUIPMENT_SLOT_HELD)
                         + Slot.pack(slot_data),
                     )
+
+                # Check if this affects armor slots
+                # Inventory slots 5-8 are armor: 5=helmet, 6=chestplate, 7=leggings, 8=boots
+                # Equipment slots: 4=helmet, 3=chestplate, 2=leggings, 1=boots
+                armor_slot_map = {5: 4, 6: 3, 7: 2, 8: 1}
+                if slot in armor_slot_map:
+                    equip_slot = armor_slot_map[slot]
+                    self._player_equipment[equip_slot] = slot_data
+                    self._announce_player(
+                        0x04,  # Entity Equipment
+                        VarInt.pack(self._player_eid)
+                        + Short.pack(equip_slot)
+                        + Slot.pack(slot_data),
+                    )
             # Don't forward Set Slot to spectators (they don't have inventory)
+
+        elif packet_id == 0x30:  # Window Items
+            window_id = buff.unpack(UnsignedByte)
+            count = buff.unpack(Short)
+
+            if window_id == 0:
+                # Player inventory - extract armor and held item
+                # Inventory slots 5-8 are armor: 5=helmet, 6=chestplate, 7=leggings, 8=boots
+                # Equipment slots: 4=helmet, 3=chestplate, 2=leggings, 1=boots
+                armor_slot_map = {5: 4, 6: 3, 7: 2, 8: 1}
+
+                for i in range(count):
+                    slot_data = buff.unpack(Slot)
+
+                    # Check armor slots
+                    if i in armor_slot_map:
+                        equip_slot = armor_slot_map[i]
+                        self._player_equipment[equip_slot] = slot_data
+                        self._announce_player(
+                            0x04,  # Entity Equipment
+                            VarInt.pack(self._player_eid)
+                            + Short.pack(equip_slot)
+                            + Slot.pack(slot_data),
+                        )
+
+                    # Check held item slot (36 + held_item_slot)
+                    hotbar_slot = i - 36
+                    if (
+                        0 <= hotbar_slot <= 8
+                        and hotbar_slot == self.gamestate.held_item_slot
+                    ):
+                        self._player_equipment[EQUIPMENT_SLOT_HELD] = slot_data
+                        self._announce_player(
+                            0x04,  # Entity Equipment
+                            VarInt.pack(self._player_eid)
+                            + Short.pack(EQUIPMENT_SLOT_HELD)
+                            + Slot.pack(slot_data),
+                        )
+            # Don't forward Window Items to spectators
 
         elif packet_id == 0x38:  # Player List Item
             self._announce(packet_id, b"".join(data))
