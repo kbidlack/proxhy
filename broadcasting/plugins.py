@@ -118,6 +118,14 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             else:
                 raise CommandException("Please provide a target player!")
 
+        # check if it's the spectator themselves (reset spectate mode)
+        if target.name.casefold() == self.username.casefold():
+            if self.spec_eid is None:
+                raise CommandException("You are not spectating anyone!")
+            self.client.send_packet(0x43, VarInt.pack(self.eid))
+            self.spec_eid = None
+            return
+
         # check if it's the broadcasting player (compare by username since UUIDs
         # may differ between auth and server in offline/local mode)
         if target.name.casefold() == self.proxy.username.casefold():
