@@ -88,10 +88,11 @@ class PlayerTransformer:
         self._player_uuid = player_uuid
         self._player_eid = self.gamestate.player_entity_id
         # Sync last position/rotation for delta calculations
+        # Use truncated fixed-point values to match what clients will receive
         self._last_position = Vec3d(
-            self.gamestate.position.x,
-            self.gamestate.position.y,
-            self.gamestate.position.z,
+            int(self.gamestate.position.x * 32) / 32,
+            int(self.gamestate.position.y * 32) / 32,
+            int(self.gamestate.position.z * 32) / 32,
         )
         self._last_rotation = Rotation(
             self.gamestate.rotation.yaw,
@@ -193,15 +194,20 @@ class PlayerTransformer:
             and self._player_spawned_for
         )
 
+        # Truncate deltas to what will actually be sent to clients
+        dx_int = int(dx)
+        dy_int = int(dy)
+        dz_int = int(dz)
+
         if use_relative:
             if has_look:
                 # Entity Look And Relative Move (0x17)
                 self._announce_player(
                     0x17,
                     VarInt.pack(self._player_eid)
-                    + Byte.pack(int(dx))
-                    + Byte.pack(int(dy))
-                    + Byte.pack(int(dz))
+                    + Byte.pack(dx_int)
+                    + Byte.pack(dy_int)
+                    + Byte.pack(dz_int)
                     + Angle.pack(new_rot.yaw)
                     + Angle.pack(new_rot.pitch)
                     + Boolean.pack(gs.on_ground),
@@ -215,19 +221,29 @@ class PlayerTransformer:
                 self._announce_player(
                     0x15,
                     VarInt.pack(self._player_eid)
-                    + Byte.pack(int(dx))
-                    + Byte.pack(int(dy))
-                    + Byte.pack(int(dz))
+                    + Byte.pack(dx_int)
+                    + Byte.pack(dy_int)
+                    + Byte.pack(dz_int)
                     + Boolean.pack(gs.on_ground),
                 )
+            # Update last position based on what was actually sent (truncated delta)
+            self._last_position = Vec3d(
+                self._last_position.x + dx_int / 32,
+                self._last_position.y + dy_int / 32,
+                self._last_position.z + dz_int / 32,
+            )
         else:
+            # Truncate to fixed-point values that will be sent
+            x_fixed = int(new_pos.x * 32)
+            y_fixed = int(new_pos.y * 32)
+            z_fixed = int(new_pos.z * 32)
             # Entity Teleport (0x18)
             self._announce_player(
                 0x18,
                 VarInt.pack(self._player_eid)
-                + Int.pack(int(new_pos.x * 32))
-                + Int.pack(int(new_pos.y * 32))
-                + Int.pack(int(new_pos.z * 32))
+                + Int.pack(x_fixed)
+                + Int.pack(y_fixed)
+                + Int.pack(z_fixed)
                 + Angle.pack(new_rot.yaw)
                 + Angle.pack(new_rot.pitch)
                 + Boolean.pack(gs.on_ground),
@@ -237,9 +253,8 @@ class PlayerTransformer:
                     0x19,
                     VarInt.pack(self._player_eid) + Angle.pack(new_rot.yaw),
                 )
-
-        # Update last known position for next delta calculation
-        self._last_position = Vec3d(new_pos.x, new_pos.y, new_pos.z)
+            # Update last position based on what was actually sent (truncated fixed-point)
+            self._last_position = Vec3d(x_fixed / 32, y_fixed / 32, z_fixed / 32)
         if has_look:
             self._last_rotation = Rotation(new_rot.yaw, new_rot.pitch)
 
@@ -333,7 +348,11 @@ class PlayerTransformer:
             # Gamestate has already processed this packet and updated position/rotation
             # We just need to sync our last position tracking and broadcast
             gs = self.gamestate
-            self._last_position = Vec3d(gs.position.x, gs.position.y, gs.position.z)
+            # Truncate to fixed-point to match what clients will receive
+            x_fixed = int(gs.position.x * 32)
+            y_fixed = int(gs.position.y * 32)
+            z_fixed = int(gs.position.z * 32)
+            self._last_position = Vec3d(x_fixed / 32, y_fixed / 32, z_fixed / 32)
             self._last_rotation = Rotation(gs.rotation.yaw, gs.rotation.pitch)
 
             self._announce(packet_id, b"".join(data))
@@ -342,9 +361,9 @@ class PlayerTransformer:
             self._announce_player(
                 0x18,
                 VarInt.pack(self._player_eid)
-                + Int.pack(int(gs.position.x * 32))
-                + Int.pack(int(gs.position.y * 32))
-                + Int.pack(int(gs.position.z * 32))
+                + Int.pack(x_fixed)
+                + Int.pack(y_fixed)
+                + Int.pack(z_fixed)
                 + Angle.pack(gs.rotation.yaw)
                 + Angle.pack(gs.rotation.pitch)
                 + Boolean.pack(gs.on_ground),

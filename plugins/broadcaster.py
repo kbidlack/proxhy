@@ -32,6 +32,7 @@ from protocol.datatypes import (
 from proxhy.argtypes import MojangPlayer
 from proxhy.command import CommandGroup
 from proxhy.errors import CommandException
+from proxhy.gamestate import Vec3d
 from proxhy.plugin import ProxhyPlugin
 
 from .broadcastee.proxy import broadcastee_plugin_list
@@ -855,7 +856,12 @@ class BroadcastPlugin(ProxhyPlugin):
                 )
 
         # Sync transformer's last known position/rotation for delta calculations
-        self._transformer._last_position = current_position
+        # Use truncated fixed-point values to match what was sent to clients
+        self._transformer._last_position = Vec3d(
+            int(current_position.x * 32) / 32,
+            int(current_position.y * 32) / 32,
+            int(current_position.z * 32) / 32,
+        )
         self._transformer._last_rotation = current_rotation
 
         self._transformer.mark_spawned(client.eid)
