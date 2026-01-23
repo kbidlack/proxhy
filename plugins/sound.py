@@ -2,7 +2,6 @@ import asyncio
 from typing import Callable, Coroutine
 
 from protocol.datatypes import Float, Int, String, UnsignedByte
-from proxhy.command import command
 from proxhy.plugin import ProxhyPlugin
 
 
@@ -78,11 +77,3 @@ class SoundPlugin(ProxhyPlugin):
             for note in pitches:
                 self._play_sound("note.pling", pitch=self.note_to_pitch(note))
             await asyncio.sleep(duration)
-
-    @command("i")
-    async def iphone_ringtone(self):
-        await self._iphone_ringtone()
-
-    @command("a")
-    async def android_ringtone(self):
-        await self._android_ringtone()

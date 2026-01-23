@@ -252,6 +252,17 @@ class BroadcastPlugin(ProxhyPlugin):
             name = player.name
             uuid_ = player.uuid
 
+            if name.casefold() == self.username.casefold():
+                raise CommandException(
+                    TextComponent("You cannot invite or request yourself!")
+                )
+
+            if name in self.broadcast_invites:
+                raise CommandException(
+                    TextComponent(name)
+                    .color("aqua")
+                    .appends("has already sent you an invite!")
+                )
             if name in self.broadcast_requests:
                 raise CommandException(
                     TextComponent(name).color("aqua").appends(already_pending_msg)
