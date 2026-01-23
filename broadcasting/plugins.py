@@ -89,6 +89,9 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             .appends(TextComponent("left the broadcast!").color("red"))
         )
 
+        # Play UI click sound at low pitch for leave
+        self.proxy._play_sound("random.click", pitch=40)
+
         self.proxy.client.send_packet(
             0x38,
             VarInt.pack(4),  # action: remove player
@@ -400,6 +403,10 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             .color("aqua")
             .appends(TextComponent("joined the broadcast!").color("green"))
         )
+
+        # Play UI click sound at normal pitch for join
+        self.proxy._play_sound("random.click")
+
         display_name = (
             TextComponent("[")
             .color("dark_gray")

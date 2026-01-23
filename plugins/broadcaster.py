@@ -263,6 +263,7 @@ class BroadcastPlugin(ProxhyPlugin):
                     .appends("has already joined the broadcast!")
                 )
 
+            asyncio.create_task(self._iphone_ringtone())
             req_task = asyncio.create_task(
                 self.compass_client.request_peer(
                     uuid_, request_reason=reason, timeout=60
@@ -631,6 +632,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self.broadcast_invites[request_id] = request
 
         if request.reason == "proxhy.broadcast":
+            asyncio.create_task(self._android_ringtone())
             self.client.chat(
                 self._build_broadcast_request_message(
                     request.username,
@@ -645,6 +647,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 lambda: asyncio.create_task(self._expire_broadcast_request(request_id)),
             )
         elif request.reason == "proxhy.broadcast_request":
+            asyncio.create_task(self._android_ringtone())
             with shelve.open(self.BC_DATA_PATH) as db:
                 trusted: set[str] = db["trusted"]
 

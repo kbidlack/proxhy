@@ -9,6 +9,7 @@ from plugins.hypixelstate import HypixelStatePluginState
 from plugins.login import LoginPluginState
 from plugins.misc import MiscPluginState
 from plugins.settings import SettingsPluginState
+from plugins.sound import SoundPluginState
 from plugins.spatial import SpatialPluginState
 from plugins.statcheck.command import StatcheckCommandPluginState
 from plugins.statcheck.statcheck import StatCheckPluginState
@@ -28,6 +29,7 @@ class ProxhyPlugin(
     SpatialPluginState,
     StatCheckPluginState,
     StatcheckCommandPluginState,
+    SoundPluginState,
     WindowPluginState,
     Plugin,
 ):
