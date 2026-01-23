@@ -49,11 +49,11 @@ class DebugPlugin(ProxhyPlugin):
             print(f"{team_name}: {team}")
         print("\n")
 
-    @command("_debug_iphone_ringtone")
+    @command("iphone_ringtone")
     async def _command_iphone_ringtone(self):
         await self._iphone_ringtone()
 
-    @command("_debug_android_ringtone")
+    @command("android_ringtone")
     async def _command_android_ringtone(self):
         await self._android_ringtone()
 

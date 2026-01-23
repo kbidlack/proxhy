@@ -67,6 +67,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self.clients: list[BroadcastPeerProxy] = []
         self.broadcast_invites: dict[str, compass.ConnectionRequest] = {}
         self.broadcast_requests: set[str] = set()
+        self.joining_broadcast: bool = False
 
         self.serverbound_task: Optional[asyncio.Task] = None
 
@@ -174,6 +175,11 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("join")
         async def _command_broadcast_join(self, request_id: str):
+            if self.joining_broadcast:
+                raise CommandException(
+                    TextComponent("You are already joining a broadcast!").color("red")
+                )
+
             if not self.compass_client_initialized:
                 raise CommandException(
                     "The compass client is not connected yet! (wait a second?)"
@@ -274,7 +280,6 @@ class BroadcastPlugin(ProxhyPlugin):
                     .appends("has already joined the broadcast!")
                 )
 
-            asyncio.create_task(self._iphone_ringtone())
             req_task = asyncio.create_task(
                 self.compass_client.request_peer(
                     uuid_, request_reason=reason, timeout=60
@@ -299,6 +304,7 @@ class BroadcastPlugin(ProxhyPlugin):
                         .appends("is currently unavailable!")
                     )
 
+            asyncio.create_task(self._iphone_ringtone())
             self.client.chat(
                 TextComponent(sent_msg)
                 .color("green")
@@ -448,30 +454,60 @@ class BroadcastPlugin(ProxhyPlugin):
         self.command_registry.register(trust)
 
     async def _join_broadcast_by_node_id(self, node_id: str):
-        # TODO: handle errors here properly
-        reader, writer = await pyroh.connect(
-            pyroh.node_addr(node_id),
-            alpn="proxhy.broadcast/1",
-            node=self.broadcast_pyroh_server.node,
-        )
+        if self.joining_broadcast:
+            raise CommandException(
+                TextComponent("You are already joining a broadcast!").color("red")
+            )
 
-        BCClientProxy = type(
-            "BCClientProxy",
-            (*broadcastee_plugin_list, Proxy),
-            {"username": self.username, "uuid": self.uuid},
-        )
+        if self.clients:
+            raise CommandException(
+                TextComponent(
+                    "You cannot join a broadcast while spectators are connected!"
+                ).color("red")
+            )
 
-        new_proxy = BCClientProxy(
-            self.client.reader,
-            self.client.writer,
-            autostart=False,
-        )
+        self.joining_broadcast = True
+        try:
+            try:
+                reader, writer = await asyncio.wait_for(
+                    pyroh.connect(
+                        pyroh.node_addr(node_id),
+                        alpn="proxhy.broadcast/1",
+                        node=self.broadcast_pyroh_server.node,
+                    ),
+                    timeout=10.0,
+                )
+            except asyncio.TimeoutError:
+                raise CommandException(
+                    TextComponent(
+                        "Connection timed out! The broadcaster may be unavailable."
+                    ).color("red")
+                )
+            except OSError as e:
+                raise CommandException(
+                    TextComponent(f"Connection failed: {e}").color("red")
+                )
 
-        await new_proxy.create_server(reader, writer)
-        await self.transfer_to(new_proxy)
+            BCClientProxy = type(
+                "BCClientProxy",
+                (*broadcastee_plugin_list, Proxy),
+                {"username": self.username, "uuid": self.uuid},
+            )
 
-        self.server.writer.write_eof()
-        await new_proxy.join(self.username, node_id)
+            new_proxy = BCClientProxy(
+                self.client.reader,
+                self.client.writer,
+                autostart=False,
+            )
+
+            await new_proxy.create_server(reader, writer)
+            await self.transfer_to(new_proxy)
+
+            self.server.writer.write_eof()
+            await new_proxy.join(self.username, node_id)
+        except CommandException:
+            self.joining_broadcast = False
+            raise
 
     @subscribe("login_success")
     async def _broadcast_event_login_success(self, _):
