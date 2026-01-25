@@ -1118,7 +1118,8 @@ class GameState:
             if entity_id in self.entities:
                 entity = self.entities[entity_id]
                 if isinstance(entity, Player) and entity.uuid in self.players:
-                    del self.players[entity.uuid]
+                    pass  # this does nto remove from tab list???
+                    # del self.players[entity.uuid]
                 del self.entities[entity_id]
 
     def _handle_entity(self, buff: Buffer) -> None:

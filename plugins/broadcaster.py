@@ -1,6 +1,7 @@
 import asyncio
 import random
 import shelve
+import uuid
 import uuid as uuid_mod
 from pathlib import Path
 from typing import Optional
@@ -21,6 +22,7 @@ from core.events import subscribe
 from core.net import State
 from core.proxy import Proxy
 from protocol.datatypes import (
+    UUID,
     Angle,
     Chat,
     Int,
@@ -504,6 +506,19 @@ class BroadcastPlugin(ProxhyPlugin):
             await self.transfer_to(new_proxy)
 
             self.server.writer.write_eof()
+
+            # build player removal packet
+            # because 0x01 doesn't clear for some reason bruh
+            self.client.send_packet(
+                0x38,
+                VarInt.pack(4),
+                VarInt.pack(len(self.gamestate.players)),
+                *(
+                    UUID.pack(uuid.UUID(player.uuid))
+                    for player in self.gamestate.players.values()
+                ),
+            )
+
             await new_proxy.join(self.username, node_id)
         except CommandException:
             self.joining_broadcast = False
