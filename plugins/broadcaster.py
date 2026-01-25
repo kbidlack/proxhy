@@ -699,7 +699,18 @@ class BroadcastPlugin(ProxhyPlugin):
                 trusted: set[str] = db["trusted"]
 
             if request.uuid in trusted:
-                await self.run_proxhy_command(f"/bc accept {request_id}")
+                self.client.chat(
+                    TextComponent(request.username)
+                    .color("aqua")
+                    .bold()
+                    .appends(
+                        TextComponent(
+                            "requested to join your broadcast! Auto-accepting..."
+                        ).color("green")
+                    )
+                )
+                del self.broadcast_invites[request_id]
+                await request.accept()
             else:
                 self.client.chat(
                     self._build_broadcast_request_message(
