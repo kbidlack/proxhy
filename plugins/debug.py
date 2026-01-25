@@ -53,9 +53,9 @@ class DebugPlugin(ProxhyPlugin):
     async def _command_iphone_ringtone(self):
         await self._iphone_ringtone()
 
-    @command("android_ringtone")
-    async def _command_android_ringtone(self):
-        await self._android_ringtone()
+    @command("samsung_ringtone")
+    async def _command_samsung_ringtone(self):
+        await self._samsung_ringtone()
 
     # @subscribe("chat:server:.*")
     # async def log_chat_msg(self, buff: Buffer):

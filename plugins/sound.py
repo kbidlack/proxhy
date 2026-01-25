@@ -8,7 +8,7 @@ from proxhy.plugin import ProxhyPlugin
 class SoundPluginState:
     note_to_pitch: Callable[[int], int]
     _play_sound: Callable[[str, float, int], None]
-    _android_ringtone: Callable[[], Coroutine[None, None, None]]
+    _samsung_ringtone: Callable[[], Coroutine[None, None, None]]
     _iphone_ringtone: Callable[[], Coroutine[None, None, None]]
 
 
@@ -40,7 +40,7 @@ class SoundPlugin(ProxhyPlugin):
             UnsignedByte.pack(pitch),
         )
 
-    async def _android_ringtone(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def _samsung_ringtone(self):  # pyright: ignore[reportIncompatibleMethodOverride]
         eighth = 0.2
         quarter = 0.4
         notes = [

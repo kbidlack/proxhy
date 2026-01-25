@@ -304,6 +304,13 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             # might not be if joining by ID
             self.proxy.broadcast_requests.remove(self.username)
 
+        self.proxy.client.chat(
+            TextComponent(self.username)
+            .color("aqua")
+            .appends(TextComponent("is joining the broadcast...").color("yellow"))
+        )
+        self.proxy._play_sound("random.click")
+
         # send login success packet
         # TODO: support server support. this + login encryption will come back then
         # self.client.send_packet(
@@ -403,9 +410,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             .color("aqua")
             .appends(TextComponent("joined the broadcast!").color("green"))
         )
-
-        # Play UI click sound at normal pitch for join
-        self.proxy._play_sound("random.click")
 
         display_name = (
             TextComponent("[")

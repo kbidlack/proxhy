@@ -581,8 +581,9 @@ class BroadcastPlugin(ProxhyPlugin):
         # in packet_login_start to avoid live packets mixing with sync packets
 
         # start processing packets from this client (runs until client disconnects)
-        # we await here to keep this method alive so pyroh doesn't close the reader/writer
         client.handle_client_task = asyncio.create_task(client.handle_client())
+
+        # we await here to keep this method alive so pyroh doesn't close the reader/writer
         try:
             await client.handle_client_task
         except asyncio.CancelledError:
@@ -679,7 +680,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self.broadcast_invites[request_id] = request
 
         if request.reason == "proxhy.broadcast":
-            asyncio.create_task(self._android_ringtone())
+            asyncio.create_task(self._samsung_ringtone())
             self.client.chat(
                 self._build_broadcast_request_message(
                     request.username,
@@ -694,7 +695,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 lambda: asyncio.create_task(self._expire_broadcast_request(request_id)),
             )
         elif request.reason == "proxhy.broadcast_request":
-            asyncio.create_task(self._android_ringtone())
+            asyncio.create_task(self._samsung_ringtone())
             with shelve.open(self.BC_DATA_PATH) as db:
                 trusted: set[str] = db["trusted"]
 
