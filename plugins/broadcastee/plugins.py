@@ -3,10 +3,10 @@ import typing
 
 import pyroh
 
-from core.events import subscribe
+from core.events import listen_server, subscribe
 from core.net import Server, State
 from core.plugin import Plugin
-from protocol.datatypes import Short, String, VarInt
+from protocol.datatypes import Buffer, Short, String, VarInt
 
 
 class BroadcasteeClosePlugin(Plugin):
@@ -15,6 +15,11 @@ class BroadcasteeClosePlugin(Plugin):
         typing.cast(pyroh.StreamWriter, self.server.writer)
         self.server.writer.write_eof()
         await self.server.writer.drain()
+
+    @listen_server(0x46, blocking=True)
+    async def _packet_set_compression(self, buff: Buffer):
+        self.server.compression_threshold = buff.unpack(VarInt)
+        self.server.compression = True
 
     async def create_server(
         self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter

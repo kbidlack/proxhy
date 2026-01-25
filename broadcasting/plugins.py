@@ -363,6 +363,16 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         self.state = State.PLAY
 
+        # set compression
+        # we are using 'broken' 0x46 packet because why not and because I can
+        # I guess I could use a plugin channel but that's like so much effort
+        # TODO: this needs logic for non proxhy broadcastees, in which compression
+        # should be set with the login packet (0x03)
+        self.client.compression_threshold = 256
+        self.client.send_packet(0x46, VarInt.pack(self.client.compression_threshold))
+        await self.client.drain()
+        self.client.compression = True
+
         for packet_id, packet_data in packets[1:]:
             self.client.send_packet(packet_id, packet_data)
 
