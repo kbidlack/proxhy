@@ -136,6 +136,12 @@ class Proxy:
             if data := await self.client.read(packet_length):
                 buff = Buffer(data)
 
+                if self.client.compression:
+                    data_length = buff.unpack(VarInt)
+                    if data_length >= self.client.compression_threshold:
+                        data = zlib.decompress(buff.read())
+                        buff = Buffer(data)
+
                 packet_id = buff.unpack(VarInt)
                 packet_data = buff.read()
 
