@@ -355,8 +355,9 @@ class PlayerTransformer:
             self._last_position = Vec3d(x_fixed / 32, y_fixed / 32, z_fixed / 32)
             self._last_rotation = Rotation(gs.rotation.yaw, gs.rotation.pitch)
 
-            self._announce(packet_id, b"".join(data))
-            spawn_callback()
+            if not self.player_spawned_for:
+                self._announce(packet_id, b"".join(data))
+                spawn_callback()
 
             self._announce_player(
                 0x18,
