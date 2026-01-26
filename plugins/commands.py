@@ -57,8 +57,9 @@ class CommandsPlugin(ProxhyPlugin):
 
     @subscribe("chat:client:/.*")
     async def _commands_event_chat_client_command(self, buff: Buffer):
-        message = buff.unpack(String)
+        await self._run_command(buff.unpack(String))
 
+    async def _run_command(self, message: str):  # pyright: ignore[reportIncompatibleMethodOverride]
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 
@@ -68,7 +69,6 @@ class CommandsPlugin(ProxhyPlugin):
 
         if command:
             try:
-                # Parse arguments (everything after command name)
                 args = segments[1:]
                 output: str | TextComponent = await command(self, args)
             except CommandException as err:
@@ -108,16 +108,13 @@ class CommandsPlugin(ProxhyPlugin):
                                 output = output.hover_text(message)
                         self.client.chat(output)
         else:
-            self.server.send_packet(0x01, buff.getvalue())
-
-    async def run_proxhy_command(self, command: str):  # pyright: ignore[reportIncompatibleMethodOverride]
-        # TODO: catch command exceptions properly here instead of forwarding to user?
-        await self._commands_event_chat_client_command(Buffer(String.pack(command)))
+            self.server.send_packet(0x01, String.pack(message))
 
     @listen_client(0x14)
     async def packet_tab_complete(self, buff: Buffer):
-        text = buff.unpack(String)
+        await self._tab_complete(buff.unpack(String))
 
+    async def _tab_complete(self, text: str):
         precommand = None
         forward = True
         suggestions: list[str] = []
@@ -166,7 +163,7 @@ class CommandsPlugin(ProxhyPlugin):
 
         if forward:
             self.suggestions.put_nowait(suggestions)
-            self.server.send_packet(0x14, buff.getvalue())
+            self.server.send_packet(0x14, String.pack(text))
         else:
             self.client.send_packet(
                 0x3A,

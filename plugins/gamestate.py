@@ -19,8 +19,6 @@ class GameStatePlugin(ProxhyPlugin):
 
     @subscribe("login_success")
     async def _gamestate_event_login_success(self, _):
-        # Start listening to serverbound packets for player movement/actions
-        # (must be after login when server connection exists)
         self.sb_gamestate_task = asyncio.create_task(self._update_serverbound())
 
     async def _update_clientbound(self):

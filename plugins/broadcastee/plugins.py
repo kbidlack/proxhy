@@ -11,7 +11,7 @@ from protocol.datatypes import Buffer, Short, String, VarInt
 
 class BroadcasteeClosePlugin(Plugin):
     @subscribe("close")
-    async def _bcclientclose_event_close(self, _):
+    async def _broadcastee_event_close(self, _):
         typing.cast(pyroh.StreamWriter, self.server.writer)
         self.server.writer.write_eof()
         await self.server.writer.drain()

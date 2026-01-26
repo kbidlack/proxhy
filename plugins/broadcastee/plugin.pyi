@@ -1,4 +1,8 @@
 from core.plugin import Plugin
+from plugins.chat import ChatPluginState
 
-class BroadcasteePlugin(Plugin):
+class BroadcasteePlugin(
+    Plugin,
+    ChatPluginState,
+):
     pass

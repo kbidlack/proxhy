@@ -1,5 +1,6 @@
 import asyncio
 import json
+import re
 import uuid
 from typing import Literal, Optional
 from unittest.mock import Mock
@@ -9,6 +10,7 @@ import pyroh
 
 from core.events import listen_client as listen
 from core.events import subscribe
+from core.net import Server
 from core.proxy import State
 from plugins.commands import CommandsPlugin
 from protocol.datatypes import (
@@ -27,21 +29,118 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import ServerPlayer
-from proxhy.command import command
+from proxhy.command import Command, CommandGroup, command
 from proxhy.errors import CommandException
 from proxhy.gamestate import PlayerAbilityFlags
 
 from .plugin import BroadcastPeerPlugin
 
 
-class BroadcastPeerCommandsPlugin(CommandsPlugin):
-    @listen(0x14)
-    async def packet_tab_complete(self, buff: Buffer):
-        # reuse packet tab complete logic, but fake server response
-        await super().packet_tab_complete(buff)
-        # VarInt(0) => server response of 0 sugggestions
-        # tells parent plugin to send it's only suggestions
-        await super().packet_server_tab_complete(Buffer(VarInt(0)))
+class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
+    async def _run_command(self, message: str):
+        segments = message.split()
+        cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
+
+        command: Optional[Command | CommandGroup] = self.command_registry.get(cmd_name)
+
+        if command:
+            try:
+                args = segments[1:]
+                output: str | TextComponent = await command(self, args)
+            except CommandException as err:
+                if isinstance(err.message, TextComponent):
+                    err.message.flatten()
+
+                    for i, child in enumerate(err.message.get_children()):
+                        if not child.data.get("color"):
+                            err.message.replace_child(i, child.color("dark_red"))
+                        if not child.data.get("bold"):
+                            err.message.replace_child(i, child.bold(False))
+
+                err.message = TextComponent(err.message)
+                if not err.message.data.get("color"):
+                    err.message.color("dark_red")
+
+                err.message = err.message.bold(False)
+
+                error_msg = TextComponent("∎ ").bold().color("blue").append(err.message)
+                if error_msg.data.get("clickEvent") is None:
+                    error_msg = error_msg.click_event("suggest_command", message)
+                if error_msg.data.get("hoverEvent") is None:
+                    error_msg = error_msg.hover_text(message)
+
+                self.client.chat(error_msg)
+            else:
+                if output:
+                    if segments[0].startswith("//"):  # send output of command
+                        # remove chat formatting
+                        output = re.sub(r"§.", "", str(output))
+                        self.proxy.bc_chat(self.username, output)
+                    else:
+                        if isinstance(output, TextComponent):
+                            if output.data.get("clickEvent") is None:
+                                output = output.click_event("suggest_command", message)
+                            if output.data.get("hoverEvent") is None:
+                                output = output.hover_text(message)
+                        self.client.chat(output)
+        else:
+            self.client.chat(
+                TextComponent(f"Unknown command '{cmd_name}'")
+                .color("red")
+                .hover_text(TextComponent(message).color("yellow"))
+                .click_event("suggest_command", message)
+            )
+
+    async def _tab_complete(self, text: str):
+        precommand = None
+        suggestions: list[str] = []
+
+        # generate autocomplete suggestions
+        if text.startswith("//"):
+            precommand = text.split()[0].removeprefix("//").casefold()
+            prefix = "//"
+        elif text.startswith("/"):
+            precommand = text.split()[0].removeprefix("/").casefold()
+            prefix = "/"
+        else:
+            prefix = ""
+
+        if precommand is not None:
+            parts = text.split()
+
+            if " " in text:
+                # User has typed at least the command name and started typing args
+                command = self.command_registry.get(precommand)
+
+                if command:
+                    # Determine what's been typed
+                    # text = "/cmd arg1 arg2 part" -> args = ["arg1", "arg2"], partial = "part"
+                    # text = "/cmd arg1 arg2 " -> args = ["arg1", "arg2"], partial = ""
+                    if text.endswith(" "):
+                        args = parts[1:]
+                        partial = ""
+                    else:
+                        args = parts[1:-1]
+                        partial = parts[-1] if len(parts) > 1 else ""
+
+                    try:
+                        suggestions = await command.get_suggestions(self, args, partial)
+                    except Exception:
+                        suggestions = []
+            else:
+                # Still typing command name
+                all_commands = self.command_registry.all_commands()
+                suggestions = [
+                    f"{prefix}{cmd}"
+                    for cmd in all_commands.keys()
+                    if cmd.startswith(precommand.lower())
+                ]
+
+        self.client.send_packet(
+            0x3A,
+            VarInt.pack(len(suggestions)),
+            *(String.pack(s) for s in suggestions),
+        )
 
 
 class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
@@ -211,6 +310,10 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             .append(TextComponent(f"{x:.1f}, {y:.1f}, {z:.1f}").color("gold"))
         )
 
+    @command("pos")
+    async def _command_pos(self):
+        self.client.chat(str(self.gamestate.position))
+
     @command("fly")
     async def _command_fly(self):
         if self.flight == PlayerAbilityFlags.ALLOW_FLYING:
@@ -236,7 +339,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     flying: Literal[0, PlayerAbilityFlags.FLYING]
 
     def _init_login(self):
-        self.server = Mock()  # HACK
+        self.server = Server(reader=Mock(), writer=Mock())
 
         self.server_list_ping = {
             "version": {"name": "1.8.9", "protocol": 47},
@@ -316,6 +419,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # self.client.send_packet(
         #     0x02, String.pack(self.uuid), String.pack(self.username)
         # )
+        await self.emit("login_success")
 
         # send respawn to a different dimension first,
         # then join, then respawn back. this forces the client to properly

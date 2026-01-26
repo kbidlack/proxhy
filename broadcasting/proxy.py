@@ -5,6 +5,8 @@
 
 from core.proxy import Proxy
 from plugins.chat import ChatPlugin
+from plugins.gamestate import GameStatePlugin
+from plugins.window import WindowPlugin
 
 from .plugins import (
     BroadcastPeerBasePlugin,
@@ -14,6 +16,8 @@ from .plugins import (
 
 broadcast_peer_plugins: tuple[type, ...] = (
     ChatPlugin,
+    WindowPlugin,
+    GameStatePlugin,
     BroadcastPeerLoginPlugin,
     BroadcastPeerBasePlugin,
     BroadcastPeerCommandsPlugin,

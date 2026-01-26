@@ -490,13 +490,13 @@ class BroadcastPlugin(ProxhyPlugin):
                     TextComponent(f"Connection failed: {e}").color("red")
                 )
 
-            BCClientProxy = type(
-                "BCClientProxy",
+            BroadcasteeProxy = type(
+                "BroadcasteeProxy",
                 (*broadcastee_plugin_list, Proxy),
                 {"username": self.username, "uuid": self.uuid},
             )
 
-            new_proxy = BCClientProxy(
+            new_proxy = BroadcasteeProxy(
                 self.client.reader,
                 self.client.writer,
                 autostart=False,
