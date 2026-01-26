@@ -5,7 +5,6 @@ import uuid
 from typing import Literal, Optional
 from unittest.mock import Mock
 
-import hypixel
 import pyroh
 
 from core.events import listen_client as listen
@@ -32,6 +31,7 @@ from proxhy.argtypes import ServerPlayer
 from proxhy.command import Command, CommandGroup, command
 from proxhy.errors import CommandException
 from proxhy.gamestate import PlayerAbilityFlags
+from proxhy.utils import _Client
 
 from .plugin import BroadcastPeerPlugin
 
@@ -462,8 +462,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.client.send_packet(*packets[0])  # join game
         await self.client.drain()
 
-        async with hypixel.Client() as c:
+        async with _Client() as c:
             self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
+            self.skin_properties = await c.get_skin_properties(self.uuid)
 
         self.state = State.PLAY
 
@@ -477,12 +478,25 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         await self.client.drain()
         self.client.compression = True
 
+        properties_data = b""
+        if self.skin_properties:
+            properties_data = VarInt.pack(len(self.skin_properties))
+            for prop in self.skin_properties:
+                properties_data += String.pack(prop.get("name", ""))
+                properties_data += String.pack(prop.get("value", ""))
+                has_sig = prop.get("signature") is not None
+                properties_data += Boolean.pack(has_sig)
+                if has_sig:
+                    properties_data += String.pack(prop["signature"])
+        else:
+            properties_data = VarInt.pack(0)
+
         for packet_id, packet_data in packets[1:]:
             self.client.send_packet(packet_id, packet_data)
 
-        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
-
         # respawn back to actual dimension
+        # NOTE: This clears the player list on the client, so we must resend
+        # the spectator's own player info after this
         self.client.send_packet(
             0x07,
             Int(current_dim),
@@ -490,6 +504,24 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             UnsignedByte.pack(2),  # gamemode: adventure
             String.pack(self.proxy.gamestate.level_type),
         )
+
+        for packet_id, packet_data in packets[1:]:
+            if packet_id == 0x38:  # Player List Item
+                self.client.send_packet(packet_id, packet_data)
+
+        self.client.send_packet(
+            0x38,
+            VarInt.pack(0),  # action: add player
+            VarInt.pack(1),  # number of players
+            UUID.pack(uuid.UUID(self.uuid)),
+            String.pack(self.username),
+            properties_data,
+            VarInt.pack(2),  # gamemode: adventure
+            VarInt.pack(0),  # ping
+            Boolean.pack(False),  # no display name for self
+        )
+
+        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
 
         # send player pos and look again after respawn to set correct pos
         # ig respawn can reset player's position
@@ -532,13 +564,14 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             .append(TextComponent("]").color("dark_gray"))
             .appends(TextComponent(f"{self.username}").color("aqua"))
         )
+
         self.proxy.client.send_packet(
             0x38,
             VarInt.pack(0),  # action: add player
             VarInt.pack(1),  # number of players
             UUID.pack(uuid.UUID(self.uuid)),
-            String.pack(self.username),  # player name with prefix
-            VarInt.pack(0),  # properties count
+            String.pack(self.username),
+            properties_data,
             VarInt.pack(2),  # gamemode: adventure
             VarInt.pack(0),  # ping
             Boolean.pack(True),  # has display name

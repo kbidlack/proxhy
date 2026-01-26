@@ -21,6 +21,84 @@ class _Client(Client):
     # literally just adds a profile function
     # because i don't wnat to have to query twice
     # to get uuid & name
+
+    async def _get_skin_properties_helper(self, uuid: str):
+        """Helper to fetch skin properties from Mojang session server."""
+        uuid_no_hyphens = uuid.replace("-", "")
+        return await self._session.get(
+            f"https://sessionserver.mojang.com/session/minecraft/profile/{uuid_no_hyphens}?unsigned=false",
+            timeout=self.timeout,
+        )
+
+    async def _get_skin_properties(self, uuid: str) -> list[dict]:
+        """Internal method to fetch skin properties."""
+        if self._session.closed:
+            raise ClosedSession
+        try:
+            response = await self._get_skin_properties_helper(uuid)
+        except asyncio.TimeoutError:
+            raise TimeoutError("mojang")
+
+        if response.status == 429:
+            if not self.rate_limit_m:
+                retry_after = None
+                raise RateLimitError(retry_after, "mojang", response)
+            else:
+                while response.status == 429:
+                    backoff = utils.ExponentialBackoff(self.timeout)
+                    retry = backoff.delay()
+                    await asyncio.sleep(retry)
+                    response = await self._get_skin_properties_helper(uuid)
+
+        if response.status == 200:
+            data = await response.json(loads=JSON_DECODER)
+            properties = data.get("properties", [])
+            return [
+                {
+                    "name": prop.get("name", ""),
+                    "value": prop.get("value", ""),
+                    "signature": prop.get("signature"),
+                }
+                for prop in properties
+            ]
+
+        elif response.status == 404:
+            return []
+
+        else:
+            raise ApiError(response, "mojang")
+
+    async def get_skin_properties(self, uuid: str) -> list[dict]:
+        """Returns the skin properties of a player from their UUID.
+
+        |mojang|
+
+        Parameters
+        ----------
+        uuid: :class:`str`
+            The UUID of the player (with or without hyphens).
+
+        Raises
+        ------
+        ApiError
+            An unexpected error occurred with the Mojang API.
+        ClosedSession
+            ``self.ClientSession`` is closed.
+        RateLimitError
+            The rate limit is exceeded and ``self.rate_limit_m`` is
+            ``False``.
+        TimeoutError
+            The request took longer than ``self.timeout``, or the retry
+            delay time is longer than ``self.timeout``.
+
+        Returns
+        -------
+        :class:`list[dict]`
+            A list of property dicts with 'name', 'value', and optionally
+            'signature' keys. Returns an empty list if player not found.
+        """
+        return await self._get_skin_properties(uuid)
+
     async def _get_profile(self, name: str) -> PlayerInfo:
         if self._session.closed:
             raise ClosedSession
