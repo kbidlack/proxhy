@@ -215,24 +215,43 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             if self.spec_eid is not None:
                 if self.spec_eid == self.proxy._transformer.player_eid:
                     pos = self.proxy.gamestate.position
+                    rot = self.proxy.gamestate.rotation
                 else:
                     entity = self.proxy.gamestate.get_entity(self.spec_eid)
                     if entity:
                         pos = entity.position
+                        rot = entity.rotation
                     else:
+                        rot = None
                         pos = None
 
-                if pos:
+                if pos and rot:
                     self.client.send_packet(
                         0x08,
                         Double.pack(pos.x),
                         Double.pack(pos.y),
                         Double.pack(pos.z),
-                        Float.pack(0.0),  # yaw (client controls camera)
-                        Float.pack(0.0),  # pitch
-                        Byte.pack(0b11000),  # flags: yaw and pitch are relative
+                        Float.pack(rot.yaw),
+                        Float.pack(rot.pitch),
+                        Byte.pack(0),
                     )
             await asyncio.sleep(0.1)
+
+    def _set_gamemode(self, gamemode: int) -> None:
+        self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gamemode)))
+
+    def _send_abilities(self) -> None:
+        abilities_flags = int(
+            PlayerAbilityFlags.INVULNERABLE
+            | (PlayerAbilityFlags.FLYING if not self.proxy.gamestate.on_ground else 0)
+            | self.flight
+        )
+        self.client.send_packet(
+            0x39,
+            Byte.pack(abilities_flags)
+            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.proxy.gamestate.field_of_view_modifier),
+        )
 
     @command("spectate", "spec")
     async def _command_spectate(self, target: ServerPlayer | None = None) -> None:
@@ -240,6 +259,8 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             if self.spec_eid is not None:
                 self.client.send_packet(0x43, VarInt.pack(self.eid))
                 self.spec_eid = None
+                self._set_gamemode(2)  # back to adventure mode
+                self._send_abilities()  # restore abilities
                 return
             else:
                 raise CommandException("Please provide a target player!")
@@ -250,6 +271,8 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
                 raise CommandException("You are not spectating anyone!")
             self.client.send_packet(0x43, VarInt.pack(self.eid))
             self.spec_eid = None
+            self._set_gamemode(2)  # back to adventure mode
+            self._send_abilities()  # restore abilities
             return
 
         # check if it's the broadcasting player (compare by username since UUIDs
@@ -268,6 +291,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             eid = player.entity_id
 
         self.spec_eid = eid
+        self._set_gamemode(3)  # spectator mode
         self.client.send_packet(0x43, VarInt.pack(eid))
 
     @command("tp", "teleport")
