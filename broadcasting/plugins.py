@@ -2,7 +2,7 @@ import asyncio
 import json
 import re
 import uuid
-from typing import Literal, Optional
+from typing import Any, Callable, Coroutine, Literal, Optional
 from unittest.mock import Mock
 
 import pyroh
@@ -210,6 +210,30 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         if action_id == 0 and self.spec_eid is not None:
             await self._command_spectate(None)
 
+    async def _spectate_teleport_task(self):
+        while self.open:
+            if self.spec_eid is not None:
+                if self.spec_eid == self.proxy._transformer.player_eid:
+                    pos = self.proxy.gamestate.position
+                else:
+                    entity = self.proxy.gamestate.get_entity(self.spec_eid)
+                    if entity:
+                        pos = entity.position
+                    else:
+                        pos = None
+
+                if pos:
+                    self.client.send_packet(
+                        0x08,
+                        Double.pack(pos.x),
+                        Double.pack(pos.y),
+                        Double.pack(pos.z),
+                        Float.pack(0.0),  # yaw (client controls camera)
+                        Float.pack(0.0),  # pitch
+                        Byte.pack(0b11000),  # flags: yaw and pitch are relative
+                    )
+            await asyncio.sleep(0.1)
+
     @command("spectate", "spec")
     async def _command_spectate(self, target: ServerPlayer | None = None) -> None:
         if target is None:
@@ -337,6 +361,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING]
     flying: Literal[0, PlayerAbilityFlags.FLYING]
+    _spectate_teleport_task: Callable[[], Coroutine[Any, Any, None]]
 
     def _init_login(self):
         self.server = Server(reader=Mock(), writer=Mock())
@@ -550,6 +575,10 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]
+
+        self.spectate_teleport_task = asyncio.create_task(
+            self._spectate_teleport_task()
+        )
 
         self.proxy.client.chat(
             TextComponent(self.username)

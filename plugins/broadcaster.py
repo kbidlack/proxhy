@@ -18,12 +18,13 @@ from broadcasting.transform import (
     build_player_list_add_packet,
     build_spawn_player_packet,
 )
-from core.events import subscribe
+from core.events import listen_server, subscribe
 from core.net import State
 from core.proxy import Proxy
 from protocol.datatypes import (
     UUID,
     Angle,
+    Buffer,
     Chat,
     Int,
     Short,
@@ -572,6 +573,13 @@ class BroadcastPlugin(ProxhyPlugin):
         self.compass_client_initialized = True
         # no this is not ai i put the ✓ there myself
         self.client.chat(TextComponent("✓ Compass client initialized!").color("green"))
+
+    @listen_server(0x07)
+    async def _packet_respawn(self, buff: Buffer):
+        for client in self.clients:
+            client.spec_eid = None
+
+        self.client.send_packet(0x07, buff.getvalue())
 
     async def on_broadcast_peer(
         self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
