@@ -74,6 +74,9 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
     @subscribe("close")
     async def _statcheck_event_close(self, _):
+        asyncio.create_task(self._close_statcheck_helper())
+
+    async def _close_statcheck_helper(self):
         try:
             if self.hypixel_client:
                 try:
