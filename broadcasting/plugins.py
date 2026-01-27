@@ -425,6 +425,11 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         # not really sure what we should be doing otherwise
         pass
 
+    @command("tip")
+    async def _command_tip(self):
+        # see above
+        pass
+
 
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING]
