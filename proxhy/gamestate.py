@@ -880,7 +880,6 @@ class GameState:
         self.chunks.clear()
         self.entities.clear()
         self.players.clear()
-        self.player_list.clear()
 
     def _handle_chat_message(self, buff: Buffer) -> None:
         """Handle Chat Message packet (0x02)."""

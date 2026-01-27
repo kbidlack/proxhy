@@ -3,7 +3,7 @@ import re
 from typing import Any, Callable, Coroutine, Union
 
 from core.events import listen_client, listen_server, subscribe
-from protocol.datatypes import Buffer, String, TextComponent, VarInt
+from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
 from proxhy.command import Command, CommandGroup, CommandRegistry
 from proxhy.errors import CommandException
 from proxhy.plugin import ProxhyPlugin
@@ -163,7 +163,7 @@ class CommandsPlugin(ProxhyPlugin):
 
         if forward:
             self.suggestions.put_nowait(suggestions)
-            self.server.send_packet(0x14, String.pack(text))
+            self.server.send_packet(0x14, String.pack(text), Boolean.pack(False))
         else:
             self.client.send_packet(
                 0x3A,

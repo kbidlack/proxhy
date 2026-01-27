@@ -57,19 +57,11 @@ class Player(CommandArg):
         suggestions: set[str] = set()
         partial_lower = partial.lower()
 
-        # Try to find all known players first on the proxy chain
-        all_players = _resolve_in_proxy_chain(ctx.proxy, "all_players")
-        if isinstance(all_players, (set, list)):
-            for name in all_players:
-                if name.lower().startswith(partial_lower):
-                    suggestions.add(name)
-        else:
-            # Fallback to the active players dict (uuid -> name)
-            players = _resolve_in_proxy_chain(ctx.proxy, "players")
-            if isinstance(players, dict):
-                for name in players.values():
-                    if name.lower().startswith(partial_lower):
-                        suggestions.add(name)
+        gamestate = _resolve_in_proxy_chain(ctx.proxy, "gamestate")
+        if gamestate is not None and hasattr(gamestate, "player_list"):
+            for _, player_info in gamestate.player_list.items():
+                if player_info.name.lower().startswith(partial_lower):
+                    suggestions.add(player_info.name)
 
         return sorted(suggestions)
 
@@ -112,21 +104,11 @@ class ServerPlayer(Player):
 
         proxy = ctx.proxy
 
-        # Above all prefer all players
-        if hasattr(proxy, "all_players"):
-            return proxy
-
         gamestate = _resolve_in_proxy_chain(proxy, "gamestate")
         if gamestate is not None and hasattr(gamestate, "player_list"):
             for uuid, player_info in gamestate.player_list.items():
                 if player_info.name.casefold() == value.casefold():
                     return cls(name=player_info.name, uuid=uuid)
-
-        players = _resolve_in_proxy_chain(proxy, "players")
-        if isinstance(players, dict):
-            for uuid, name in players.items():
-                if name.casefold() == value.casefold():
-                    return cls(name=name, uuid=uuid)
 
         raise CommandException(
             TextComponent("Player '")

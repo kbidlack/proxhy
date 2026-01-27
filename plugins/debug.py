@@ -49,6 +49,10 @@ class DebugPlugin(ProxhyPlugin):
             print(f"{team_name}: {team}")
         print("\n")
 
+    @command("player_list")
+    async def _command_player_list(self):
+        print([p.name for p in self.gamestate.player_list.values()])
+
     @command("iphone_ringtone")
     async def _command_iphone_ringtone(self):
         await self._iphone_ringtone()
