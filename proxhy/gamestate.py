@@ -879,6 +879,8 @@ class GameState:
 
         self.chunks.clear()
         self.entities.clear()
+        self.players.clear()
+        self.player_list.clear()
 
     def _handle_chat_message(self, buff: Buffer) -> None:
         """Handle Chat Message packet (0x02)."""
@@ -1118,8 +1120,7 @@ class GameState:
             if entity_id in self.entities:
                 entity = self.entities[entity_id]
                 if isinstance(entity, Player) and entity.uuid in self.players:
-                    pass  # this does nto remove from tab list???
-                    # del self.players[entity.uuid]
+                    del self.players[entity.uuid]
                 del self.entities[entity_id]
 
     def _handle_entity(self, buff: Buffer) -> None:

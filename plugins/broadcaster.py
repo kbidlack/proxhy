@@ -504,19 +504,18 @@ class BroadcastPlugin(ProxhyPlugin):
             )
 
             await new_proxy.create_server(reader, writer)
-            await self.transfer_to(new_proxy)
-
             self.server.writer.write_eof()
+            await self.transfer_to(new_proxy)
 
             # build player removal packet
             # because 0x01 doesn't clear for some reason bruh
             self.client.send_packet(
                 0x38,
                 VarInt.pack(4),
-                VarInt.pack(len(self.gamestate.players)),
+                VarInt.pack(len(self.gamestate.player_list)),
                 *(
                     UUID.pack(uuid.UUID(player.uuid))
-                    for player in self.gamestate.players.values()
+                    for player in self.gamestate.player_list.values()
                 ),
             )
 

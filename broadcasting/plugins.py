@@ -222,6 +222,9 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
                     self.client.send_packet(
                         *self.proxy.gamestate._build_player_inventory()
                     )
+                    self.client.send_packet(
+                        0x2F, Byte.pack(-1), Short.pack(-1), Slot.pack(SlotData())
+                    )
                 else:
                     entity = self.proxy.gamestate.get_entity(self.spec_eid)
                     if entity:
@@ -405,6 +408,12 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         return TextComponent(f"Turned flight {'on' if self.flight else 'off'}!").color(
             "green"
         )
+
+    @command("locraw")
+    async def _command_locraw(self):
+        # just do nothing
+        # not really sure what we should be doing otherwise
+        pass
 
 
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
