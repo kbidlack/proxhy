@@ -574,7 +574,7 @@ class BroadcastPlugin(ProxhyPlugin):
         # no this is not ai i put the ✓ there myself
         self.client.chat(TextComponent("✓ Compass client initialized!").color("green"))
 
-    @listen_server(0x07)
+    @listen_server(0x07, blocking=True)
     async def _packet_respawn(self, buff: Buffer):
         for client in self.clients:
             client.spec_eid = None

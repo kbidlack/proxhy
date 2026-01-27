@@ -21,6 +21,9 @@ from protocol.datatypes import (
     Double,
     Float,
     Int,
+    Short,
+    Slot,
+    SlotData,
     String,
     TextComponent,
     UnsignedByte,
@@ -210,17 +213,26 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         if action_id == 0 and self.spec_eid is not None:
             await self._command_spectate(None)
 
-    async def _spectate_teleport_task(self):
+    async def _update_spec_task(self):
         while self.open:
             if self.spec_eid is not None:
                 if self.spec_eid == self.proxy._transformer.player_eid:
                     pos = self.proxy.gamestate.position
                     rot = self.proxy.gamestate.rotation
+                    self.client.send_packet(
+                        *self.proxy.gamestate._build_player_inventory()
+                    )
                 else:
                     entity = self.proxy.gamestate.get_entity(self.spec_eid)
                     if entity:
                         pos = entity.position
                         rot = entity.rotation
+                        equip = entity.equipment
+                        self._set_slot(36, equip.held)  # hotbar slot 0
+                        self._set_slot(5, equip.helmet)
+                        self._set_slot(6, equip.chestplate)
+                        self._set_slot(7, equip.leggings)
+                        self._set_slot(8, equip.boots)
                     else:
                         rot = None
                         pos = None
@@ -235,7 +247,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
                         Float.pack(rot.pitch),
                         Byte.pack(0),
                     )
-            await asyncio.sleep(0.1)
+            await asyncio.sleep(1 / 20)  # every tick, ideally
 
     def _set_gamemode(self, gamemode: int) -> None:
         self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gamemode)))
@@ -253,15 +265,32 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
+    def _set_slot(self, slot: int, item: SlotData | None) -> None:
+        self.client.send_packet(
+            0x2F,
+            Byte.pack(0),  # window ID 0 = player inventory
+            Short.pack(slot),
+            Slot.pack(item if item else SlotData()),
+        )
+
+    def _reset_spec(self):
+        self.client.send_packet(0x43, VarInt.pack(self.eid))
+        self.client.send_packet(
+            0x30,
+            UnsignedByte.pack(0),  # window ID
+            Short.pack(45),  # slot count
+            b"".join(Slot.pack(SlotData()) for _ in range(45)),
+        )
+        self.spec_eid = None
+        self._set_gamemode(2)
+        self._send_abilities()
+        self._set_slot(36, None)
+
     @command("spectate", "spec")
     async def _command_spectate(self, target: ServerPlayer | None = None) -> None:
         if target is None:
             if self.spec_eid is not None:
-                self.client.send_packet(0x43, VarInt.pack(self.eid))
-                self.spec_eid = None
-                self._set_gamemode(2)  # back to adventure mode
-                self._send_abilities()  # restore abilities
-                return
+                return self._reset_spec()
             else:
                 raise CommandException("Please provide a target player!")
 
@@ -269,11 +298,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         if target.name.casefold() == self.username.casefold():
             if self.spec_eid is None:
                 raise CommandException("You are not spectating anyone!")
-            self.client.send_packet(0x43, VarInt.pack(self.eid))
-            self.spec_eid = None
-            self._set_gamemode(2)  # back to adventure mode
-            self._send_abilities()  # restore abilities
-            return
+            return self._reset_spec()
 
         # check if it's the broadcasting player (compare by username since UUIDs
         # may differ between auth and server in offline/local mode)
@@ -385,7 +410,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING]
     flying: Literal[0, PlayerAbilityFlags.FLYING]
-    _spectate_teleport_task: Callable[[], Coroutine[Any, Any, None]]
+    _update_spec_task: Callable[[], Coroutine[Any, Any, None]]
 
     def _init_login(self):
         self.server = Server(reader=Mock(), writer=Mock())
@@ -600,9 +625,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]
 
-        self.spectate_teleport_task = asyncio.create_task(
-            self._spectate_teleport_task()
-        )
+        self.spectate_teleport_task = asyncio.create_task(self._update_spec_task())
 
         self.proxy.client.chat(
             TextComponent(self.username)
