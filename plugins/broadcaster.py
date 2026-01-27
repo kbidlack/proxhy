@@ -504,9 +504,9 @@ class BroadcastPlugin(ProxhyPlugin):
             )
 
             await new_proxy.create_server(reader, writer)
-            self.server.writer.write_eof()
             await self.transfer_to(new_proxy)
 
+            self.server.writer.write_eof()
             # build player removal packet
             # because 0x01 doesn't clear for some reason bruh
             self.client.send_packet(

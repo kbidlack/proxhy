@@ -289,6 +289,13 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self._send_abilities()
         self._set_slot(36, None)
 
+    @listen(0x02)
+    async def _packet_use_entity(self, buff: Buffer):
+        target = buff.unpack(VarInt)
+        type_ = buff.unpack(VarInt)
+        if type_ == 0:
+            self._spectate(target)
+
     @command("spectate", "spec")
     async def _command_spectate(self, target: ServerPlayer | None = None) -> None:
         if target is None:
@@ -318,6 +325,9 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
                 raise CommandException(f"Player '{target.name}' is not nearby!")
             eid = player.entity_id
 
+        self._spectate(eid)
+
+    def _spectate(self, eid: int):
         self.spec_eid = eid
         self._set_gamemode(3)  # spectator mode
         self.client.send_packet(0x43, VarInt.pack(eid))
