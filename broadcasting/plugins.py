@@ -553,7 +553,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # includes join game
         packets = self.proxy.gamestate.sync_broadcast_spectator(self.eid)
         self.client.send_packet(*packets[0])  # join game
-        await self.client.drain()
 
         async with _Client() as c:
             self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
@@ -588,8 +587,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             self.client.send_packet(packet_id, packet_data)
 
         # respawn back to actual dimension
-        # NOTE: This clears the player list on the client, so we must resend
-        # the spectator's own player info after this
         self.client.send_packet(
             0x07,
             Int(current_dim),
@@ -598,8 +595,17 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             String.pack(self.proxy.gamestate.level_type),
         )
 
+        # Resend player list, entity spawns, metadata, and equipment after respawn
         for packet_id, packet_data in packets[1:]:
-            if packet_id == 0x38:  # Player List Item
+            if packet_id in (0x38, 0x0C, 0x0E, 0x0F, 0x1C, 0x04, 0x19, 0x3E):
+                # 0x38 = Player List Item
+                # 0x0C = Spawn Player
+                # 0x0E = Spawn Object
+                # 0x0F = Spawn Mob
+                # 0x1C = Entity Metadata
+                # 0x19 = Entity Head Look
+                # 0x04 = Entity Equipment
+                # 0x3E = Teams (for NPC nametag prefixes/suffixes)
                 self.client.send_packet(packet_id, packet_data)
 
         self.client.send_packet(

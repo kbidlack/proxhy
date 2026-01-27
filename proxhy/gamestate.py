@@ -40,6 +40,45 @@ from protocol.datatypes import (
 # Type alias for packet: (packet_id, packet_data)
 type Packet = tuple[int, bytes]
 
+# Explicit set of entity types that should be treated as "mobs" (Spawn Mob packet).
+# Using an explicit set is safer than numeric ranges because entity IDs are
+# non-contiguous and some IDs overlap between object and mob tables.
+MOB_TYPES = {
+    50,
+    51,
+    52,
+    53,
+    54,
+    55,
+    56,
+    57,
+    58,
+    59,
+    60,
+    61,
+    62,
+    63,
+    64,
+    65,
+    66,
+    67,
+    68,
+    69,
+    90,
+    91,
+    92,
+    93,
+    94,
+    95,
+    96,
+    97,
+    98,
+    99,
+    100,
+    101,
+    120,
+}
+
 # =============================================================================
 # Enums and Constants
 # =============================================================================
@@ -331,6 +370,7 @@ class Player(Entity):
 
     name: str = ""
     current_item: int = 0
+    properties: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -1006,6 +1046,7 @@ class GameState:
 
         if uuid in self.player_list:
             player.name = self.player_list[uuid].name
+            player.properties = self.player_list[uuid].properties
 
         self.entities[entity_id] = player
         self.players[uuid] = player
@@ -1676,6 +1717,12 @@ class GameState:
                     ping=ping,
                     display_name=str(display_name) if display_name else None,
                 )
+
+                # Also store properties on the Player entity if it exists
+                # (needed for NPCs that get removed from tab list later)
+                if uuid in self.players:
+                    self.players[uuid].properties = properties
+                    self.players[uuid].name = name
 
             elif action == PlayerListAction.UPDATE_GAMEMODE:
                 gamemode = buff.unpack(VarInt)
@@ -2415,27 +2462,28 @@ class GameState:
 
             if isinstance(entity, Player):
                 packets.append(self._build_spawn_player(entity))
-            elif entity.entity_type >= 50 and entity.entity_type < 120:
-                # Mob types (50-119)
-                packets.append(self._build_spawn_mob(entity))
             else:
-                # Objects - skip item entities (type 2) without valid item metadata
-                if entity.entity_type == 2:
-                    # Item entities need metadata at index 10 with a valid item
-                    item_meta = entity.metadata.get(10)
-                    if item_meta is None:
-                        continue  # Skip - no item metadata
-                    if isinstance(item_meta, MetadataValue):
-                        if not isinstance(item_meta.value, SlotData):
-                            continue  # Skip - invalid metadata type
-                        if item_meta.value.item is None:
-                            continue  # Skip - empty slot
-                    elif isinstance(item_meta, SlotData):
-                        if item_meta.item is None:
-                            continue  # Skip - empty slot
-                    else:
-                        continue  # Skip - unknown metadata format
-                packets.append(self._build_spawn_object(entity))
+                # Decide based on explicit MOB_TYPES set instead of numeric ranges.
+                if entity.entity_type in MOB_TYPES:
+                    packets.append(self._build_spawn_mob(entity))
+                else:
+                    # Objects - skip item entities (type 2) without valid item metadata
+                    if entity.entity_type == 2:
+                        # Item entities need metadata at index 10 with a valid item
+                        item_meta = entity.metadata.get(10)
+                        if item_meta is None:
+                            continue  # Skip - no item metadata
+                        if isinstance(item_meta, MetadataValue):
+                            if not isinstance(item_meta.value, SlotData):
+                                continue  # Skip - invalid metadata type
+                            if item_meta.value.item is None:
+                                continue  # Skip - empty slot
+                        elif isinstance(item_meta, SlotData):
+                            if item_meta.item is None:
+                                continue  # Skip - empty slot
+                        else:
+                            continue  # Skip - unknown metadata format
+                    packets.append(self._build_spawn_object(entity))
 
         return packets
 
@@ -2453,6 +2501,100 @@ class GameState:
             + self._pack_metadata(player.metadata)
         )
         return (0x0C, data)
+
+    def _build_npc_player_spawns(self) -> list[Packet]:
+        """Build packets to spawn NPC players (players not in tab list).
+
+        Hypixel and other servers spawn NPCs as players, then remove them from
+        the tab list. To respawn them, we need to:
+        1. Add them to the tab list (required before Spawn Player)
+        2. Spawn them
+        3. Send their metadata
+        4. Send their equipment
+        5. Remove them from the tab list again
+        """
+        packets: list[Packet] = []
+
+        for uuid, player in self.players.items():
+            if player.entity_id == self.player_entity_id:
+                continue
+            # Check if this player is NOT in the tab list (i.e., an NPC)
+            if uuid not in self.player_list:
+                # Find team membership for this NPC
+                npc_team_name = None
+                for team_name, team in self.teams.items():
+                    if player.name in team.members:
+                        npc_team_name = team_name
+                        break
+
+                # 1. Add to tab list temporarily (with skin properties)
+                add_data = VarInt.pack(PlayerListAction.ADD_PLAYER)
+                add_data += VarInt.pack(1)
+                add_data += self._pack_uuid(uuid)
+                add_data += String.pack(player.name or "")
+                # Include skin properties if available
+                add_data += VarInt.pack(len(player.properties))
+                for prop in player.properties:
+                    add_data += String.pack(prop.get("name", ""))
+                    add_data += String.pack(prop.get("value", ""))
+                    has_sig = prop.get("signature") is not None
+                    add_data += Boolean.pack(has_sig)
+                    if has_sig:
+                        add_data += String.pack(prop["signature"])
+                add_data += VarInt.pack(0)  # gamemode
+                add_data += VarInt.pack(0)  # ping
+                add_data += Boolean.pack(False)  # no display name
+                packets.append((0x38, add_data))
+
+                # 1.5. Add NPC to their team (for nametag prefix/suffix)
+                if npc_team_name:
+                    team_data = String.pack(npc_team_name)
+                    team_data += Byte.pack(3)  # mode 3 = add players to team
+                    team_data += VarInt.pack(1)  # 1 player
+                    team_data += String.pack(player.name or "")
+                    packets.append((0x3E, team_data))
+
+                # 2. Spawn player
+                packets.append(self._build_spawn_player(player))
+
+                # 2.5. Send head look to set head rotation
+                head_yaw = player.head_yaw if player.head_yaw else player.rotation.yaw
+                packets.append(
+                    (0x19, VarInt.pack(player.entity_id) + Angle.pack(head_yaw))
+                )
+
+                # 3. Send metadata if present
+                if player.metadata:
+                    meta_data = VarInt.pack(player.entity_id) + self._pack_metadata(
+                        player.metadata
+                    )
+                    packets.append((0x1C, meta_data))
+
+                # 4. Send equipment
+                equip = player.equipment
+                slots = [
+                    (EquipmentSlot.HELD, equip.held),
+                    (EquipmentSlot.BOOTS, equip.boots),
+                    (EquipmentSlot.LEGGINGS, equip.leggings),
+                    (EquipmentSlot.CHESTPLATE, equip.chestplate),
+                    (EquipmentSlot.HELMET, equip.helmet),
+                ]
+                for slot_id, item in slots:
+                    if item and item.item:
+                        equip_data = (
+                            VarInt.pack(player.entity_id)
+                            + Short.pack(slot_id)
+                            + Slot.pack(item)
+                        )
+                        packets.append((0x04, equip_data))
+
+                # NOTE: We intentionally do NOT remove NPCs from the tab list here.
+                # If we remove them immediately, the client doesn't have time to
+                # load the skin texture before the player list entry is gone,
+                # resulting in Steve/Alex skins. The NPC will remain in the tab
+                # list but won't be visible to the user since they have no display name.
+
+        return packets
 
     def _build_spawn_mob(self, entity: Entity) -> Packet:
         """Build Spawn Mob packet (0x0F)."""
@@ -2903,6 +3045,9 @@ class GameState:
         # 24. Entity Properties (0x20) - For all entities
         packets.extend(self._build_entity_properties())
 
+        # 24.5. NPC Player Spawns - spawn players not in tab list (Hypixel NPCs)
+        packets.extend(self._build_npc_player_spawns())
+
         # 25. Window Items (0x30) - Player inventory
         packets.append(self._build_player_inventory())
 
@@ -3027,6 +3172,9 @@ class GameState:
 
         # 24. Entity Properties (0x20) - For all entities
         packets.extend(self._build_entity_properties())
+
+        # 24.5. NPC Player Spawns - spawn players not in tab list (Hypixel NPCs)
+        packets.extend(self._build_npc_player_spawns())
 
         # 25. Window Items (0x30) - Player inventory
         # packets.append(self._build_player_inventory())
@@ -3157,6 +3305,9 @@ class GameState:
 
         # 24. Entity Properties (0x20) - For all entities
         packets.extend(self._build_entity_properties())
+
+        # 24.5. NPC Player Spawns - spawn players not in tab list (Hypixel NPCs)
+        packets.extend(self._build_npc_player_spawns())
 
         # 25. Window Items (0x30) - Player inventory
         # packets.append(self._build_player_inventory())
