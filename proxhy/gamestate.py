@@ -264,6 +264,28 @@ class Vec3d:
     y: float = 0.0
     z: float = 0.0
 
+    def __sub__(self, other: Vec3d | float) -> Vec3d:
+        if isinstance(other, Vec3d):
+            return Vec3d(self.x - other.x, self.y - other.y, self.z - other.z)
+        return Vec3d(self.x - other, self.y - other, self.z - other)
+
+    def __add__(self, other: Vec3d | float) -> Vec3d:
+        if isinstance(other, Vec3d):
+            return Vec3d(self.x + other.x, self.y + other.y, self.z + other.z)
+        return Vec3d(self.x + other, self.y + other, self.z + other)
+
+    def __radd__(self, other: Vec3d | float) -> Vec3d:
+        return self.__add__(other)
+
+    def __mul__(self, scalar: float) -> Vec3d:
+        return Vec3d(self.x * scalar, self.y * scalar, self.z * scalar)
+
+    def __truediv__(self, scalar: float) -> Vec3d:
+        return Vec3d(self.x / scalar, self.y / scalar, self.z / scalar)
+
+    def __floordiv__(self, scalar: float) -> Vec3d:
+        return Vec3d(self.x // scalar, self.y // scalar, self.z // scalar)
+
 
 @dataclass
 class Vec3i:
@@ -272,6 +294,25 @@ class Vec3i:
     x: int = 0
     y: int = 0
     z: int = 0
+
+    def __sub__(self, other: Vec3i | int) -> Vec3i:
+        if isinstance(other, Vec3i):
+            return Vec3i(self.x - other.x, self.y - other.y, self.z - other.z)
+        return Vec3i(self.x - other, self.y - other, self.z - other)
+
+    def __add__(self, other: Vec3i | int) -> Vec3i:
+        if isinstance(other, Vec3i):
+            return Vec3i(self.x + other.x, self.y + other.y, self.z + other.z)
+        return Vec3i(self.x + other, self.y + other, self.z + other)
+
+    def __radd__(self, other: Vec3i | int) -> Vec3i:
+        return self.__add__(other)
+
+    def __mul__(self, scalar: int) -> Vec3i:
+        return Vec3i(self.x * scalar, self.y * scalar, self.z * scalar)
+
+    def __floordiv__(self, scalar: int) -> Vec3i:
+        return Vec3i(self.x // scalar, self.y // scalar, self.z // scalar)
 
 
 @dataclass

@@ -73,6 +73,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self.joining_broadcast: bool = False
 
         self.serverbound_task: Optional[asyncio.Task] = None
+        self._respawn_debounce_task: Optional[asyncio.Task] = None
 
         self.compass_client_initialized = False
 
@@ -576,9 +577,22 @@ class BroadcastPlugin(ProxhyPlugin):
     @listen_server(0x07, blocking=True)
     async def _packet_respawn(self, buff: Buffer):
         for client in self.clients:
-            client.spec_eid = None
+            if not client.watching:
+                client._reset_spec()
 
         self.client.send_packet(0x07, buff.getvalue())
+
+        if self._respawn_debounce_task is not None:
+            self._respawn_debounce_task.cancel()
+
+        async def spawn_bats_debounced():
+            await asyncio.sleep(0.4)
+            for client in self.clients:
+                client._spawn_bat()
+                if client.watching:
+                    client._spectate(client.bat_eid)
+
+        self._respawn_debounce_task = asyncio.create_task(spawn_bats_debounced())
 
     async def on_broadcast_peer(
         self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
