@@ -13,6 +13,23 @@ from protocol.datatypes import (
 from proxhy.plugin import ProxhyPlugin
 
 
+@numba.njit(cache=True, fastmath=True)
+def _compute_height_warning(
+    y: float, min_height: int, max_height: int
+) -> tuple[bool, int, float]:
+    """Compute height warning data. Returns (should_warn, limit_dist, particle_y)."""
+    near_min = abs(min_height - y) <= 3
+    near_max = abs(max_height - y) <= 5
+    if not (near_min or near_max):
+        return False, 0, 0.0
+
+    dist_to_min = abs(y - min_height)
+    dist_to_max = abs(max_height - y)
+    limit_dist = round(max(min(dist_to_min, dist_to_max), 0))
+    particle_y = max_height if dist_to_max < dist_to_min else min_height
+    return True, limit_dist, float(particle_y)
+
+
 class SpatialPluginState:
     check_height_task: Optional[asyncio.Task]
 
@@ -46,7 +63,6 @@ class SpatialPlugin(ProxhyPlugin):
 
             await asyncio.sleep(1 / 20)
 
-    @numba.njit(cache=True, fastmath=True)
     def height_limit_warnings(self):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
@@ -54,26 +70,24 @@ class SpatialPlugin(ProxhyPlugin):
             return
         y = self.gamestate.position.y
         max_height: int = self.game.map.max_height or 255
-        min_height: int = self.game.map.max_height or 0
+        min_height: int = self.game.map.min_height or 0
 
-        if abs(min_height - y) <= 3 or abs(max_height - y) <= 5:
-            limit_dist = round(max(min(abs(y - min_height), abs(max_height - y)), 0))
-            color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
-            self.client.set_actionbar_text(
-                f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
+        should_warn, limit_dist, particle_y = _compute_height_warning(
+            y, min_height, max_height
+        )
+        if not should_warn:
+            return
+
+        color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
+        self.client.set_actionbar_text(
+            f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
+        )
+        for _ in range(10):
+            particle_x = self.gamestate.position.x + np.random.normal(0, 0.7) * 3
+            particle_z = self.gamestate.position.z + np.random.normal(0, 0.7) * 3
+            self.display_particle(
+                particle_id=30, pos=(particle_x, particle_y, particle_z)
             )
-            particle_y = (  # whichever height limit the player is closest to
-                max_height
-                if abs(max_height - self.gamestate.position.y)
-                < abs(min_height - self.gamestate.position.y)
-                else min_height
-            )
-            for _ in range(10):
-                particle_x = self.gamestate.position.x + np.random.normal(0, 0.7) * 3
-                particle_z = self.gamestate.position.z + np.random.normal(0, 0.7) * 3
-                self.display_particle(
-                    particle_id=30, pos=(particle_x, particle_y, particle_z)
-                )
 
     def display_particle(
         self,
