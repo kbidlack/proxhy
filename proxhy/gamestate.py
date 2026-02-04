@@ -8,12 +8,14 @@ clientbound packets and maintains the complete game state as seen by a client.
 # mostly written by AI, because I was NOT about
 # to copy this all myself from the mc wiki
 
-from __future__ import annotations
-
 import uuid as uuid_mod
 from dataclasses import dataclass, field
 from enum import IntEnum, IntFlag
 from typing import Any, Callable, Literal, Optional
+
+import numpy as np
+from numba import float64, int64
+from numba.experimental import jitclass
 
 from protocol.datatypes import (
     UUID,
@@ -256,63 +258,99 @@ class MinecartType(IntEnum):
 # =============================================================================
 
 
-@dataclass
+_vec3d_spec = [
+    ("x", float64),
+    ("y", float64),
+    ("z", float64),
+]
+
+
+@jitclass(_vec3d_spec)  # type: ignore[misc]
 class Vec3d:
     """3D position with double precision."""
 
-    x: float = 0.0
-    y: float = 0.0
-    z: float = 0.0
+    x: float
+    y: float
+    z: float
 
-    def __sub__(self, other: Vec3d | float) -> Vec3d:
-        if isinstance(other, Vec3d):
-            return Vec3d(self.x - other.x, self.y - other.y, self.z - other.z)
-        return Vec3d(self.x - other, self.y - other, self.z - other)
+    def __init__(self, x: float = 0.0, y: float = 0.0, z: float = 0.0):
+        self.x = x
+        self.y = y
+        self.z = z
 
-    def __add__(self, other: Vec3d | float) -> Vec3d:
-        if isinstance(other, Vec3d):
-            return Vec3d(self.x + other.x, self.y + other.y, self.z + other.z)
-        return Vec3d(self.x + other, self.y + other, self.z + other)
+    def __sub__(self, other: "Vec3d") -> "Vec3d":
+        return Vec3d(self.x - other.x, self.y - other.y, self.z - other.z)
 
-    def __radd__(self, other: Vec3d | float) -> Vec3d:
-        return self.__add__(other)
+    def __add__(self, other: "Vec3d") -> "Vec3d":
+        return Vec3d(self.x + other.x, self.y + other.y, self.z + other.z)
 
-    def __mul__(self, scalar: float) -> Vec3d:
+    def __mul__(self, scalar: float) -> "Vec3d":
         return Vec3d(self.x * scalar, self.y * scalar, self.z * scalar)
 
-    def __truediv__(self, scalar: float) -> Vec3d:
+    def __truediv__(self, scalar: float) -> "Vec3d":
         return Vec3d(self.x / scalar, self.y / scalar, self.z / scalar)
 
-    def __floordiv__(self, scalar: float) -> Vec3d:
+    def __floordiv__(self, scalar: float) -> "Vec3d":
         return Vec3d(self.x // scalar, self.y // scalar, self.z // scalar)
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Vec3d):
+            return False
+        return self.x == other.x and self.y == other.y and self.z == other.z
 
-@dataclass
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, Vec3d):
+            return True
+        return self.x != other.x or self.y != other.y or self.z != other.z
+
+    def copy(self) -> "Vec3d":
+        return Vec3d(self.x, self.y, self.z)
+
+
+_vec3i_spec = [
+    ("x", int64),
+    ("y", int64),
+    ("z", int64),
+]
+
+
+@jitclass(_vec3i_spec)  # type: ignore[misc]
 class Vec3i:
     """3D position with integer precision."""
 
-    x: int = 0
-    y: int = 0
-    z: int = 0
+    x: int
+    y: int
+    z: int
 
-    def __sub__(self, other: Vec3i | int) -> Vec3i:
-        if isinstance(other, Vec3i):
-            return Vec3i(self.x - other.x, self.y - other.y, self.z - other.z)
-        return Vec3i(self.x - other, self.y - other, self.z - other)
+    def __init__(self, x: int = 0, y: int = 0, z: int = 0):
+        self.x = x
+        self.y = y
+        self.z = z
 
-    def __add__(self, other: Vec3i | int) -> Vec3i:
-        if isinstance(other, Vec3i):
-            return Vec3i(self.x + other.x, self.y + other.y, self.z + other.z)
-        return Vec3i(self.x + other, self.y + other, self.z + other)
+    def __sub__(self, other: "Vec3i") -> "Vec3i":
+        return Vec3i(self.x - other.x, self.y - other.y, self.z - other.z)
 
-    def __radd__(self, other: Vec3i | int) -> Vec3i:
-        return self.__add__(other)
+    def __add__(self, other: "Vec3i") -> "Vec3i":
+        return Vec3i(self.x + other.x, self.y + other.y, self.z + other.z)
 
-    def __mul__(self, scalar: int) -> Vec3i:
+    def __mul__(self, scalar: int) -> "Vec3i":
         return Vec3i(self.x * scalar, self.y * scalar, self.z * scalar)
 
-    def __floordiv__(self, scalar: int) -> Vec3i:
+    def __floordiv__(self, scalar: int) -> "Vec3i":
         return Vec3i(self.x // scalar, self.y // scalar, self.z // scalar)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Vec3i):
+            return False
+        return self.x == other.x and self.y == other.y and self.z == other.z
+
+    def __ne__(self, other: object) -> bool:
+        if not isinstance(other, Vec3i):
+            return True
+        return self.x != other.x or self.y != other.y or self.z != other.z
+
+    def copy(self) -> "Vec3i":
+        return Vec3i(self.x, self.y, self.z)
 
 
 @dataclass
@@ -2234,6 +2272,88 @@ class GameState:
         local_x = x & 0x0F
         local_z = z & 0x0F
         return chunk.biomes[local_z * 16 + local_x]
+
+    def get_block_bitmask(self, center: Vec3d | Vec3i, radius: int) -> np.ndarray:
+        """
+        Get a 3D numpy array bitmask of blocks around a center position.
+
+        Args:
+            center: Center position (x, y, z)
+            radius: Radius in blocks (resulting array is (2*radius+1)^3)
+
+        Returns:
+            3D numpy array of shape (2*radius+1, 2*radius+1, 2*radius+1)
+            with 1 where a block exists (non-air) and 0 where air/unloaded.
+            Array indexed as [x, y, z] relative to (center - radius).
+        """
+        size = 2 * radius + 1
+        result = np.zeros((size, size, size), dtype=np.uint8)
+
+        cx, cy, cz = int(center.x), int(center.y), int(center.z)
+
+        # Compute world coordinate bounds
+        min_x, max_x = cx - radius, cx + radius
+        min_y, max_y = max(0, cy - radius), min(255, cy + radius)
+        min_z, max_z = cz - radius, cz + radius
+
+        # Iterate over chunks that intersect our query
+        for chunk_x_idx in range(min_x >> 4, (max_x >> 4) + 1):
+            for chunk_z_idx in range(min_z >> 4, (max_z >> 4) + 1):
+                chunk = self.chunks.get((chunk_x_idx, chunk_z_idx))
+                if chunk is None:
+                    continue
+
+                # Chunk world coordinate bounds
+                chunk_world_x = chunk_x_idx << 4
+                chunk_world_z = chunk_z_idx << 4
+
+                # Overlap in world coords
+                ox_min = max(min_x, chunk_world_x)
+                ox_max = min(max_x, chunk_world_x + 15)
+                oz_min = max(min_z, chunk_world_z)
+                oz_max = min(max_z, chunk_world_z + 15)
+
+                for section_idx in range(max(0, min_y >> 4), min(15, max_y >> 4) + 1):
+                    section = chunk.sections[section_idx]
+                    if section is None:
+                        continue
+
+                    # Convert section bytearray to uint16 array (zero-copy view)
+                    # Storage layout is [y, z, x] with 2 bytes per block
+                    section_blocks = np.frombuffer(
+                        section.blocks, dtype=np.uint16
+                    ).reshape(16, 16, 16)
+
+                    section_world_y = section_idx << 4
+                    oy_min = max(min_y, section_world_y)
+                    oy_max = min(max_y, section_world_y + 15)
+
+                    # Local coords within section
+                    lx_min, lx_max = ox_min & 0xF, ox_max & 0xF
+                    ly_min, ly_max = oy_min & 0xF, oy_max & 0xF
+                    lz_min, lz_max = oz_min & 0xF, oz_max & 0xF
+
+                    # Result array starting indices
+                    rx_start = ox_min - cx + radius
+                    ry_start = oy_min - cy + radius
+                    rz_start = oz_min - cz + radius
+
+                    # Slice dimensions
+                    rx_end = rx_start + (lx_max - lx_min + 1)
+                    ry_end = ry_start + (ly_max - ly_min + 1)
+                    rz_end = rz_start + (lz_max - lz_min + 1)
+
+                    # Extract section slice [y, z, x] and check non-zero
+                    section_slice = section_blocks[
+                        ly_min : ly_max + 1, lz_min : lz_max + 1, lx_min : lx_max + 1
+                    ]
+
+                    # Transpose from [y, z, x] to [x, y, z] and assign non-zero mask
+                    result[rx_start:rx_end, ry_start:ry_end, rz_start:rz_end] = (
+                        section_slice.transpose(2, 0, 1) != 0
+                    ).astype(np.uint8)
+
+        return result
 
     def reset(self) -> None:
         """Reset the game state to initial values."""

@@ -2,6 +2,10 @@ import asyncio
 import math
 import random
 
+import numba
+import numpy as np
+from numpy.typing import NDArray
+
 from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import listen_client as listen
 from core.events import subscribe
@@ -24,131 +28,414 @@ from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.gamestate import PlayerAbilityFlags, Rotation, Vec3d
 
+# camera candidates: 8 azimuths x 4 elevations x 2 radii = 64 positions
+# elevations: 45°, 35°, 25°, 15° from horizontal
+_CANDIDATES = np.array(
+    [
+        (
+            r * math.cos(el) * math.cos(az),
+            r * math.sin(el),
+            r * math.cos(el) * math.sin(az),
+            ri * 10 + ei,
+        )
+        for ri, r in enumerate((6.0, 8.0))
+        for ei, el in enumerate((0.785, 0.611, 0.436, 0.262))
+        for az in np.linspace(0, 2 * math.pi, 8, endpoint=False)
+    ],
+    dtype=np.float64,
+)
+
+# body visibility check points: (dy_offset, is_critical)
+_BODY_OFFSETS = np.array([(1.62, 1), (0.0, 1), (0.9, 0), (-0.9, 0)], dtype=np.float64)
+
+
+@numba.njit(cache=True, fastmath=True)
+def _ray_blocked(
+    bitmask: NDArray[np.uint8],
+    x0: float,
+    y0: float,
+    z0: float,
+    x1: float,
+    y1: float,
+    z1: float,
+) -> bool:
+    """3D DDA raycast returning True if ray hits solid block."""
+    size = bitmask.shape[0]
+    dx, dy, dz = x1 - x0, y1 - y0, z1 - z0
+
+    if abs(dx) < 1e-6 and abs(dy) < 1e-6 and abs(dz) < 1e-6:
+        ix, iy, iz = int(x0), int(y0), int(z0)
+        return (
+            0 <= ix < size
+            and 0 <= iy < size
+            and 0 <= iz < size
+            and bitmask[ix, iy, iz] != 0
+        )
+
+    x, y, z = int(math.floor(x0)), int(math.floor(y0)), int(math.floor(z0))
+    ex, ey, ez = int(math.floor(x1)), int(math.floor(y1)), int(math.floor(z1))
+    sx = 1 if dx > 0 else -1 if dx < 0 else 0
+    sy = 1 if dy > 0 else -1 if dy < 0 else 0
+    sz = 1 if dz > 0 else -1 if dz < 0 else 0
+
+    INF = 1e30
+    tmx = ((x + (sx > 0)) - x0) / dx if abs(dx) > 1e-10 else INF
+    tmy = ((y + (sy > 0)) - y0) / dy if abs(dy) > 1e-10 else INF
+    tmz = ((z + (sz > 0)) - z0) / dz if abs(dz) > 1e-10 else INF
+    tdx = abs(1.0 / dx) if abs(dx) > 1e-10 else INF
+    tdy = abs(1.0 / dy) if abs(dy) > 1e-10 else INF
+    tdz = abs(1.0 / dz) if abs(dz) > 1e-10 else INF
+
+    for _ in range(abs(ex - x) + abs(ey - y) + abs(ez - z) + 2):
+        if 0 <= x < size and 0 <= y < size and 0 <= z < size and bitmask[x, y, z] != 0:
+            return True
+        if x == ex and y == ey and z == ez:
+            break
+        if tmx <= tmy and tmx <= tmz:
+            tmx, x = tmx + tdx, x + sx
+        elif tmy <= tmz:
+            tmy, y = tmy + tdy, y + sy
+        else:
+            tmz, z = tmz + tdz, z + sz
+    return False
+
+
+@numba.njit(cache=True, fastmath=True)
+def _find_camera_offset(
+    bitmask: NDArray[np.uint8],
+    others: NDArray[np.float64],
+    candidates: NDArray[np.float64],
+    body_offsets: NDArray[np.float64],
+    look_x: float,
+    look_z: float,
+    speed: float,
+) -> tuple[float, float, float]:
+    """Find optimal camera offset behind player with clear sightlines."""
+    c = float((bitmask.shape[0] - 1) // 2)  # center of bitmask
+    speed_factor = min(speed / 0.28, 1.5)
+    best, fallback = (0.0, 0.0, 0.0, 1e9), (0.0, 0.0, 0.0, 1e9)
+
+    for i in range(candidates.shape[0]):
+        ox, oy, oz, pref = (
+            candidates[i, 0],
+            candidates[i, 1],
+            candidates[i, 2],
+            candidates[i, 3],
+        )
+        cx, cy, cz = c + ox, c + oy, c + oz
+
+        # Check body visibility (critical points block candidate entirely)
+        crit_blocked, blocked = False, 0
+        for j in range(body_offsets.shape[0]):
+            if _ray_blocked(bitmask, cx, cy, cz, c, c + body_offsets[j, 0], c):
+                if body_offsets[j, 1] > 0.5:
+                    crit_blocked = True
+                    break
+                blocked += 1
+
+        # Prefer camera behind player (penalize positions in front)
+        cam_len = math.sqrt(ox * ox + oz * oz)
+        dir_penalty = (
+            ((ox * look_x + oz * look_z) / cam_len + 1.0) * 50.0
+            if cam_len > 0.01
+            else 50.0
+        )
+
+        # Prefer lower angles, especially when moving
+        elev_penalty = max(0.0, oy - 1.5) * (10.0 + 20.0 * speed_factor)
+
+        score = blocked * 50.0 + dir_penalty + elev_penalty + pref * 0.01
+
+        # Penalize blocked combat targets
+        for j in range(others.shape[0]):
+            if _ray_blocked(
+                bitmask,
+                cx,
+                cy,
+                cz,
+                c + others[j, 0],
+                c + others[j, 1],
+                c + others[j, 2],
+            ):
+                score += 20.0
+
+        if crit_blocked:
+            if score + 500.0 < fallback[3]:
+                fallback = (ox, oy, oz, score + 500.0)
+        elif score < best[3]:
+            best = (ox, oy, oz, score)
+
+    if best[3] < 1e9:
+        return (best[0], best[1], best[2])
+    if fallback[3] < 1e9:
+        return (fallback[0], fallback[1], fallback[2])
+    return (4.0, 4.0, 0.0)
+
+
+@numba.njit(cache=True, fastmath=True)
+def _interp_spherical(
+    cur_x: float,
+    cur_y: float,
+    cur_z: float,
+    tgt_x: float,
+    tgt_y: float,
+    tgt_z: float,
+    bitmask: NDArray[np.uint8],
+    stuck: int,
+    t: float,
+) -> tuple[float, float, float, int]:
+    """Interpolate camera along sphere surface to keep player in frame."""
+    c = float((bitmask.shape[0] - 1) // 2)
+
+    # Convert to spherical (radius, azimuth, elevation)
+    cr = math.sqrt(cur_x * cur_x + cur_y * cur_y + cur_z * cur_z)
+    tr = math.sqrt(tgt_x * tgt_x + tgt_y * tgt_y + tgt_z * tgt_z)
+    if cr < 0.1:
+        cr = 6.0
+    if tr < 0.1:
+        tr = 6.0
+
+    caz, taz = math.atan2(cur_z, cur_x), math.atan2(tgt_z, tgt_x)
+    cel = math.asin(max(-0.99, min(0.99, cur_y / cr)))
+    tel = math.asin(max(-0.99, min(0.99, tgt_y / tr)))
+
+    # Shortest azimuth path
+    adiff = taz - caz
+    if adiff > math.pi:
+        adiff -= 2 * math.pi
+    elif adiff < -math.pi:
+        adiff += 2 * math.pi
+
+    # Interpolate spherical coords
+    naz = caz + adiff * t
+    nel = cel + (tel - cel) * t
+    nr = cr + (tr - cr) * t
+
+    # Convert to cartesian
+    ce, se, ca, sa = math.cos(nel), math.sin(nel), math.cos(naz), math.sin(naz)
+    nx, ny, nz = nr * ce * ca, nr * se, nr * ce * sa
+
+    if not _ray_blocked(bitmask, nx + c, ny + c, nz + c, c, c, c):
+        return (nx, ny, nz, 0)
+
+    # Try larger radii if blocked
+    for bonus in (1.0, 2.0, 3.0, 4.0):
+        r = nr + bonus
+        ox, oy, oz = r * ce * ca, r * se, r * ce * sa
+        if not _ray_blocked(bitmask, ox + c, oy + c, oz + c, c, c, c):
+            return (ox, oy, oz, 0)
+
+    # Force move if stuck
+    if stuck >= 3:
+        ft = min(t * 2.0, 0.3)
+        naz2 = caz + adiff * ft
+        nel2 = cel + (tel - cel) * ft
+        nr2 = cr + (tr - cr) * ft
+        ce2, se2, ca2, sa2 = (
+            math.cos(nel2),
+            math.sin(nel2),
+            math.cos(naz2),
+            math.sin(naz2),
+        )
+        return (nr2 * ce2 * ca2, nr2 * se2, nr2 * ce2 * sa2, 0)
+
+    return (cur_x, cur_y, cur_z, stuck + 1)
+
 
 class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
     def _init_broadcast_peer_spectate(self):
         self.watching = False
+        self._cam: Vec3d | None = None  # camera offset from player
+        self._cam_stuck = 0
+        self._rot: tuple[float, float] | None = None  # smoothed (yaw, pitch)
+        self._last_pos: Vec3d | None = None
 
     @listen(0x0B)
     async def packet_entity_action(self, buff: Buffer):
-        if eid := buff.unpack(VarInt) != self.eid:
-            print(
-                f"0x0B: Sent EID and self EID mismatch? {eid} / {self.eid}"
-            )  # TODO: log this
+        if buff.unpack(VarInt) != self.eid:
             return
-
-        action_id = buff.unpack(VarInt)
-        if action_id == 0 and self.spec_eid is not None:
+        if buff.unpack(VarInt) == 0 and self.spec_eid is not None:
             self._reset_spec()
 
     async def _update_spec_task(self):
         while self.open:
-            if self.spec_eid is not None:
-                if self.spec_eid == self.proxy._transformer.player_eid:
-                    pos = self.proxy.gamestate.position
-                    rot = self.proxy.gamestate.rotation
-                    self.client.send_packet(
-                        *self.proxy.gamestate._build_player_inventory()
-                    )
-                    self.client.send_packet(
-                        0x2F, Byte.pack(-1), Short.pack(-1), Slot.pack(SlotData())
-                    )
-                else:
-                    entity = self.proxy.gamestate.get_entity(self.spec_eid)
-                    if entity:
-                        pos = entity.position
-                        rot = entity.rotation
-                        equip = entity.equipment
-                        self._set_slot(36, equip.held)  # hotbar slot 0
-                        self._set_slot(5, equip.helmet)
-                        self._set_slot(6, equip.chestplate)
-                        self._set_slot(7, equip.leggings)
-                        self._set_slot(8, equip.boots)
-                    else:
-                        rot = None
-                        pos = None
+            if self.spec_eid is None:
+                await asyncio.sleep(0.05)
+                continue
 
-                if pos and rot:
-                    self.client.send_packet(
-                        0x08,
-                        Double.pack(pos.x),
-                        Double.pack(pos.y),
-                        Double.pack(pos.z),
-                        Float.pack(rot.yaw),
-                        Float.pack(rot.pitch),
-                        Byte.pack(0),
-                    )
-            await asyncio.sleep(1 / 20)  # every tick, ideally
+            pos = rot = None
+            if self.spec_eid == self.proxy._transformer.player_eid:
+                pos, rot = self.proxy.gamestate.position, self.proxy.gamestate.rotation
+                self.client.send_packet(*self.proxy.gamestate._build_player_inventory())
+                self.client.send_packet(
+                    0x2F, Byte.pack(-1), Short.pack(-1), Slot.pack(SlotData())
+                )
+            elif entity := self.proxy.gamestate.get_entity(self.spec_eid):
+                pos, rot = entity.position, entity.rotation
+                eq = entity.equipment
+                for slot, item in [
+                    (36, eq.held),
+                    (5, eq.helmet),
+                    (6, eq.chestplate),
+                    (7, eq.leggings),
+                    (8, eq.boots),
+                ]:
+                    self._set_slot(slot, item)
+
+            if pos and rot:
+                self.client.send_packet(
+                    0x08,
+                    Double.pack(pos.x),
+                    Double.pack(pos.y),
+                    Double.pack(pos.z),
+                    Float.pack(rot.yaw),
+                    Float.pack(rot.pitch),
+                    Byte.pack(0),
+                )
+            await asyncio.sleep(0.05)
 
     @subscribe("login_success")
     async def _broadcast_peer_base_event_login_success(self, _):
-        self.spectate_teleport_task = asyncio.create_task(self._update_spec_task())
-        self.update_watch_task = asyncio.create_task(self._update_watch())
+        asyncio.create_task(self._update_spec_task())
+        asyncio.create_task(self._update_watch())
 
-    def _get_watch_position_rotation(self) -> tuple[Vec3d, Rotation]:
-        # TODO: calculate real watch position
-        relative_position = Vec3d(2, 2, 2)
-        position = self.proxy.gamestate.position + relative_position
+    def _get_camera(self) -> tuple[Vec3d, Rotation]:
+        """Calculate camera position and rotation for watch mode."""
+        pos = self.proxy.gamestate.position
+        rot = self.proxy.gamestate.rotation
+        bitmask = self.proxy.gamestate.get_block_bitmask(pos, radius=8)
 
-        in_combat_with_plus_self = [
-            *(e.position for e in self.proxy.ein_combat_with),
-            self.proxy.gamestate.position,
-        ]
+        # Combat targets as offsets from player
+        others = (
+            np.array(
+                [
+                    (e.position.x - pos.x, e.position.y - pos.y, e.position.z - pos.z)
+                    for e in self.proxy.ein_combat_with
+                ],
+                dtype=np.float64,
+            )
+            if self.proxy.ein_combat_with
+            else np.empty((0, 3), dtype=np.float64)
+        )
 
-        avg_position = sum(
-            in_combat_with_plus_self,
-            start=Vec3d(0, 0, 0),
-        ) / len(in_combat_with_plus_self)
+        # Player look direction and movement speed
+        yaw_rad = -rot.yaw * math.pi / 180
+        look_x, look_z = math.sin(yaw_rad), math.cos(yaw_rad)
+        speed = (
+            math.sqrt((pos.x - self._last_pos.x) ** 2 + (pos.z - self._last_pos.z) ** 2)
+            if self._last_pos
+            else 0.0
+        )
+        self._last_pos = pos
 
-        rotation = self.compute_look(position, avg_position)
-        return position, rotation
+        # Find target camera offset and interpolate
+        tgt = _find_camera_offset(
+            bitmask, others, _CANDIDATES, _BODY_OFFSETS, look_x, look_z, speed
+        )
+        interp_t = 0.12 + min(speed / 0.28, 1.0) * 0.18
 
-    def _spawn_bat(self) -> None:
-        # TODO: check for eid clashes on the server
+        if self._cam is None:
+            self._cam = Vec3d(*tgt)
+        else:
+            *new, self._cam_stuck = _interp_spherical(
+                self._cam.x,
+                self._cam.y,
+                self._cam.z,
+                tgt[0],
+                tgt[1],
+                tgt[2],
+                bitmask,
+                self._cam_stuck,
+                interp_t,
+            )
+            self._cam = Vec3d(*new)
+
+        cam_pos = pos + self._cam
+        focus = pos + Vec3d(0, 1.62, 0)
+
+        # Look target: weighted blend of player, look-ahead, and combat targets
+        pitch_rad = -rot.pitch * math.pi / 180
+        cos_p = math.cos(pitch_rad)
+        look_ahead = Vec3d(
+            focus.x + look_x * cos_p * 5,
+            focus.y + math.sin(pitch_rad) * 5,
+            focus.z + look_z * cos_p * 5,
+        )
+
+        targets = [focus, look_ahead] + [e.position for e in self.proxy.ein_combat_with]
+        weights = [2.0, 1.0] + [1.0] * len(self.proxy.ein_combat_with)
+        tw = sum(weights)
+        lx = sum(w * t.x for w, t in zip(weights, targets)) / tw
+        ly = sum(w * t.y for w, t in zip(weights, targets)) / tw
+        lz = sum(w * t.z for w, t in zip(weights, targets)) / tw
+
+        # Compute rotation to look target
+        dx, dy, dz = lx - cam_pos.x, ly - cam_pos.y, lz - cam_pos.z
+        dist = math.sqrt(dx * dx + dy * dy + dz * dz)
+        tgt_yaw = (-math.atan2(dx, dz) * 180 / math.pi) % 360
+        tgt_pitch = -math.asin(dy / dist) * 180 / math.pi
+
+        # Smooth rotation (slower when looking steeply)
+        if self._rot is None:
+            self._rot = (tgt_yaw, tgt_pitch)
+        else:
+            yaw, pitch = self._rot
+            yd = tgt_yaw - yaw
+            if yd > 180:
+                yd -= 360
+            elif yd < -180:
+                yd += 360
+            smooth = 0.15 * (1.0 - max(0.0, (abs(pitch) - 30) / 60) * 0.6)
+            self._rot = (
+                (yaw + yd * smooth) % 360,
+                pitch + (tgt_pitch - pitch) * smooth,
+            )
+
+        return cam_pos, Rotation(*self._rot)
+
+    def _spawn_bat(self):
         self.bat_eid = random.getrandbits(31)
-        self.watch_position, self.watch_rotation = self._get_watch_position_rotation()
+        self.watch_pos, self.watch_rot = self._get_camera()
         self.client.send_packet(
             0x0F,
             VarInt.pack(self.bat_eid)
             + UnsignedByte.pack(65)
-            + Int.pack(int(self.watch_position.x * 32))
-            + Int.pack(int(self.watch_position.y * 32))
-            + Int.pack(int(self.watch_position.z * 32))
-            + Angle.pack(self.watch_rotation.yaw)
-            + Angle.pack(self.watch_rotation.pitch)
+            + Int.pack(int(self.watch_pos.x * 32))
+            + Int.pack(int(self.watch_pos.y * 32))
+            + Int.pack(int(self.watch_pos.z * 32))
+            + Angle.pack(self.watch_rot.yaw)
+            + Angle.pack(self.watch_rot.pitch)
             + Angle.pack(0.0)
             + Short.pack(0)
             + Short.pack(0)
             + Short.pack(0)
-            + UnsignedByte.pack(0)  # metadata index 0 (entity flags), type 0 (byte)
-            + Byte.pack(0x20)  # 0x20; invisible
-            + UnsignedByte.pack(
-                16
-            )  # metadata index 16 (bat: is hanging), type 0 (byte)
-            + Byte.pack(0)  # not hanging
-            + UnsignedByte.pack(0x7F),  # end of metadata
+            + UnsignedByte.pack(0)
+            + Byte.pack(0x20)
+            + UnsignedByte.pack(16)
+            + Byte.pack(0)
+            + UnsignedByte.pack(0x7F),
         )
 
     async def _update_watch(self):
         self._spawn_bat()
-
         while self.open:
-            old_position = self.watch_position
-            self.watch_position, self.watch_rotation = (
-                self._get_watch_position_rotation()
+            old = self.watch_pos
+            self.watch_pos, self.watch_rot = self._get_camera()
+            dx, dy, dz = (
+                self.watch_pos.x - old.x,
+                self.watch_pos.y - old.y,
+                self.watch_pos.z - old.z,
             )
-            dx = self.watch_position.x - old_position.x
-            dy = self.watch_position.y - old_position.y
-            dz = self.watch_position.z - old_position.z
-            if any((abs(dx) > 4, abs(dy) > 4, abs(dz) > 4)):
+
+            if max(abs(dx), abs(dy), abs(dz)) > 4:
                 self.client.send_packet(
                     0x18,
                     VarInt.pack(self.bat_eid),
-                    Int.pack(int(self.watch_position.x * 32)),  # fixed-point position
-                    Int.pack(int(self.watch_position.y * 32)),
-                    Int.pack(int(self.watch_position.z * 32)),
-                    Angle.pack(self.watch_rotation.yaw),
-                    Angle.pack(self.watch_rotation.pitch),
+                    Int.pack(int(self.watch_pos.x * 32)),
+                    Int.pack(int(self.watch_pos.y * 32)),
+                    Int.pack(int(self.watch_pos.z * 32)),
+                    Angle.pack(self.watch_rot.yaw),
+                    Angle.pack(self.watch_rot.pitch),
                     Boolean.pack(False),
                 )
             else:
@@ -164,60 +451,46 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             self.client.send_packet(
                 0x16,
                 VarInt.pack(self.bat_eid),
-                Angle.pack(self.watch_rotation.yaw),
-                Angle.pack(self.watch_rotation.pitch),
+                Angle.pack(self.watch_rot.yaw),
+                Angle.pack(self.watch_rot.pitch),
                 Boolean.pack(False),
             )
-            await asyncio.sleep(1 / 10)
+            await asyncio.sleep(0.1)
 
-    def compute_look(self, camera_pos: Vec3d, object_pos: Vec3d) -> Rotation:
-        dx = object_pos.x - camera_pos.x
-        dy = object_pos.y - camera_pos.y
-        dz = object_pos.z - camera_pos.z
+    def _set_gamemode(self, gm: int):
+        self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
 
-        r = math.sqrt(dx * dx + dy * dy + dz * dz)
-
-        # yaw: xz-plane, starts at (0, +Z), ccw, degrees
-        yaw = -math.atan2(dx, dz) * 180 / math.pi
-
-        if yaw < 0:  # normalize
-            yaw += 360
-
-        pitch = -math.asin(dy / r) * 180 / math.pi
-
-        return Rotation(yaw, pitch)
-
-    def _set_gamemode(self, gamemode: int) -> None:
-        self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gamemode)))
-
-    def _send_abilities(self) -> None:
-        abilities_flags = int(
+    def _send_abilities(self):
+        flags = (
             PlayerAbilityFlags.INVULNERABLE
             | (PlayerAbilityFlags.FLYING if not self.proxy.gamestate.on_ground else 0)
             | self.flight
         )
         self.client.send_packet(
             0x39,
-            Byte.pack(abilities_flags)
+            Byte.pack(int(flags))
             + Float.pack(self.proxy.gamestate.flying_speed)
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
-    def _set_slot(self, slot: int, item: SlotData | None) -> None:
+    def _set_slot(self, slot: int, item: SlotData | None):
         self.client.send_packet(
-            0x2F,
-            Byte.pack(0),  # window ID 0 = player inventory
-            Short.pack(slot),
-            Slot.pack(item if item else SlotData()),
+            0x2F, Byte.pack(0), Short.pack(slot), Slot.pack(item or SlotData())
         )
 
     def _reset_spec(self):
-        self.watching = False
+        self.watching, self._cam, self._cam_stuck, self._rot, self._last_pos = (
+            False,
+            None,
+            0,
+            None,
+            None,
+        )
         self.client.send_packet(0x43, VarInt.pack(self.eid))
         self.client.send_packet(
             0x30,
-            UnsignedByte.pack(0),  # window ID
-            Short.pack(45),  # slot count
+            UnsignedByte.pack(0),
+            Short.pack(45),
             b"".join(Slot.pack(SlotData()) for _ in range(45)),
         )
         self.spec_eid = None
@@ -227,43 +500,30 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
 
     @listen(0x02)
     async def _packet_use_entity(self, buff: Buffer):
-        target = buff.unpack(VarInt)
-        type_ = buff.unpack(VarInt)
-        if type_ == 0:
+        target, action = buff.unpack(VarInt), buff.unpack(VarInt)
+        if action == 0:
             self._spectate(target)
 
     def _find_eid(self, target: ServerPlayer):
-        # check if it's the broadcasting player (compare by username since UUIDs
-        # may differ between auth and server in offline/local mode)
         if target.name.casefold() == self.proxy.username.casefold():
-            # use transformer's player_eid, not gamestate's - the transformer
-            # spawns the owner with a different entity ID for spectators
-            eid = self.proxy._transformer.player_eid
-        else:
-            # another player -- check that they're spawned nearby
-            if target.uuid is None:
-                raise CommandException(f"Player '{target.name}' is not nearby!")
-            player = self.proxy.gamestate.get_player_by_uuid(target.uuid)
-            if not player:
-                raise CommandException(f"Player '{target.name}' is not nearby!")
-            eid = player.entity_id
-
-        return eid
+            return self.proxy._transformer.player_eid
+        if target.uuid is None or not (
+            player := self.proxy.gamestate.get_player_by_uuid(target.uuid)
+        ):
+            raise CommandException(f"Player '{target.name}' is not nearby!")
+        return player.entity_id
 
     @command("spectate", "spec")
-    async def _command_spectate(self, target: ServerPlayer) -> None:
-        # check if it's the spectator themselves (reset spectate mode)
+    async def _command_spectate(self, target: ServerPlayer):
         if target.name.casefold() == self.username.casefold():
             if self.spec_eid is None:
                 raise CommandException("You are not spectating anyone!")
             return self._reset_spec()
-
-        eid = self._find_eid(target)
-        self._spectate(eid)
+        self._spectate(self._find_eid(target))
 
     def _spectate(self, eid: int):
         self.spec_eid = eid
-        self._set_gamemode(3)  # spectator mode
+        self._set_gamemode(3)
         self.client.send_packet(0x43, VarInt.pack(eid))
 
     @command("watch")

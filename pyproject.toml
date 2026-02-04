@@ -19,6 +19,7 @@ dependencies = [
     "hypixel-py>=0.4.2",
     "uvloop>=0.22.1; platform_system != 'Windows'",
     "winloop>=0.4.1",
+    "numba>=0.63.1",
 ]
 
 [project.scripts]

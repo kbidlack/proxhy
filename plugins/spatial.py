@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional
 
+import numba
 import numpy as np
 
 from core.events import subscribe
@@ -41,11 +42,12 @@ class SpatialPlugin(ProxhyPlugin):
                 and self.settings.bedwars.visual.height_limit_warnings.get() == "ON"
                 and self.game.started
             ):
-                await self.height_limit_warnings()
+                self.height_limit_warnings()
 
             await asyncio.sleep(1 / 20)
 
-    async def height_limit_warnings(self):
+    @numba.njit(cache=True, fastmath=True)
+    def height_limit_warnings(self):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
         if self.game.map is None:

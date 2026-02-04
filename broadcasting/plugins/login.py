@@ -1,3 +1,4 @@
+import asyncio
 import json
 import uuid
 from unittest.mock import Mock
@@ -157,8 +158,18 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.client.send_packet(*packets[0])  # join game
 
         async with _Client() as c:
-            self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
-            self.skin_properties = await c.get_skin_properties(self.uuid)
+            try:
+                async with asyncio.timeout(2):
+                    self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
+                    self.skin_properties = await c.get_skin_properties(self.uuid)
+            except asyncio.TimeoutError:
+                self.proxy.client.chat(
+                    TextComponent("Failed to fetch uuid for")
+                    .color("red")
+                    .appends(TextComponent(self.username).color("aqua"))
+                )
+                self.uuid = str(uuid.uuid4())
+                self.skin_properties = None
 
         self.state = State.PLAY
 
