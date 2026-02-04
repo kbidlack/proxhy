@@ -229,12 +229,33 @@ class LoginPlugin(ProxhyPlugin):
             def on_pending():
                 pass
 
-            access_token, username, uuid = await auth.complete_device_code_login(
-                device["device_code"],
-                interval=device.get("interval", 5),
-                expires_in=device.get("expires_in", 900),
-                on_pending=on_pending,
-            )
+            try:
+                access_token, username, uuid = await auth.complete_device_code_login(
+                    device["device_code"],
+                    interval=device.get("interval", 5),
+                    expires_in=device.get("expires_in", 900),
+                    on_pending=on_pending,
+                )
+            except auth.AuthException as e:
+                if e.code == "XSTS-2148916233":
+                    self.client.send_packet(
+                        0x40,
+                        Chat.pack(
+                            TextComponent(
+                                "This Microsoft account does not have a linked Minecraft account!"
+                            ).color("red")
+                        ),
+                    )
+                else:
+                    self.client.send_packet(
+                        0x40,
+                        Chat.pack(
+                            TextComponent("An unknown error occurred:")
+                            .color("red")
+                            .appends(TextComponent(str(e)))
+                        ),
+                    )
+                return
 
             if username != self.username:
                 self.client.send_packet(
