@@ -67,7 +67,7 @@ class GameStatePlugin(ProxhyPlugin):
             self.gamestate.update_serverbound(id, b"".join(data))
             await self.emit("sb_gamestate_update", (id, *data))
 
-    @listen_client(0x02)
+    @listen_client(0x02, blocking=True)
     async def _packet_use_entity(self, buff: Buffer):
         self.server.send_packet(0x02, buff.getvalue())
 
