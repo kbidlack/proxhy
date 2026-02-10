@@ -73,7 +73,8 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     async def _login_success_helper(self):
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
         asyncio.create_task(self.migrate_log_stats())
-        asyncio.create_task(self.log_stats("login"))
+        if not self.dev_mode:
+            asyncio.create_task(self.log_stats("login"))
 
     @subscribe("close")
     async def _statcheck_event_close(self, _):
@@ -391,13 +392,26 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             STATS = Statistic.STATS["bedwars"]
             stats = (STATS["finals"], STATS["fkdr"], STATS["wins"], STATS["wlr"])
 
-        required_modes = list(BEDWARS_NON_DREAM_MAPPING.keys())
+        required_modes = list(BEDWARS_NON_DREAM_MAPPING.values())
         if not display_abridged:
-            required_modes.extend(BEDWARS_DREAM_MAPPING_SIMPLE.keys())
+            required_modes.extend(BEDWARS_DREAM_MAPPING_SIMPLE.values())
+
+        RATIO_DEPENDENCIES = {
+            "fkdr": ("final_kills_bedwars", "final_deaths_bedwars"),
+            "kdr": ("kills_bedwars", "deaths_bedwars"),
+            "wlr": ("wins_bedwars", "losses_bedwars"),
+            "bblr": ("beds_broken_bedwars", "beds_lost_bedwars"),
+        }
 
         required_keys: list[str] = []
-        for mode in required_modes:
-            required_keys.extend(f"{mode}_{s.json_key}" for s in stats)
+        for mode in [""] + [m.lower() for m in required_modes]:
+            prefix = f"{mode}_" if mode else ""
+            for s in stats:
+                if s.json_key in RATIO_DEPENDENCIES:
+                    for dep in RATIO_DEPENDENCIES[s.json_key]:
+                        required_keys.append(f"{prefix}{dep}")
+                else:
+                    required_keys.append(f"{prefix}{s.json_key}")
 
         rankname = get_rankname(player)
 
