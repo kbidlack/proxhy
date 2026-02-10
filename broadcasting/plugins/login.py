@@ -260,6 +260,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         await self.client.drain()
 
+        # Schedule delayed NPC removal from tab list to allow skin loading
+        asyncio.create_task(self._delayed_npc_removal())
+
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]
 
@@ -318,3 +321,8 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
                 VarInt.pack(eid) for eid in entity_ids
             )
             self.proxy.client.send_packet(0x13, data)
+
+    async def _delayed_npc_removal(self) -> None:
+        """Remove NPCs from tab list after a delay to allow skin loading."""
+        await asyncio.sleep(1.5)
+        self.client.send_packet(*self.proxy.gamestate._build_npc_removal_packet())

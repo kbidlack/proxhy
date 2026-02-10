@@ -797,6 +797,9 @@ class GameState:
         # Block break animations
         self.block_break_animations: dict[int, tuple[Vec3i, int]] = {}
 
+        # NPCs spawned during last sync (for delayed tab list removal)
+        self._last_synced_npc_uuids: list[str] = []
+
         # Camera entity (for spectating)
         self.camera_entity_id: int | None = None
 
@@ -2672,15 +2675,17 @@ class GameState:
         2. Spawn them
         3. Send their metadata
         4. Send their equipment
-        5. Remove them from the tab list again
+        5. Remove them from the tab list after a delay (via build_npc_removal_packets)
         """
         packets: list[Packet] = []
+        self._last_synced_npc_uuids = []
 
         for uuid, player in self.players.items():
             if player.entity_id == self.player_entity_id:
                 continue
             # Check if this player is NOT in the tab list (i.e., an NPC)
             if uuid not in self.player_list:
+                self._last_synced_npc_uuids.append(uuid)
                 # Find team membership for this NPC
                 npc_team_name = None
                 for team_name, team in self.teams.items():
@@ -2749,13 +2754,28 @@ class GameState:
                         )
                         packets.append((0x04, equip_data))
 
-                # NOTE: We intentionally do NOT remove NPCs from the tab list here.
-                # If we remove them immediately, the client doesn't have time to
-                # load the skin texture before the player list entry is gone,
-                # resulting in Steve/Alex skins. The NPC will remain in the tab
-                # list but won't be visible to the user since they have no display name.
+                # NOTE: NPC UUIDs are stored in _last_synced_npc_uuids for delayed
+                # removal. Call build_npc_removal_packets() after a delay to get
+                # the packets that remove these NPCs from the tab list. Removing
+                # them immediately would cause Steve/Alex skins since the client
+                # needs time to load the skin textures.
 
         return packets
+
+    def _build_npc_removal_packet(self) -> Packet:
+        """Build a packet to remove NPCs from the tab list.
+
+        Call this after a delay (e.g., 1-2 seconds) following a sync operation
+        to remove NPCs from the tab list once the client has loaded their skins.
+        """
+
+        # Build a single REMOVE_PLAYER packet with all NPC UUIDs
+        data = VarInt.pack(PlayerListAction.REMOVE_PLAYER)
+        data += VarInt.pack(len(self._last_synced_npc_uuids))
+        for uuid in self._last_synced_npc_uuids:
+            data += self._pack_uuid(uuid)
+
+        return (0x38, data)
 
     def _build_spawn_mob(self, entity: Entity) -> Packet:
         """Build Spawn Mob packet (0x0F)."""
