@@ -6,7 +6,7 @@ from dataclasses import dataclass, field
 from functools import lru_cache
 from importlib.resources import files
 from pathlib import Path
-from typing import Callable, Optional, TypedDict
+from typing import Any, Callable, Optional, TypedDict
 
 import hypixel
 import keyring
@@ -33,7 +33,11 @@ from protocol.datatypes import (
 )
 from proxhy.command import command
 from proxhy.errors import CommandException
-from proxhy.formatting import FormattedPlayer
+from proxhy.formatting import (
+    format_bedwars_dict,
+    format_bw_star,
+    get_rankname,
+)
 from proxhy.gamestate import Team
 from proxhy.plugin import ProxhyPlugin
 
@@ -113,7 +117,7 @@ COLOR_CODE_TO_NAME = {
 class PlayersWithStats(TypedDict):
     uuid: str
     display_name: str
-    fplayer: FormattedPlayer | Nick
+    fplayer: dict | Nick
 
 
 class TeamColor(TypedDict):
@@ -282,32 +286,30 @@ class StatCheckPlugin(ProxhyPlugin):
             ),
         )
 
-    def _build_player_display_name(
-        self, player_name: str, fplayer: FormattedPlayer | Nick
-    ) -> str:
+    def _build_player_display_name(self, player_name: str, fdict: dict | Nick) -> str:
         try:
             color = self.get_team_color(player_name)
         except ValueError:
             color = {"code": "", "letter": "", "name": ""}
 
-        if isinstance(fplayer, Nick):
+        if isinstance(fdict, Nick):
             return f"{color['code']}§l{color['letter']}§r §5[NICK] {player_name}"
 
         if (
             self.settings.bedwars.tablist.is_mode_specific.get() == "ON"
             and self.game.mode
         ):
-            mode_key = f"{self.game.mode[8:].lower()}_stats"
-            fkdr = fplayer.bedwars.__getattribute__(mode_key)["fkdr"]
+            mode = self.game.mode[8:].lower()
+            fkdr = fdict[f"{mode}_fkdr"]
         else:
-            fkdr = fplayer.bedwars.fkdr
+            fkdr = fdict["fkdr"]
 
         show_rankname = self.settings.bedwars.tablist.show_rankname.get()
-        name = fplayer.rankname if show_rankname == "ON" else fplayer.raw_name
+        name = fdict["rankname"] if show_rankname == "ON" else fdict["raw_name"]
 
         display_name = " ".join(
             (
-                f"{fplayer.bedwars.level}{color['code']}",
+                f"{fdict['star']}{color['code']}",
                 name,
                 f" §7| {fkdr}",
             )
@@ -391,14 +393,14 @@ class StatCheckPlugin(ProxhyPlugin):
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
             # Recalculate display names with new mode-specific setting
             for player, player_data in self.players_with_stats.items():
-                fplayer = player_data["fplayer"]
-                if isinstance(fplayer, FormattedPlayer):
+                fdict = player_data["fplayer"]
+                if isinstance(fdict, dict):
                     # Rebuild display name with new setting
-                    display_name = self._build_player_display_name(player, fplayer)
+                    display_name = self._build_player_display_name(player, fdict)
                     self.players_with_stats[player] = {
                         "uuid": player_data["uuid"],
                         "display_name": display_name,
-                        "fplayer": fplayer,
+                        "fplayer": fdict,
                     }
 
             # Update the tab list immediately
@@ -423,14 +425,14 @@ class StatCheckPlugin(ProxhyPlugin):
     ) -> None:
         """Callback when show_rankname setting changes - rebuild display names."""
         for player, player_data in self.players_with_stats.items():
-            fplayer = player_data["fplayer"]
-            if isinstance(fplayer, FormattedPlayer):
+            fdict = player_data["fplayer"]
+            if isinstance(fdict, dict):
                 # Rebuild display name with new setting
-                display_name = self._build_player_display_name(player, fplayer)
+                display_name = self._build_player_display_name(player, fdict)
                 self.players_with_stats[player] = {
                     "uuid": player_data["uuid"],
                     "display_name": display_name,
-                    "fplayer": fplayer,
+                    "fplayer": fdict,
                 }
         self.keep_player_stats_updated()
         self._update_dead_players_in_tablist()
@@ -734,21 +736,29 @@ class StatCheckPlugin(ProxhyPlugin):
                     # Only cache actual Player objects, not Nick objects
                     if not isinstance(player, (PlayerNotFound, Nick)):
                         self._cached_players[player.name] = player
-                        fplayer = FormattedPlayer(player)
+                        bedwars_data = player._data.get("stats", {}).get("Bedwars", {})
+                        fdict: dict[str, Any] | Nick = dict(
+                            format_bedwars_dict(bedwars_data)
+                        )
+                        fdict["star"] = format_bw_star(player.bedwars.level)
+                        fdict["raw_level"] = player.bedwars.level
+                        fdict["raw_fkdr"] = player.bedwars.fkdr
+                        fdict["rankname"] = get_rankname(player)
+                        fdict["raw_name"] = player.name
                     else:  # if is a nicked player
                         # get team color for nicked player
                         for team in self.gamestate.teams.values():
                             if player.name in team.members:
                                 self.nick_team_colors.update({player.name: team.prefix})
                                 break
-                        fplayer = player
+                        fdict = player
 
-                    display_name = self._build_player_display_name(player.name, fplayer)
+                    display_name = self._build_player_display_name(player.name, fdict)
 
                     self.players_with_stats[player.name] = {
                         "uuid": player.uuid,
                         "display_name": display_name,
-                        "fplayer": fplayer,
+                        "fplayer": fdict,
                     }
 
                     if self.settings.bedwars.tablist.show_stats.get() == "ON":
@@ -802,13 +812,13 @@ class StatCheckPlugin(ProxhyPlugin):
         )
 
         # key to sort player stats with sorted()
-        key: Callable[[FormattedPlayer], float]
+        key: Callable[[dict], float]
         if self.settings.bedwars.display_top_stats.get() in {"OFF", "INDEX"}:
-            key = lambda fp: fp.bedwars.raw_fkdr**2 * fp.bedwars.raw_level  # noqa: E731
+            key = lambda fp: fp["raw_fkdr"] ** 2 * fp["raw_level"]  # noqa: E731
         elif self.settings.bedwars.display_top_stats.get() == "STAR":
-            key = lambda fp: fp.bedwars.raw_level  # noqa: E731
+            key = lambda fp: fp["raw_level"]  # noqa: E731
         elif self.settings.bedwars.display_top_stats.get() == "FKDR":
-            key = lambda fp: fp.bedwars.raw_fkdr  # noqa: E731
+            key = lambda fp: fp["raw_fkdr"]  # noqa: E731
         else:
             raise ValueError(
                 f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.get()} instead.'
@@ -836,15 +846,15 @@ class StatCheckPlugin(ProxhyPlugin):
                 else:
                     better, worse = sorted((fp1, fp2), key=key, reverse=True)
 
-                if isinstance(better, FormattedPlayer):
-                    title = self.players_with_stats[better.raw_name]["display_name"]
+                if isinstance(better, dict):
+                    title = self.players_with_stats[better["raw_name"]]["display_name"]
                 else:
                     title = self.players_with_stats[better.name]["display_name"]
 
                 if self.settings.bedwars.announce_first_rush.get() == "FIRST RUSH":
                     # if we aren't showing alt rush team stats, we can show both players from first rush
-                    if isinstance(worse, FormattedPlayer):
-                        subtitle = self.players_with_stats[worse.raw_name][
+                    if isinstance(worse, dict):
+                        subtitle = self.players_with_stats[worse["raw_name"]][
                             "display_name"
                         ]
                     else:
@@ -874,8 +884,8 @@ class StatCheckPlugin(ProxhyPlugin):
                     else:
                         better, worse = sorted((fp1, fp2), key=key, reverse=True)
 
-                    if isinstance(better, FormattedPlayer):
-                        subtitle = self.players_with_stats[better.raw_name][
+                    if isinstance(better, dict):
+                        subtitle = self.players_with_stats[better["raw_name"]][
                             "display_name"
                         ]
                     else:
@@ -963,24 +973,19 @@ class StatCheckPlugin(ProxhyPlugin):
                 continue
 
             # Handle regular players with stats
-            if player_name in self._cached_players:
-                player = self._cached_players[player_name]
-                fplayer = FormattedPlayer(player)
-
+            fdict = player_data["fplayer"]
+            if isinstance(fdict, dict):
                 # Calculate ranking value
                 if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
-                    fkdr = fplayer.bedwars.__getattribute__(
-                        f"raw_{self.game.mode[8:].lower()}_stats"
-                    )["fkdr"]
-                    f_fkdr = fplayer.bedwars.__getattribute__(
-                        f"{self.game.mode[8:].lower()}_stats"
-                    )["fkdr"]
+                    mode = self.game.mode[8:].lower()
+                    fkdr = fdict[f"{mode}_fkdr"]
+                    f_fkdr = fdict[f"{mode}_fkdr"]
                 else:
-                    fkdr = fplayer.bedwars.raw_fkdr
-                    f_fkdr = fplayer.bedwars.fkdr
+                    fkdr = fdict["raw_fkdr"]
+                    f_fkdr = fdict["fkdr"]
 
-                fkdr = int(fplayer.bedwars.raw_fkdr)
-                stars = int(fplayer.bedwars.raw_level)
+                fkdr = int(fdict["raw_fkdr"])
+                stars = int(fdict["raw_level"])
 
                 if self.settings.bedwars.display_top_stats.get() == "FKDR":
                     rank_value = fkdr
@@ -994,7 +999,7 @@ class StatCheckPlugin(ProxhyPlugin):
                 enemy_players.append(
                     {
                         "name": player_name,
-                        "star_formatted": fplayer.bedwars.level,
+                        "star_formatted": fdict["star"],
                         "fkdr_formatted": f_fkdr,
                         "rank_value": rank_value,
                         "team_color": player_team.prefix,
