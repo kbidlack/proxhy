@@ -2,6 +2,7 @@ import asyncio
 import datetime
 import json
 import os
+import re
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Optional
 
@@ -23,6 +24,7 @@ from proxhy.hypixels import (
     BEDWARS_NON_DREAM_MAPPING,
 )
 from proxhy.plugin import ProxhyPlugin
+from proxhy.utils import _Client
 
 
 class StatcheckCommandPluginState:
@@ -70,6 +72,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
     async def _login_success_helper(self):
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
+        asyncio.create_task(self.migrate_log_stats())
         asyncio.create_task(self.log_stats("login"))
 
     @subscribe("close")
@@ -96,8 +99,8 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             bedwars_stats = player._data.get("stats", {}).get("Bedwars", {})
             skywars_stats = player._data.get("stats", {}).get("Skywars", {})
             duels_stats = player._data.get("stats", {}).get("Duels", {})
-        except Exception:
-            # print(f"Failed to log stats on {event}: {e}") # TODO: log this
+        except Exception as e:
+            print(f"Failed to log stats on {event}: {e}")  # TODO: log this
             return
 
         log_entry = {
@@ -116,22 +119,76 @@ class StatcheckCommandPlugin(ProxhyPlugin):
                 if lines:
                     last_line = lines[-1].strip()
                     last_entry = json.loads(last_line)
-                    if last_entry.get("bedwars") == bedwars_stats:
+                    if (
+                        last_entry.get("bedwars") == bedwars_stats
+                        and last_entry.get("skywars") == skywars_stats
+                        and last_entry.get("duels") == duels_stats
+                    ):
                         return
-                    if last_entry.get("skywars") == skywars_stats:
-                        return
-                    if last_entry.get("duels") == duels_stats:
-                        return
-            except Exception:
-                # print(f"Error checking last log entry: {e}")
+            except Exception as e:
+                print(f"Error checking last log entry: {e}")
                 pass  # TODO: log this
 
         try:
             with open(self.log_path, "a") as f:
                 f.write(json.dumps(log_entry) + "\n")
-        except Exception:
-            # print(f"Error writing stat log: {e}")
+        except Exception as e:
+            print(f"Error writing stat log: {e}")
             pass  # TODO: log this
+
+    @staticmethod
+    def _is_uuid(value: str) -> bool:
+        return bool(re.fullmatch(r"[0-9a-f]{32}", value, re.IGNORECASE))
+
+    async def migrate_log_stats(self) -> None:
+        """Migrate stat log entries that use player names to use UUIDs instead."""
+        if not os.path.exists(self.log_path):
+            return
+
+        with open(self.log_path, "r") as f:
+            lines = f.readlines()
+
+        # Collect unique names that need migration
+        names_to_resolve: set[str] = set()
+        for line in lines:
+            try:
+                entry = json.loads(line.strip())
+                player = entry.get("player", "")
+                if player and not self._is_uuid(player):
+                    names_to_resolve.add(player)
+            except Exception:
+                continue
+
+        if not names_to_resolve:
+            return
+
+        # Resolve names to UUIDs via Mojang API
+        name_to_uuid: dict[str, str] = {}
+        async with _Client() as client:
+            for name in names_to_resolve:
+                try:
+                    info = await client.get_profile(name)
+                    name_to_uuid[name] = info.uuid
+                except Exception as e:
+                    print(f"Failed to resolve UUID for '{name}': {e}")
+
+        if not name_to_uuid:
+            return
+
+        # Rewrite the log file with UUIDs
+        new_lines = []
+        for line in lines:
+            try:
+                entry = json.loads(line.strip())
+                player = entry.get("player", "")
+                if player in name_to_uuid:
+                    entry["player"] = name_to_uuid[player]
+                new_lines.append(json.dumps(entry) + "\n")
+            except Exception:
+                new_lines.append(line)
+
+        with open(self.log_path, "w") as f:
+            f.writelines(new_lines)
 
     def _find_closest_stat_log(
         self, uuid: str, window: float, gamemode: Gamemode_T
@@ -145,7 +202,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             for line in f:
                 try:
                     entry = json.loads(line.strip())
-                    if entry.get("uuid", "").casefold() == uuid and entry.get(
+                    if entry.get("player", "").casefold() == uuid and entry.get(
                         "bedwars"
                     ):
                         entry["dt"] = datetime.datetime.fromisoformat(
@@ -346,7 +403,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
         if window:
             old_stats, chosen_date = self._find_closest_stat_log(
-                player.name, window, "bedwars"
+                player.uuid, window, "bedwars"
             )
             diffs = self._calculate_stat_deltas(current_stats, old_stats, required_keys)
             fdict = format_bedwars_dict(diffs)
