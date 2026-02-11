@@ -150,6 +150,16 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("joinid")
         async def _command_broadcast_joinid(self: BroadcastPlugin, node_id: str):
+            self.client.chat(
+                TextComponent("Joining")
+                .color("yellow")
+                .appends(
+                    TextComponent(node_id)
+                    .color("aqua")
+                    .hover_text(node_id)
+                    .click_event("suggest_command", node_id)
+                )
+            )
             await self._join_broadcast_by_node_id(node_id)
 
         @bc.command("join")
@@ -465,9 +475,9 @@ class BroadcastPlugin(ProxhyPlugin):
                         "Connection timed out! The broadcaster may be unavailable."
                     ).color("red")
                 )
-            except OSError as e:
+            except pyroh.iroh.iroh_ffi.IrohError as e:
                 raise CommandException(
-                    TextComponent(f"Connection failed: {e}").color("red")
+                    TextComponent(f"Connection failed: {e.message()}").color("red")
                 )
 
             await self._setup_broadcastee_proxy(reader, writer, node_id)
@@ -650,7 +660,14 @@ class BroadcastPlugin(ProxhyPlugin):
 
         if self.logged_in:
             if hasattr(self, "broadcast_server_task") and self.broadcast_server_task:
+                self.broadcast_pyroh_server.close()
                 self.broadcast_server_task.cancel()
+                try:
+                    await asyncio.wait_for(
+                        self.broadcast_pyroh_server.wait_closed(), timeout=0.5
+                    )
+                except asyncio.TimeoutError:
+                    pass
 
             try:
                 await asyncio.wait_for(
