@@ -39,7 +39,7 @@ def get_rank(player: Player):
 
 def get_rankname(player: Player):
     rank = get_rank(player)
-    sep: str = "" if player.rank == "§7" else " "  # no space for non
+    sep: str = "" if player.rank == "NONE" else " "  # no space for non
     return sep.join((f"{rank}", f"{player.name}"))
 
 
