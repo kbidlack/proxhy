@@ -37,4 +37,4 @@ where = ["."]
 
 [tool.uv.sources]
 pyroh = { git = "https://github.com/kbidlack/pyroh" }
-compass = { git = "https://github.com/kbidlack/compass.git", subdirectory = "client-python" }
+compass = { git = "https://github.com/kbidlack/compass.git", subdirectory = "client" }
