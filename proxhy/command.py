@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import inspect
 import types
 from abc import ABC, abstractmethod
@@ -18,6 +16,38 @@ from typing import (
 
 from protocol.datatypes import TextComponent
 from proxhy.errors import CommandException
+
+
+class Lazy[T]:
+    """
+    A lazy wrapper for command arguments that defers conversion until awaited.
+
+    Use ``Lazy[HypixelPlayer]`` as a type annotation on command parameters
+    whose conversion is expensive (e.g. API calls) and may not always be needed.
+    The conversion only runs when the command function ``await``\\s the parameter.
+
+    Example::
+
+        @command("sc")
+        async def _command_sc(self, player: Lazy[HypixelPlayer] = None):
+            if player is not None:
+                player = await player   # API call happens here
+    """
+
+    def __init__(self, coro_factory: Callable[[], Awaitable[T]]):
+        self._coro_factory = coro_factory
+        self._resolved = False
+        self._value: T | None = None
+
+    def __await__(self):
+        return self._resolve().__await__()
+
+    async def _resolve(self) -> T:
+        if not self._resolved:
+            self._value = await self._coro_factory()
+            self._resolved = True
+        return self._value  # type: ignore[return-value]
+
 
 # =============================================================================
 # Command Context
@@ -114,7 +144,11 @@ class CommandContext:
                         pass
         else:
             for arg in self.args:
-                if isinstance(arg, type_):
+                if isinstance(arg, Lazy):
+                    resolved = await arg
+                    if isinstance(resolved, type_):
+                        return resolved
+                elif isinstance(arg, type_):
                     return arg
         return None
 
@@ -207,6 +241,12 @@ class Parameter:
     def __init__(self, param: inspect.Parameter, type_hint: Any = None):
         self.name = param.name
         self.type_hint = type_hint or param.annotation
+
+        # Check for Lazy[X] wrapper — unwrap to get the inner type
+        self.is_lazy = get_origin(self.type_hint) is Lazy
+        if self.is_lazy:
+            lazy_args = get_args(self.type_hint)
+            self.type_hint = lazy_args[0] if lazy_args else self.type_hint
 
         # Check if required (no default value)
         if param.default is not inspect._empty:
@@ -474,15 +514,43 @@ class Command:
                 remaining = args[i:]
                 for j, arg in enumerate(remaining):
                     ctx.param_index = i + j
-                    converted = await param.convert(ctx, arg)
-                    converted_args.append(converted)
+                    if param.is_lazy:
+                        idx = i + j
+                        lazy = Lazy(
+                            lambda p=param, a=arg, ix=idx: self._lazy_convert(
+                                ctx, p, a, ix
+                            )
+                        )
+                        converted_args.append(lazy)
+                    else:
+                        converted = await param.convert(ctx, arg)
+                        converted_args.append(converted)
                 break
             elif i < len(args):
-                # Convert single argument using Parameter.convert
-                converted = await param.convert(ctx, args[i])
-                converted_args.append(converted)
+                if param.is_lazy:
+                    lazy = Lazy(
+                        lambda p=param, a=args[i], ix=i: self._lazy_convert(
+                            ctx, p, a, ix
+                        )
+                    )
+                    converted_args.append(lazy)
+                else:
+                    converted = await param.convert(ctx, args[i])
+                    converted_args.append(converted)
 
         return await self.function(proxy, *converted_args)
+
+    @staticmethod
+    async def _lazy_convert(
+        ctx: CommandContext, param: Parameter, arg: str, index: int
+    ) -> Any:
+        """Convert a parameter with the correct param_index set on ctx."""
+        old_param_index = ctx.param_index
+        ctx.param_index = index
+        try:
+            return await param.convert(ctx, arg)
+        finally:
+            ctx.param_index = old_param_index
 
     async def get_suggestions(
         self, proxy: Any, args: list[str], partial: str

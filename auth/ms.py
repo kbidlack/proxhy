@@ -18,8 +18,6 @@ Flow:
 7. Verify game ownership and get profile
 """
 
-from __future__ import annotations
-
 import secrets
 import time
 from typing import TYPE_CHECKING, TypedDict

@@ -11,7 +11,7 @@ import hypixel
 from core.events import subscribe
 from protocol.datatypes import TextComponent
 from proxhy.argtypes import Gamemode, Gamemode_T, HypixelPlayer, Stat, Statistic
-from proxhy.command import command
+from proxhy.command import Lazy, command
 from proxhy.errors import CommandException
 from proxhy.formatting import (
     format_bedwars_dict,
@@ -36,32 +36,35 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     @command("sc", "statcheck")
     async def _command_statcheck(
         self,
-        player: HypixelPlayer = None,  # type: ignore[assignment]
+        _player: Lazy[HypixelPlayer] = None,  # type: ignore[assignment]
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
     ):
         """Check player stats. Usage: /sc [player] [mode]"""
+        player = await _player if _player else _player
         return await self._sc_internal(player=player, mode=mode, stat_names=stats)
 
     @command("scw", "scweekly")
     async def _command_scweekly(
         self,
-        player: HypixelPlayer = None,  # type: ignore[assignment]
+        _player: Lazy[HypixelPlayer] = None,  # type: ignore[assignment]
         mode: Gamemode = Gamemode("bedwars"),
         window: float = 7.0,
         *stats: Statistic,
     ):
         """Check player's weekly (or timed) stats. Usage: /scw [player] [mode] [window (default: 7)] [stats]"""
+        player = await _player if _player else _player
         return await self._sc_internal(player, window, mode, stat_names=stats)
 
     @command("scfull")
     async def _command_scfull(
         self,
-        player: HypixelPlayer = None,  # type: ignore[assignment]
+        _player: Lazy[HypixelPlayer] = None,  # type: ignore[assignment]
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
     ):
         """Check player stats with all modes. Usage: /scfull [player] [mode] [stats]"""
+        player = await _player if _player else _player
         return await self._sc_internal(
             player=player, mode=mode, stat_names=stats, display_abridged=False
         )

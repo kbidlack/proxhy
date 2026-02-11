@@ -3,6 +3,7 @@
 # to be able to take advantage of all the prebuilt plugins
 # and packet handling stuff from proxy, just for a client connection
 
+
 from core.proxy import Proxy
 from plugins.chat import ChatPlugin
 from plugins.gamestate import GameStatePlugin
