@@ -110,7 +110,7 @@ GAME_START_MESSAGE_SETS = [  # block all the game start messages
     [
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
         "                                  Bed Wars",
-        "     Every few seconds brings a new surprise! Use"
+        "     Every few seconds brings a new surprise! Use",
         "        these items to defend your bed or destroy",
         "                                enemy beds.",
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
@@ -825,7 +825,10 @@ class StatCheckPlugin(ProxhyPlugin):
                         self._send_tablist_update(str(player.uuid), display_name)
 
         # if we've gotten everyone from /who, stat highlights can be called
-        if self.settings.bedwars.display_top_stats.get() != "OFF":
+        if (
+            self.settings.bedwars.display_top_stats.get() != "OFF"
+            and self.game.mode != "bedwars_two_one_duels"
+        ):
             if not self.stats_highlighted:
                 await self.stat_highlights()
                 self.stats_highlighted = True
@@ -834,6 +837,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     async def highlight_adjacent_teams(self) -> None:
         """Waits until stats are updated; displays a title card with stats of adjacent team(s)."""
+
         await self.update_stats_complete.wait()
         if not self._api_key_valid:
             return
@@ -996,7 +1000,7 @@ class StatCheckPlugin(ProxhyPlugin):
     async def stat_highlights(self):
         """Display top 3 enemy players and nicked players."""
         if not self.players_with_stats:
-            return "No stats found!"
+            return  # no stats
 
         own_team_color = self.get_team_color(self.username)["name"]
 
@@ -1208,28 +1212,30 @@ class StatCheckPlugin(ProxhyPlugin):
             return self.client.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
-
-        if self.settings.bedwars.display_top_stats.get() == "OFF":
-            self.client.send_packet(0x02, buff.getvalue())
-
+        is_duels = self.game.mode == "bedwars_two_one_duels"
+        suppress = (
+            self.settings.bedwars.display_top_stats.get() != "OFF" and not is_duels
+        )
         if message in {msg_set[-2] for msg_set in GAME_START_MESSAGE_SETS}:  # runs once
-            if (
-                self.settings.bedwars.announce_first_rush.get() != "OFF"
-                and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
-                and not self.adjacent_teams_highlighted
-            ):
-                # get first rush stats
-                # there's no well-defined first rush for 3s/4s so we only do this for solos and doubles
-                asyncio.create_task(self.highlight_adjacent_teams())
-
-            # replace them with the statcheck overview
-            if self.settings.bedwars.display_top_stats.get() != "OFF":
-                self.client.chat(
-                    TextComponent("Fetching top stats...").color("gold").bold()
-                )
             self.server.send_packet(0x01, String("/who"))
             self.received_who.clear()
             self.game.started = True
+
+            if suppress:
+                if (
+                    self.settings.bedwars.announce_first_rush.get() != "OFF"
+                    and self.game.mode.lower()
+                    in {"bedwars_eight_one", "bedwars_eight_two"}
+                    and not self.adjacent_teams_highlighted
+                ):
+                    asyncio.create_task(self.highlight_adjacent_teams())
+
+                self.client.chat(
+                    TextComponent("Fetching top stats...").color("gold").bold()
+                )
+
+        if not suppress:
+            self.client.send_packet(0x02, buff.getvalue())
 
     @command("key", "apikey")
     async def _command_key(self, key: str):
@@ -1256,7 +1262,10 @@ class StatCheckPlugin(ProxhyPlugin):
 
         await self._update_stats()
         if not self.stats_highlighted:
-            if self.settings.bedwars.display_top_stats.get() != "OFF":
+            if (
+                self.settings.bedwars.display_top_stats.get() != "OFF"
+                and self.game.mode != "bedwars_two_one_duels"
+            ):
                 await self.stat_highlights()
 
     def match_kill_message(self, message: str) -> Optional[re.Match]:
