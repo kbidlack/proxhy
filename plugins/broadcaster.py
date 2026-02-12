@@ -648,7 +648,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 await client.close()
 
     @subscribe("close")
-    async def _broadcast_event_close(self, _):  # _: reason (str); unused (for now?)
+    async def _broadcast_event_close(self, reason):
         for tsk in {"cb_gamestate_task", "sb_gamestate_task"}:  # tsk tsk
             # might not be neceessary to check this anymore bc of gamestate plugin
             if hasattr(self, tsk) and (task := getattr(self, tsk)):
@@ -660,14 +660,15 @@ class BroadcastPlugin(ProxhyPlugin):
 
         if self.logged_in:
             if hasattr(self, "broadcast_server_task") and self.broadcast_server_task:
-                self.broadcast_pyroh_server.close()
-                self.broadcast_server_task.cancel()
-                try:
-                    await asyncio.wait_for(
-                        self.broadcast_pyroh_server.wait_closed(), timeout=0.5
-                    )
-                except asyncio.TimeoutError:
-                    pass
+                # self.broadcast_pyroh_server.close() this doesnt do anything ):
+                # self.broadcast_server_task.cancel()
+                if reason != "transfer":
+                    try:
+                        await asyncio.wait_for(
+                            self.broadcast_pyroh_server.wait_closed(), timeout=0.5
+                        )
+                    except asyncio.TimeoutError:
+                        pass
 
             try:
                 await asyncio.wait_for(
