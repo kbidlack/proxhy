@@ -2,6 +2,7 @@ import asyncio
 import math
 import random
 
+import hypixel
 import numba
 import numpy as np
 from numpy.typing import NDArray
@@ -613,9 +614,12 @@ class PlayerSpectateWindow(Window):
             )
 
         _set_slot_helper(f"Loading {self.entity.name}'s rank name...")
-        rankname = get_rankname(
-            await self.proxy.proxy.hypixel_client.player(self.entity.name)
-        )
+        try:
+            rankname = get_rankname(
+                await self.proxy.proxy.hypixel_client.player(self.entity.name)
+            )
+        except hypixel.HypixelException:
+            _set_slot_helper(self.entity.name)
         _set_slot_helper(rankname)
 
     async def _update_slots(self):
