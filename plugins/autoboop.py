@@ -6,8 +6,8 @@ from platformdirs import user_config_dir
 
 from core.events import subscribe
 from protocol.datatypes import Buffer, Chat, TextComponent
-from proxhy.argtypes import HypixelPlayer
-from proxhy.command import CommandGroup
+from proxhy.argtypes import AutoboopPlayer, HypixelPlayer
+from proxhy.command import CommandGroup, Lazy
 from proxhy.errors import CommandException
 from proxhy.formatting import get_rankname
 from proxhy.plugin import ProxhyPlugin
@@ -29,7 +29,8 @@ class AutoboopPlugin(ProxhyPlugin):
         @self.autoboop_group.command("list", "ls")
         async def _autoboop_list(self):
             with shelve.open(self.AB_DATA_PATH) as db:
-                players = sorted(db.keys())
+                user_players = db.get(self.username, {})
+                players = sorted(user_players.keys())
                 if not players:
                     return TextComponent("No players in autoboop!").color("green")
 
@@ -38,21 +39,24 @@ class AutoboopPlugin(ProxhyPlugin):
                 for i, name in enumerate(players):
                     if i != 0:
                         msg.append(TextComponent(", ").color("green"))
-                    msg.append(TextComponent(db.get(name)).color("aqua"))
+                    msg.append(TextComponent(user_players[name]).color("aqua"))
                 return msg
 
         @self.autoboop_group.command("add")
         async def _autoboop_add(self, player: HypixelPlayer):
             rankname = get_rankname(player._player)
+            key = player.name.lower()
 
             with shelve.open(self.AB_DATA_PATH) as db:
-                if db.get(player.name):
+                user_players = db.get(self.username, {})
+                if user_players.get(key):
                     raise CommandException(
                         TextComponent("Player ")
                         .append(rankname)
                         .appends("is already in autoboop!")
                     )
-                db[player.name] = rankname
+                user_players[key] = rankname
+                db[self.username] = user_players
 
             return (
                 TextComponent("Added ")
@@ -62,22 +66,25 @@ class AutoboopPlugin(ProxhyPlugin):
             )
 
         @self.autoboop_group.command("remove", "rm")
-        async def _autoboop_remove(self, player: HypixelPlayer):
-            rankname = get_rankname(player._player)
-            with shelve.open(self.AB_DATA_PATH) as db:
-                if not db.get(player.name):
-                    raise CommandException(
-                        TextComponent("Player ")
-                        .append(rankname)
-                        .appends("is not in autoboop!")
-                    )
-                del db[player.name]
+        async def _autoboop_remove(self, _player: Lazy[AutoboopPlayer]):
+            key = _player.value.lower()
 
-            return (
-                TextComponent("Removed ")
-                .color("green")
-                .append(rankname)
-                .appends(TextComponent("from autoboop!").color("green"))
+            with shelve.open(self.AB_DATA_PATH) as db:
+                user_players = db.get(self.username, {})
+                if key in user_players:
+                    rankname = user_players.pop(key)
+                    db[self.username] = user_players
+                    return (
+                        TextComponent("Removed ")
+                        .color("green")
+                        .append(rankname)
+                        .appends(TextComponent("from autoboop!").color("green"))
+                    )
+
+            player = await _player
+            rankname = get_rankname(player._player)
+            raise CommandException(
+                TextComponent("Player ").append(rankname).appends("is not in autoboop!")
             )
 
         self.command_registry.register(self.autoboop_group)
@@ -94,7 +101,8 @@ class AutoboopPlugin(ProxhyPlugin):
         player_name = str(player.group(2))
 
         with shelve.open(self.AB_DATA_PATH) as db:
-            if db.get(player_name):
+            user_players = db.get(self.username, {})
+            if player_name.lower() in user_players:
                 self.server.chat(f"/boop {player_name}")
 
         self.client.send_packet(0x02, buff.getvalue())

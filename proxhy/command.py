@@ -34,10 +34,11 @@ class Lazy[T]:
                 player = await player   # API call happens here
     """
 
-    def __init__(self, coro_factory: Callable[[], Awaitable[T]]):
+    def __init__(self, coro_factory: Callable[[], Awaitable[T]], value: str = ""):
         self._coro_factory = coro_factory
         self._resolved = False
         self._value: T | None = None
+        self.value = value
 
     def __await__(self):
         return self._resolve().__await__()
@@ -519,7 +520,8 @@ class Command:
                         lazy = Lazy(
                             lambda p=param, a=arg, ix=idx: self._lazy_convert(
                                 ctx, p, a, ix
-                            )
+                            ),
+                            value=arg,
                         )
                         converted_args.append(lazy)
                     else:
@@ -531,7 +533,8 @@ class Command:
                     lazy = Lazy(
                         lambda p=param, a=args[i], ix=i: self._lazy_convert(
                             ctx, p, a, ix
-                        )
+                        ),
+                        value=args[i],
                     )
                     converted_args.append(lazy)
                 else:
