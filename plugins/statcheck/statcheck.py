@@ -83,7 +83,7 @@ GAME_START_MESSAGE_SETS = [  # block all the game start messages
     ],
     [
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-        "                              Bed Wars Rush"
+        "                              Bed Wars Rush",
         "     All generators are maxed! Your bed has three",
         "       layers of protection! Left click while holding",
         "                 wool to activate bridge building!",
@@ -93,7 +93,7 @@ GAME_START_MESSAGE_SETS = [  # block all the game start messages
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
         "                           Bed Wars Ultimate",
         "          Select an ultimate in the store! They will",
-        "                     be enabled in 10 seconds!"
+        "                     be enabled in 10 seconds!",
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
     ],
     #
@@ -113,6 +113,15 @@ GAME_START_MESSAGE_SETS = [  # block all the game start messages
         "     Every few seconds brings a new surprise! Use"
         "        these items to defend your bed or destroy",
         "                                enemy beds.",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                             Bed Wars Duels",
+        "      Protect your bed and destroy the enemy bed.",
+        "         Upgrade yourself by collecting Iron, Gold,",
+        "    Emerald and Diamond from generators to access",
+        "                          powerful upgrades.",
         "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
     ],
 ]
@@ -1076,7 +1085,7 @@ class StatCheckPlugin(ProxhyPlugin):
             result = "No stats found!"
 
         self.client.chat(
-            TextComponent("\nTop stats:\n\n")
+            TextComponent("Top stats:\n\n")
             .color("gold")
             .bold()
             .append(result)
