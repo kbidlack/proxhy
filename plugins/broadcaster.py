@@ -32,7 +32,7 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.argtypes import MojangPlayer
+from proxhy.argtypes import BroadcastPlayer, MojangPlayer
 from proxhy.command import CommandGroup
 from proxhy.errors import CommandException
 from proxhy.gamestate import Vec3d
@@ -225,6 +225,22 @@ class BroadcastPlugin(ProxhyPlugin):
             del self.broadcast_invites[request_id]
             reader, writer = await request.accept()
             asyncio.create_task(self.on_broadcast_peer(reader, writer))
+
+        @bc.command("slime")
+        async def _command_broadcast_slime(
+            self: BroadcastPlugin, player: BroadcastPlayer
+        ):
+            client = player.client
+
+            client.client.send_packet(
+                0x40,
+                Chat.pack(
+                    TextComponent("You have been slimed out of the broadcast.").color(
+                        "red"
+                    )
+                ),
+            )
+            client.client.close()
 
         async def _send_peer_request(
             self: BroadcastPlugin,

@@ -10,6 +10,7 @@ from proxhy.hypixels import Stat
 from proxhy.utils import PlayerInfo, _Client
 
 if TYPE_CHECKING:
+    from broadcasting.proxy import BroadcastPeerProxy
     from core.settings import Setting, SettingGroup
     from proxhy.command import CommandContext
 
@@ -100,7 +101,6 @@ class ServerPlayer(Player):
         Raises:
             CommandException: If the player is not found in the server's player list
         """
-        from proxhy.errors import CommandException
 
         proxy = ctx.proxy
 
@@ -115,6 +115,30 @@ class ServerPlayer(Player):
             .append(TextComponent(value).color("gold"))
             .append("' not found on the server!")
         )
+
+
+class BroadcastPlayer(Player):
+    def __init__(self, client: BroadcastPeerProxy):
+        self.client = client
+
+    @classmethod
+    async def convert(cls, ctx: CommandContext, value: str) -> BroadcastPlayer:
+        clients: list[BroadcastPeerProxy] = ctx.proxy.clients
+
+        for client in clients:
+            if client.username.lower() == value.lower():
+                return cls(client=client)
+
+        raise CommandException(
+            TextComponent("Player '")
+            .append(TextComponent(value).color("gold"))
+            .append("' is not in the broadcast!")
+        )
+
+    @classmethod
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
+        clients: list[BroadcastPeerProxy] = ctx.proxy.clients
+        return sorted(client.username for client in clients)
 
 
 class MojangPlayer(Player):

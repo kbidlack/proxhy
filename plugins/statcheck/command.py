@@ -76,8 +76,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     async def _login_success_helper(self):
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
         asyncio.create_task(self.migrate_log_stats())
-        if not self.dev_mode:
-            asyncio.create_task(self.log_stats("login"))
+        asyncio.create_task(self.log_stats("login"))
 
     @subscribe("close")
     async def _statcheck_event_close(self, _):
@@ -98,6 +97,9 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             pass  # TODO: log
 
     async def log_stats(self, event: str) -> None:  # type: ignore
+        if self.dev_mode:
+            return
+
         try:
             player = await self.hypixel_client.player(self.username)
             bedwars_stats = player._data.get("stats", {}).get("Bedwars", {})
