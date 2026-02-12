@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from importlib.resources import files  # noqa: F401
 from io import BytesIO
-from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol, overload
 
 from . import nbt
 
@@ -60,12 +60,32 @@ class Item:
         return cls(**item) if item else None
 
 
-@dataclass
 class SlotData:
-    item: Optional[Item] = None
-    count: int = 1
-    damage: int = 0
-    nbt: bytes = b""
+    __slots__ = ("item", "count", "damage", "nbt")
+
+    @overload
+    def __init__(self, item: None) -> None: ...
+    @overload
+    def __init__(
+        self, item: Item, count: int = 1, damage: int = 0, nbt: bytes = b""
+    ) -> None: ...
+
+    def __init__(
+        self,
+        item: Optional[Item] = None,
+        count: int = 1,
+        damage: int = 0,
+        nbt: bytes = b"",
+    ):
+        self.item = item
+        if item is None:
+            self.count = 0
+            self.damage = 0
+            self.nbt = b""
+        else:
+            self.count = count
+            self.damage = damage
+            self.nbt = nbt
 
 
 class Buffer(BytesIO):

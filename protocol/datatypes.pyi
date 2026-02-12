@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, Dict, Literal, Optional, Protocol, TypedDict
+from typing import Any, Dict, Literal, Optional, Protocol, TypedDict, overload
 
 from _typeshed import Incomplete
 
@@ -63,12 +63,17 @@ class Item:
     def from_id(cls, id: ItemID) -> Item:
         """Create an Item instance from an ID."""
 
-@dataclass
 class SlotData:
-    item: Item | None = ...
-    count: int = ...
-    damage: int = ...
-    nbt: bytes = ...
+    item: Item | None
+    count: int
+    damage: int
+    nbt: bytes
+    @overload
+    def __init__(self) -> None: ...
+    @overload
+    def __init__(
+        self, item: Item, count: int = ..., damage: int = ..., nbt: bytes = ...
+    ) -> None: ...
 
 class Buffer(BytesIO):
     def unpack[T](self, kind: type[DataType[Any, T]]) -> T: ...
@@ -261,8 +266,23 @@ class Slot(DataType[SlotData, SlotData]):
     @staticmethod
     def unpack(buff: Buffer) -> SlotData: ...
 
+type WindowType = Literal[
+    "minecraft:chest",
+    "minecraft:crafting_table",
+    "minecraft:furnace",
+    "minecraft:dispenser",
+    "minecraft:enchanting_table",
+    "minecraft:brewing_stand",
+    "minecraft:villager",
+    "minecraft:beacon",
+    "minecraft:anvil",
+    "minecraft:hopper",
+    "minecraft:dropper",
+    "EntityHorse",
+]
+
 # Auto-generated from ./assets/item_mappings.json
-ItemName = Literal[
+type ItemName = Literal[
     "minecraft:acacia_door",
     "minecraft:acacia_fence",
     "minecraft:acacia_fence_gate",

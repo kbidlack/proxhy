@@ -9,6 +9,8 @@ from numpy.typing import NDArray
 from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import listen_client as listen
 from core.events import subscribe
+from plugins.window import Window
+from protocol import nbt
 from protocol.datatypes import (
     Angle,
     Boolean,
@@ -17,6 +19,7 @@ from protocol.datatypes import (
     Double,
     Float,
     Int,
+    Item,
     Short,
     Slot,
     SlotData,
@@ -26,7 +29,9 @@ from protocol.datatypes import (
 from proxhy.argtypes import ServerPlayer
 from proxhy.command import command
 from proxhy.errors import CommandException
-from proxhy.gamestate import PlayerAbilityFlags, Rotation, Vec3d
+from proxhy.formatting import get_rankname
+from proxhy.gamestate import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
+from proxhy.plugin import ProxhyPlugin
 
 # camera candidates: 8 azimuths x 4 elevations x 2 radii = 64 positions
 # elevations: 45°, 35°, 25°, 15° from horizontal
@@ -243,6 +248,8 @@ def _interp_spherical(
 
 
 class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
+    proxy: ProxhyPlugin
+
     def _init_broadcast_peer_spectate(self):
         self.watching = False
         self._cam: Vec3d | None = None  # camera offset from player
@@ -473,10 +480,8 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
-    def _set_slot(self, slot: int, item: SlotData | None):
-        self.client.send_packet(
-            0x2F, Byte.pack(0), Short.pack(slot), Slot.pack(item or SlotData())
-        )
+    def _set_slot(self, slot: int, item: SlotData):
+        self.client.send_packet(0x2F, Byte.pack(0), Short.pack(slot), Slot.pack(item))
 
     def _reset_spec(self):
         self.watching, self._cam, self._cam_stuck, self._rot, self._last_pos = (
@@ -496,13 +501,20 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         self.spec_eid = None
         self._set_gamemode(2)
         self._send_abilities()
-        self._set_slot(36, None)
+        self._set_slot(36, SlotData())
 
     @listen(0x02)
     async def _packet_use_entity(self, buff: Buffer):
         target, action = buff.unpack(VarInt), buff.unpack(VarInt)
+        entity = self.gamestate.get_entity(target)
         if action == 0:
-            self._spectate(target)
+            if isinstance(entity, Player):
+                spectate_player_menu = PlayerSpectateWindow(self, entity)
+                spectate_player_menu.open()
+            elif isinstance(entity, Entity):
+                self._spectate(target)  # TODO: what?
+            else:
+                self._spectate(target)
 
     def _find_eid(self, target: ServerPlayer):
         if target.name.casefold() == self.proxy.username.casefold():
@@ -530,3 +542,128 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
     async def _command_watch(self):
         self.watching = True
         self._spectate(self.bat_eid)
+
+
+class PlayerSpectateWindow(Window):
+    proxy: BroadcastPeerSpectatePlugin
+    entity: Player
+
+    def __init__(self, proxy: BroadcastPeerSpectatePlugin, entity: Player):
+        self.proxy = proxy
+        self.entity = entity
+
+        super().__init__(
+            proxy=self.proxy,
+            window_title=entity.name,
+            window_type="minecraft:chest",
+            num_slots=9,
+        )
+
+        asyncio.create_task(self._load_rankname())
+        self.set_slot(
+            1,
+            SlotData(
+                item=Item.from_name("minecraft:ender_eye"),
+                nbt=nbt.dumps(
+                    nbt.from_dict(
+                        {
+                            "display": {
+                                "Name": f"§b§lSpectate {entity.name}",
+                            },
+                        }
+                    )
+                ),
+            ),
+            callback=self._ender_eye_callback,
+        )
+        self.set_slot(
+            2,
+            SlotData(
+                item=Item.from_name("minecraft:ender_pearl"),
+                nbt=nbt.dumps(
+                    nbt.from_dict(
+                        {
+                            "display": {
+                                "Name": f"§d§lWatch {entity.name}",
+                            },
+                            "ench": [],
+                        }
+                    )
+                ),
+            ),
+        )
+        asyncio.create_task(self._update_slots())
+
+    async def _load_rankname(self):
+        def _set_slot_helper(display_name: str):
+            self.set_slot(
+                0,
+                SlotData(
+                    item=Item.from_name("minecraft:skull"),
+                    damage=3,
+                    nbt=nbt.dumps(
+                        nbt.from_dict(
+                            {
+                                "SkullOwner": self.entity.name,
+                                "display": {"Name": display_name},
+                            }
+                        )
+                    ),
+                ),
+            )
+
+        _set_slot_helper(f"Loading {self.entity.name}'s rank name...")
+        rankname = get_rankname(
+            await self.proxy.proxy.hypixel_client.player(self.entity.name)
+        )
+        _set_slot_helper(rankname)
+
+    async def _update_slots(self):
+        def _or_glass_pane(sd: SlotData, display_name: str) -> SlotData:
+            nsd = SlotData(
+                item=Item.from_name("minecraft:stained_glass_pane"),
+                damage=Item.from_display_name(
+                    "Red Stained Glass Pane"
+                ).data,  # ts some bs why is it the damage field
+                nbt=nbt.dumps(
+                    nbt.from_dict(
+                        {
+                            "display": {
+                                "Name": f"§r§c{display_name}",
+                            }
+                        }
+                    )
+                ),
+            )
+            return nsd if sd.item is None else sd
+
+        while self.open:
+            self.set_slots(
+                {
+                    8: _or_glass_pane(self.entity.equipment.boots, "Boots slot empty"),
+                    7: _or_glass_pane(
+                        self.entity.equipment.leggings, "Leggings slot empty"
+                    ),
+                    6: _or_glass_pane(
+                        self.entity.equipment.chestplate, "Chestplate slot empty"
+                    ),
+                    5: _or_glass_pane(
+                        self.entity.equipment.helmet, "Helmet slot empty"
+                    ),
+                    4: _or_glass_pane(self.entity.equipment.held, "Main hand empty"),
+                }
+            )
+            self.update()
+            await asyncio.sleep(1 / 20)
+
+    async def _ender_eye_callback(
+        self,
+        window: Window,
+        slot: int,
+        button: int,
+        action_num: int,
+        mode: int,
+        clicked_item: SlotData,
+    ):
+        self.close()
+        self.proxy._spectate(self.entity.entity_id)

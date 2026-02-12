@@ -4,9 +4,18 @@ import random
 from copy import deepcopy
 from functools import wraps
 from types import NoneType, NotImplementedType
-from typing import Awaitable, Callable, Literal, Optional, SupportsIndex, overload
+from typing import (
+    TYPE_CHECKING,
+    Awaitable,
+    Callable,
+    Literal,
+    Optional,
+    SupportsIndex,
+    overload,
+)
 
 from core.events import listen_client
+from core.plugin import Plugin
 from protocol.datatypes import (
     Buffer,
     Byte,
@@ -19,6 +28,9 @@ from protocol.datatypes import (
     UnsignedByte,
 )
 from proxhy.plugin import ProxhyPlugin
+
+if TYPE_CHECKING:
+    from protocol.datatypes import WindowType
 
 
 class WindowPluginState:
@@ -102,11 +114,10 @@ type SlotType = tuple[SlotData, Optional[Callable | Awaitable], bool]
 class Slots(list[SlotType]):
     @overload
     def __getitem__(self, s: SupportsIndex) -> SlotType: ...
-
     @overload
     def __getitem__(self, s: slice) -> list[SlotType]: ...
 
-    def __getitem__(self, s: SupportsIndex | slice) -> SlotType | list[SlotType]:
+    def __getitem__(self, s: SupportsIndex | slice) -> SlotType | list[SlotType]:  # type: ignore[override]
         if isinstance(s, int):
             if s == -999 or s >= len(self):
                 return (SlotData(), None, False)
@@ -118,13 +129,13 @@ class Slots(list[SlotType]):
 class Window:
     def __init__(
         self,
-        proxy: ProxhyPlugin,
+        proxy: Plugin,
         window_title: str = "Chest",
-        window_type: str = "minecraft:chest",
+        window_type: WindowType = "minecraft:chest",
         num_slots: int = 27,
         entity_id: Optional[int] = None,
     ):
-        self.proxy: WindowPlugin = proxy  # type: ignore
+        self.proxy = proxy
         self.window_title = window_title
         self.window_type = window_type
         self.num_slots = num_slots
@@ -159,6 +170,16 @@ class Window:
             self.proxy.client.send_packet(
                 0x2F, Byte.pack(self.window_id), Short.pack(slot), Slot.pack(slot_data)
             )
+
+    def set_slots(
+        self,
+        slots: dict[int, SlotData],
+        callback: Optional[Callable | Awaitable] = None,
+        locked=True,
+    ):
+        """Set multiple slots in the window."""
+        for slot, slot_data in slots.items():
+            self.set_slot(slot, slot_data, callback, locked)
 
     @ensure_open(open=False)
     def open(self):

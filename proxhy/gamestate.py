@@ -387,11 +387,11 @@ class PlayerInfo:
 class EntityEquipment:
     """Equipment slots for an entity."""
 
-    held: SlotData | None = None
-    boots: SlotData | None = None
-    leggings: SlotData | None = None
-    chestplate: SlotData | None = None
-    helmet: SlotData | None = None
+    held: SlotData = field(default_factory=SlotData)
+    boots: SlotData = field(default_factory=SlotData)
+    leggings: SlotData = field(default_factory=SlotData)
+    chestplate: SlotData = field(default_factory=SlotData)
+    helmet: SlotData = field(default_factory=SlotData)
 
 
 @dataclass
@@ -2746,7 +2746,7 @@ class GameState:
                     (EquipmentSlot.HELMET, equip.helmet),
                 ]
                 for slot_id, item in slots:
-                    if item and item.item:
+                    if item.item:
                         equip_data = (
                             VarInt.pack(player.entity_id)
                             + Short.pack(slot_id)
@@ -2843,7 +2843,7 @@ class GameState:
                 (EquipmentSlot.HELMET, equip.helmet),
             ]
             for slot_id, item in slots:
-                if item and item.item:
+                if item.item:
                     data = (
                         VarInt.pack(entity.entity_id)
                         + Short.pack(slot_id)
