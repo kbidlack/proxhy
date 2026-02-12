@@ -60,15 +60,63 @@ with (
 ):
     KILL_MSGS: list[str] = json.load(file)["kill_messages"]
 
-game_start_msgs = [  # block all the game start messages
-    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
-    "                                  Bed Wars",
-    "     Protect your bed and destroy the enemy beds.",
-    "      Upgrade yourself and your team by collecting",
-    "    Iron, Gold, Emerald and Diamond from generators",
-    "                  to access powerful upgrades.",
-    "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+GAME_START_MESSAGE_SETS = [  # block all the game start messages
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                                  Bed Wars",
+        "     Protect your bed and destroy the enemy beds.",
+        "      Upgrade yourself and your team by collecting",
+        "    Iron, Gold, Emerald and Diamond from generators",
+        "                  to access powerful upgrades.",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
+    #
+    # no armed
+    #
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                       Bed Wars Lucky Blocks",
+        "    Collect Lucky Blocks from resource generators",
+        "       to receive random loot! Break them to reveal",
+        "                             their contents!",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                              Bed Wars Rush"
+        "     All generators are maxed! Your bed has three",
+        "       layers of protection! Left click while holding",
+        "                 wool to activate bridge building!",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                           Bed Wars Ultimate",
+        "          Select an ultimate in the store! They will",
+        "                     be enabled in 10 seconds!"
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
+    #
+    # no voidless
+    #
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                          Bed Wars Swappage",
+        "    Players swap teams at random intervals! Players",
+        "        also swap positions with the players of the",
+        "                    team they are swapping to!",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
+    [
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+        "                                  Bed Wars",
+        "     Every few seconds brings a new surprise! Use"
+        "        these items to defend your bed or destroy",
+        "                                enemy beds.",
+        "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬",
+    ],
 ]
+GAME_START_MESSAGES = [msg for msg_set in GAME_START_MESSAGE_SETS for msg in msg_set]
 
 # Regex patterns
 COLOR_CODE_RE = re.compile(r"§.")
@@ -1145,7 +1193,7 @@ class StatCheckPlugin(ProxhyPlugin):
     def in_bedwars_game(self):
         return self.game.gametype == "bedwars" and self.game.mode
 
-    @subscribe(f"chat:server:({'|'.join(game_start_msgs)})")
+    @subscribe(f"chat:server:({'|'.join(GAME_START_MESSAGES)})")
     async def _statcheck_event_chat_server_game_start(self, buff: Buffer):
         if self.game.gametype != "bedwars" or self.stats_highlighted:
             return self.client.send_packet(0x02, buff.getvalue())
@@ -1155,7 +1203,7 @@ class StatCheckPlugin(ProxhyPlugin):
         if self.settings.bedwars.display_top_stats.get() == "OFF":
             self.client.send_packet(0x02, buff.getvalue())
 
-        if message == game_start_msgs[-2]:  # runs once
+        if message in {msg_set[-2] for msg_set in GAME_START_MESSAGE_SETS}:  # runs once
             if (
                 self.settings.bedwars.announce_first_rush.get() != "OFF"
                 and self.game.mode.lower() in {"bedwars_eight_one", "bedwars_eight_two"}
