@@ -7,8 +7,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 if TYPE_CHECKING:
-    from protocol.datatypes import Color_T
+    from protocol.datatypes import Color_T, Item
     from protocol.datatypes import ItemName as Item_T
+
+type SettingState = tuple[Item, Color_T]
 
 
 class Setting[S: str]:
@@ -20,7 +22,7 @@ class Setting[S: str]:
         display_name: str,
         description: str,
         item: Item_T,
-        states: Dict[S, Color_T],
+        states: Dict[S, SettingState],
         default_state: S,
         storage: SettingsStorage,
     ):
@@ -52,8 +54,8 @@ class Setting[S: str]:
         return self._item
 
     @property
-    def states(self) -> Dict[S, Color_T]:
-        """Returns available states and their colors."""
+    def states(self) -> Dict[S, SettingState]:
+        """Returns available states and their items and colors."""
         return self._states.copy()
 
     def get(self) -> S:
@@ -229,7 +231,7 @@ def create_setting[T: str](
     display_name: str,
     description: str,
     item: Item_T,
-    states: Dict[T, Color_T],
+    states: Dict[T, SettingState],
     default_state: T,
     storage: SettingsStorage,
 ) -> Setting[T]:

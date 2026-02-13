@@ -1,6 +1,7 @@
 import asyncio
 import math
 import random
+from typing import Callable, Literal
 
 import hypixel
 import numba
@@ -32,7 +33,6 @@ from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.formatting import get_rankname
 from proxhy.gamestate import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
-from proxhy.plugin import ProxhyPlugin
 
 # camera candidates: 8 azimuths x 4 elevations x 2 radii = 64 positions
 # elevations: 45°, 35°, 25°, 15° from horizontal
@@ -248,9 +248,12 @@ def _interp_spherical(
     return (cur_x, cur_y, cur_z, stuck + 1)
 
 
-class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
-    proxy: ProxhyPlugin
+class BroadcastPeerSpectatePluginState:
+    flight_speed: int | float
+    _send_abilities: Callable
 
+
+class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
     def _init_broadcast_peer_spectate(self):
         self.watching = False
         self._cam: Vec3d | None = None  # camera offset from player
@@ -468,16 +471,29 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
     def _set_gamemode(self, gm: int):
         self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
 
+    @subscribe("setting:broadcast:titles")
+    async def _setting_broadcast_titles(self, data: list[Literal["ON", "OFF"]]):
+        _, new_state = data
+        if new_state == "OFF":
+            self.client.send_packet(0x45, VarInt.pack(4))  # reset
+        else:
+            for packet in self.gamestate._build_title():
+                id, packet_data = packet
+                self.client.send_packet(id, packet_data)
+
+    @subscribe("setting:broadcast.fly_speed")
+    async def _setting_broadcast_fly_speed(self, _):
+        self._send_abilities()
+
     def _send_abilities(self):
-        flags = (
-            PlayerAbilityFlags.INVULNERABLE
-            | (PlayerAbilityFlags.FLYING if not self.proxy.gamestate.on_ground else 0)
-            | self.flight
-        )
+        _fly_speed_mapping = {"0.5x": 0.025, "1x": 0.05, "2x": 0.1}
+        self.flight_speed = _fly_speed_mapping[self.settings.fly_speed.get()]
+
+        flags = PlayerAbilityFlags.INVULNERABLE | self.flying | self.flight
         self.client.send_packet(
             0x39,
             Byte.pack(int(flags))
-            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.flight_speed)
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
@@ -554,7 +570,7 @@ class PlayerSpectateWindow(Window):
         self.entity = entity
 
         super().__init__(
-            proxy=self.proxy,
+            proxy=self.proxy,  # type: ignore
             window_title=entity.name,
             window_type="minecraft:chest",
             num_slots=9,

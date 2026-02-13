@@ -32,7 +32,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING] = (
             PlayerAbilityFlags.ALLOW_FLYING
         )  # alternatively 0 if off
-        self.flying: Literal[0, PlayerAbilityFlags.FLYING]
+        self.flying: Literal[0, PlayerAbilityFlags.FLYING] = PlayerAbilityFlags.FLYING
 
     @subscribe("close")
     async def _broadcast_peer_base_event_close(self, _):
@@ -147,7 +147,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.client.send_packet(
             0x39,
             Byte.pack(PlayerAbilityFlags.INVULNERABLE | self.flying | self.flight)
-            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.flight_speed)
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 

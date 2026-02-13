@@ -15,7 +15,6 @@ from typing import (
 )
 
 from core.events import listen_client
-from core.plugin import Plugin
 from protocol.datatypes import (
     Buffer,
     Byte,
@@ -127,9 +126,11 @@ class Slots(list[SlotType]):
 
 
 class Window:
+    proxy: ProxhyPlugin
+
     def __init__(
         self,
-        proxy: Plugin,
+        proxy: ProxhyPlugin,
         window_title: str = "Chest",
         window_type: WindowType = "minecraft:chest",
         num_slots: int = 27,

@@ -12,16 +12,18 @@ from plugins.window import WindowPlugin
 from .plugins.base import BroadcastPeerBasePlugin
 from .plugins.commands import BroadcastPeerCommandsPlugin
 from .plugins.login import BroadcastPeerLoginPlugin
+from .plugins.settings import BroadcastPeerSettingsPlugin
 from .plugins.spectate import BroadcastPeerSpectatePlugin
 
-broadcast_peer_plugins: tuple[type, ...] = (
+
+class BroadcastPeerProxy(
     ChatPlugin,
     WindowPlugin,
     GameStatePlugin,
     BroadcastPeerLoginPlugin,
     BroadcastPeerBasePlugin,
     BroadcastPeerCommandsPlugin,
+    BroadcastPeerSettingsPlugin,
     BroadcastPeerSpectatePlugin,
-)
-
-BroadcastPeerProxy = type("BroadcastPeerProxy", (*broadcast_peer_plugins, Proxy), {})
+    Proxy,
+): ...

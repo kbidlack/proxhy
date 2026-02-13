@@ -1,5 +1,7 @@
 from broadcasting.plugins.base import BroadcastPeerBasePluginState
 from broadcasting.plugins.login import BroadcastPeerLoginPluginState
+from broadcasting.plugins.settings import BroadcastPeerSettingsPluginState
+from broadcasting.plugins.spectate import BroadcastPeerSpectatePluginState
 from core.plugin import Plugin
 from plugins.chat import ChatPluginState
 from plugins.gamestate import GameStatePluginState
@@ -13,6 +15,8 @@ class BroadcastPeerPlugin(
     Plugin,
     BroadcastPeerLoginPluginState,
     BroadcastPeerBasePluginState,
+    BroadcastPeerSettingsPluginState,
+    BroadcastPeerSpectatePluginState,
 ):
-    proxy: Proxhy
+    proxy: Proxhy  # type: ignore
     eid: int

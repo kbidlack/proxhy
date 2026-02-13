@@ -67,7 +67,7 @@ BC_SPEC_ALLOW = (
     0x42,  # Combat Event - combat information
     0x43,  # Camera - camera entity
     0x44,  # World Border - world border updates
-    0x45,  # Title - title/subtitle/actionbar text
+    # 0x45,  # Title - title/subtitle/actionbar text (we have custom handling for this in plugins/broadcaster.py)
     # 0x46,  # Set Compression - connection-specific
     0x47,  # Player List Header/Footer - tab list header
     0x48,  # Resource Pack Send - resource pack info

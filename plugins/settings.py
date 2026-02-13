@@ -2,7 +2,7 @@ import math
 from textwrap import fill
 from typing import Any
 
-from core.settings import SettingGroup
+from core.settings import Setting, SettingGroup
 from protocol.datatypes import (
     Item,
     SlotData,
@@ -49,7 +49,7 @@ class SettingsPlugin(ProxhyPlugin):
 
         # Get old state and set new state
         old_state = setting.setting.get()
-        old_color = setting.setting.states[old_state]
+        _, old_color = setting.setting.states[old_state]
 
         if value is not None:
             setting.setting.set(value.value)
@@ -57,7 +57,7 @@ class SettingsPlugin(ProxhyPlugin):
         else:
             _, new_state = setting.setting.toggle()
 
-        new_color = setting.setting.states[new_state]
+        _, new_color = setting.setting.states[new_state]
 
         # Send confirmation message
         self.client.chat(
@@ -74,6 +74,8 @@ class SettingsPlugin(ProxhyPlugin):
 
 
 class SettingsMenu(Window):
+    proxy: ProxhyPlugin
+
     def __init__(
         self,
         proxy: ProxhyPlugin,
@@ -87,7 +89,7 @@ class SettingsMenu(Window):
             )
         super().__init__(proxy, window_title, "minecraft:chest", num_slots)
         self.num_slots = num_slots
-        self.proxy: SettingsPlugin = proxy  # type: ignore
+        self.proxy = proxy
         self.settings = self.proxy.settings
         self.subsetting_path = subsetting_path
         self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
@@ -132,22 +134,17 @@ class SettingsMenu(Window):
             .append("!")
         )
 
-    def get_state_item(self, state: str) -> SlotData:
-        if str(state).lower() in self.DISABLED_STATES:
-            item = Item.from_display_name("Red Stained Glass Pane")
-            slot_data = SlotData(
-                item,
-                damage=item.data,
-                nbt=dumps(from_dict({"display": {"Name": f"§c§l{state.upper()}"}})),
-            )
-        else:
-            item = Item.from_display_name("Lime Stained Glass Pane")
-            slot_data = SlotData(
-                item,
-                damage=item.data,
-                nbt=dumps(from_dict({"display": {"Name": f"§a§l{state.upper()}"}})),
-            )
-        return slot_data
+    def get_state_item(self, setting: Setting, state: str) -> SlotData:
+        item, color = setting.states[state]
+        color_codes_inv = {v: f"§{k}" for k, v in TextComponent.COLOR_CODES.items()}
+        color_code = color_codes_inv.get(color, "§f")
+        return SlotData(
+            item,
+            damage=item.data,
+            nbt=dumps(
+                from_dict({"display": {"Name": f"{color_code}§l{state.upper()}"}})
+            ),
+        )
 
     def get_formatted_items(self) -> list[dict]:
         """Return chest menu layout for settings page; centers everything."""
@@ -226,7 +223,7 @@ class SettingsMenu(Window):
             items.append(
                 {
                     "slot": slot,
-                    "slot_data": self.get_state_item(s.get()),
+                    "slot_data": self.get_state_item(s, s.get()),
                     "callback": self.toggle_state_callback,
                 }
             )
@@ -294,15 +291,17 @@ class SettingsMenu(Window):
         self.build()
 
         s_raw = self.settings.get_setting_by_path(s_path)
+        _, prev_color = s_raw.states[prev_state]  # type: ignore
+        _, next_color = s_raw.states[next_state]  # type: ignore
         msg = self.get_setting_toggle_msg(
             s_raw.display_name,
             prev_state,
             next_state,
-            s_raw.states[prev_state],  # type: ignore
-            s_raw.states[next_state],  # type: ignore
+            prev_color,
+            next_color,
         )
         self.proxy.client.chat(msg)
-        await self.proxy.emit(f"setting:{s_path}", [prev_state, next_state])
+        await self.proxy.emit(f"setting:{s_raw._key}", [prev_state, next_state])
 
     def open_group_callback(
         self,

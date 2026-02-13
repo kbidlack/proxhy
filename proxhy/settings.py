@@ -4,6 +4,7 @@ from typing import Literal
 from platformdirs import user_config_dir
 
 from core.settings import Setting, SettingGroup, SettingsStorage, create_setting
+from protocol.datatypes import Item
 
 config_dir = Path(user_config_dir("proxhy", ensure_exists=True))
 config_dir.mkdir(parents=True, exist_ok=True)
@@ -25,7 +26,10 @@ class TablistGroup(SettingGroup):
             display_name="Show Tablist Stats",
             description="In Bedwars, shows users' stats next to their name in the tablist.",
             item="minecraft:iron_sword",
-            states={"OFF": "red", "ON": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
             default_state="OFF",
             storage=storage,
         )
@@ -35,7 +39,10 @@ class TablistGroup(SettingGroup):
             display_name="Mode-Specific Tablist Stats",
             description="In Bedwars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
             item="minecraft:writable_book",
-            states={"OFF": "red", "ON": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
             default_state="OFF",
             storage=storage,
         )
@@ -45,7 +52,10 @@ class TablistGroup(SettingGroup):
             display_name="Show Rankname in Tablist",
             description="In Bedwars, the tablist will show users' colorized ranks and usernames instead of team color.",
             item="minecraft:name_tag",
-            states={"OFF": "red", "ON": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
             default_state="OFF",
             storage=storage,
         )
@@ -55,7 +65,10 @@ class TablistGroup(SettingGroup):
             display_name="Show Respawn Timer",
             description="In Bedwars, shows a timer next to players' names showing how long until they respawn.",
             item="minecraft:clock",
-            states={"OFF": "red", "ON": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
             default_state="ON",
             storage=storage,
         )
@@ -65,7 +78,10 @@ class TablistGroup(SettingGroup):
             display_name="Show Eliminated Players",
             description="In Bedwars, shows eliminated players in the tablist, grayed out.",
             item="minecraft:bone",
-            states={"OFF": "red", "ON": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
             default_state="ON",
             storage=storage,
         )
@@ -85,7 +101,10 @@ class VisualGroup(SettingGroup):
             display_name="Height Limit Warnings",
             description="When you're near the top or bottom of the map, display particles and a warning in the actionbar.",
             item="minecraft:quartz_stairs",
-            states={"ON": "green", "OFF": "red"},
+            states={
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+            },
             default_state="ON",
             storage=storage,
         )
@@ -111,10 +130,19 @@ class BedwarsGroup(SettingGroup):
                 description="In Bedwars, receive a chat message at the start of the game highlighting the best players.",
                 item="minecraft:golden_sword",
                 states={
-                    "OFF": "red",
-                    "FKDR": "green",
-                    "STAR": "green",
-                    "INDEX": "green",
+                    "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                    "FKDR": (
+                        Item.from_display_name("Lime Stained Glass Pane"),
+                        "green",
+                    ),
+                    "STAR": (
+                        Item.from_display_name("Lime Stained Glass Pane"),
+                        "green",
+                    ),
+                    "INDEX": (
+                        Item.from_display_name("Lime Stained Glass Pane"),
+                        "green",
+                    ),
                 },
                 default_state="OFF",
                 storage=storage,
@@ -128,7 +156,17 @@ class BedwarsGroup(SettingGroup):
             display_name="Highlight First Rush Stats",
             description="At the start of a Bedwars game, display a title card with the name and stats of your first rush.",
             item="minecraft:wool",
-            states={"OFF": "red", "FIRST RUSH": "yellow", "BOTH ADJACENT": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "FIRST RUSH": (
+                    Item.from_display_name("Yellow Stained Glass Pane"),
+                    "yellow",
+                ),
+                "BOTH ADJACENT": (
+                    Item.from_display_name("Lime Stained Glass Pane"),
+                    "green",
+                ),
+            },
             default_state="OFF",
             storage=storage,
         )
@@ -138,7 +176,10 @@ class BedwarsGroup(SettingGroup):
             display_name="Invalid API Key Reminders",
             description="In the Bedwars pregame, send a reminder with a link to developer.hypixel.net if your API key is invalid.",
             item="minecraft:tripwire_hook",
-            states={"OFF": "red", "ON": "green"},
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
             default_state="OFF",
             storage=storage,
         )

@@ -90,7 +90,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.client.send_packet(
             0x39,
             Byte.pack(abilities_flags)
-            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.flight_speed)
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
@@ -254,7 +254,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.client.send_packet(
             0x39,
             Byte.pack(abilities_flags)
-            + Float.pack(self.proxy.gamestate.flying_speed)
+            + Float.pack(self.flight_speed)
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
