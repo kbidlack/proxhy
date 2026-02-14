@@ -25,6 +25,7 @@ from protocol.datatypes import (
     Short,
     Slot,
     SlotData,
+    TextComponent,
     UnsignedByte,
     VarInt,
 )
@@ -309,6 +310,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
     async def _broadcast_peer_base_event_login_success(self, _match, _data):
         asyncio.create_task(self._update_spec_task())
         asyncio.create_task(self._update_watch())
+        asyncio.create_task(self._check_position())
 
     def _get_camera(self) -> tuple[Vec3d, Rotation]:
         """Calculate camera position and rotation for watch mode."""
@@ -467,6 +469,25 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
                 Boolean.pack(False),
             )
             await asyncio.sleep(0.1)
+
+    async def _check_position(self):
+        while self.open:
+            pos = self.gamestate.position
+            if pos.y < -100:
+                owner = self.proxy.username
+                self.client.chat(
+                    TextComponent(f"Click here to teleport back to {owner}")
+                    .color("green")
+                    .bold()
+                    .click_event(
+                        "run_command",
+                        f"/tp {owner}",
+                    )
+                    .hover_text(TextComponent(f"Teleport to {owner}").color("yellow"))
+                )
+                await asyncio.sleep(10)
+            else:
+                await asyncio.sleep(1)
 
     def _set_gamemode(self, gm: int):
         self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
