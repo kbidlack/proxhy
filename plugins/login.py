@@ -294,21 +294,6 @@ class LoginPlugin(ProxhyPlugin):
                 await self.close()
                 break
 
-    @subscribe("close")
-    async def _login_event_close(self, _match, _data):
-        if self.keep_alive_task and not self.keep_alive_task.done():
-            self.keep_alive_task.cancel()
-            try:
-                await self.keep_alive_task
-            except asyncio.CancelledError:
-                pass
-        if self.device_code_task and not self.device_code_task.done():
-            self.device_code_task.cancel()
-            try:
-                await self.device_code_task
-            except asyncio.CancelledError:
-                pass
-
     @listen_client(0x00, State.HANDSHAKING, blocking=True, override=True)
     async def packet_handshake(self, buff: Buffer):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
@@ -351,11 +336,11 @@ class LoginPlugin(ProxhyPlugin):
             0x08, Double(0), Double(0), Double(0), Float(0), Float(0), Byte(b"\x00")
         )
 
-        self.keep_alive_task = asyncio.create_task(self.login_keep_alive())
+        self.keep_alive_task = self.create_task(self.login_keep_alive())
 
         if reason == "logging_in":
             self.client.chat("You have not logged into Proxhy with this account yet!")
-            self.device_code_task = asyncio.create_task(self._start_device_code_flow())
+            self.device_code_task = self.create_task(self._start_device_code_flow())
         else:
             self.regenerating_credentials = True
             self.client.set_title(

@@ -308,9 +308,9 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
 
     @subscribe("login_success")
     async def _broadcast_peer_base_event_login_success(self, _match, _data):
-        asyncio.create_task(self._update_spec_task())
-        asyncio.create_task(self._update_watch())
-        asyncio.create_task(self._check_position())
+        self.create_task(self._update_spec_task())
+        self.create_task(self._update_watch())
+        self.create_task(self._check_position())
 
     def _get_camera(self) -> tuple[Vec3d, Rotation]:
         """Calculate camera position and rotation for watch mode."""

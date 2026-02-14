@@ -1,5 +1,4 @@
 import asyncio
-from typing import Optional
 
 import numba
 import numpy as np
@@ -30,26 +29,10 @@ def _compute_height_warning(
     return True, limit_dist, float(particle_y)
 
 
-class SpatialPluginState:
-    check_height_task: Optional[asyncio.Task]
-
-
 class SpatialPlugin(ProxhyPlugin):
-    def _init_spatial(self):
-        self.check_height_task = None
-
     @subscribe("login_success")
     async def _spatial_event_login_success(self, _match, _data):
-        self.check_height_task = asyncio.create_task(self.check_height_loop())
-
-    @subscribe("close")
-    async def _spatial_event_close(self, _match, _data):
-        if self.check_height_task:
-            self.check_height_task.cancel()
-            try:
-                await self.check_height_task
-            except asyncio.CancelledError:
-                pass
+        self.create_task(self.check_height_loop())
 
     async def check_height_loop(self):
         """Called once when the proxy is started; loops indefinitely"""

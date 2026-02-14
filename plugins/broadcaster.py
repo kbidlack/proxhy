@@ -48,7 +48,6 @@ class BroadcastPluginState:
     clients: list[BroadcastPeerProxy]  # type: ignore
     broadcast_invites: dict[str, ConnectionRequest]
     broadcast_requests: set[str]
-    serverbound_task: Optional[asyncio.Task]
     compass_client: MinecraftPeerClient | None
     broadcast_pyroh_server: pyroh.Server
     broadcast_server_task: asyncio.Task
@@ -68,7 +67,6 @@ class BroadcastPlugin(ProxhyPlugin):
         self.broadcast_requests: set[str] = set()
         self.joining_broadcast: bool = False
 
-        self.serverbound_task: Optional[asyncio.Task] = None
         self._respawn_debounce_task: Optional[asyncio.Task] = None
 
         self.compass_client: MinecraftPeerClient | None = None
@@ -666,15 +664,6 @@ class BroadcastPlugin(ProxhyPlugin):
 
     @subscribe("close")
     async def _broadcast_event_close(self, _match, reason):
-        for tsk in {"cb_gamestate_task", "sb_gamestate_task"}:  # tsk tsk
-            # might not be neceessary to check this anymore bc of gamestate plugin
-            if hasattr(self, tsk) and (task := getattr(self, tsk)):
-                task.cancel()
-                try:
-                    await task
-                except asyncio.CancelledError:
-                    pass
-
         if self.logged_in:
             if hasattr(self, "broadcast_server_task") and self.broadcast_server_task:
                 # self.broadcast_pyroh_server.close() this doesnt do anything ):
@@ -708,13 +697,6 @@ class BroadcastPlugin(ProxhyPlugin):
                 pass
 
             self._transformer.reset()
-
-            if self.serverbound_task and not self.serverbound_task.done():
-                self.serverbound_task.cancel()
-                try:
-                    await self.serverbound_task
-                except asyncio.CancelledError:
-                    pass
 
     async def _expire_broadcast_request(self, request_id: str):
         if request_id in self.broadcast_invites:

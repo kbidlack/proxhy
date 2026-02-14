@@ -53,10 +53,18 @@ class Proxy:
         self.handle_client_task: Optional[asyncio.Task] = None
         self.handle_server_task: Optional[asyncio.Task] = None
 
+        self._tasks: set[asyncio.Task] = set()
+
         self.initialize_plugins()
 
         if autostart:
             self.handle_client_task = asyncio.create_task(self.handle_client())
+
+    def create_task(self, coro: Coroutine) -> asyncio.Task:
+        task = asyncio.create_task(coro)
+        self._tasks.add(task)
+        task.add_done_callback(self._tasks.discard)
+        return task
 
     def initialize_plugins(self):
         for name in dir(self):
@@ -228,6 +236,11 @@ class Proxy:
                     await task
                 except asyncio.CancelledError:
                     pass
+
+        for task in self._tasks:
+            task.cancel()
+        await asyncio.gather(*self._tasks, return_exceptions=True)
+        self._tasks.clear()
 
         if force:
             try:

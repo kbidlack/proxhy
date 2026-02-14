@@ -37,8 +37,6 @@ class ExpiringSet[T: Hashable]:
 
 class GameStatePluginState:
     gamestate: GameState
-    cb_gamestate_task: asyncio.Task
-    sb_gamestate_task: asyncio.Task
     in_combat_with: ExpiringSet[int]  # set[eid]
     ein_combat_with: list[Entity]
 
@@ -47,11 +45,11 @@ class GameStatePlugin(ProxhyPlugin):
     def _init_0_gamestate(self):  # since other plugins require we put 0
         self.gamestate = GameState()
         self.in_combat_with = ExpiringSet(ttl=5)
-        self.cb_gamestate_task = asyncio.create_task(self._update_clientbound())
+        self.create_task(self._update_clientbound())
 
     @subscribe("login_success")
     async def _gamestate_event_login_success(self, _match, _data):
-        self.sb_gamestate_task = asyncio.create_task(self._update_serverbound())
+        self.create_task(self._update_serverbound())
 
     async def _update_clientbound(self):
         while self.open:
