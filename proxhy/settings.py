@@ -3,6 +3,7 @@ from typing import Literal
 
 from platformdirs import user_config_dir
 
+from broadcasting.settings import BroadcastSettings
 from core.settings import Setting, SettingGroup, SettingsStorage, create_setting
 from protocol.datatypes import Item
 
@@ -198,3 +199,4 @@ class ProxhySettings(SettingGroup):
         self._storage = SettingsStorage(Path(settings_file))
 
         self.bedwars = BedwarsGroup(self._storage)
+        self.broadcast = BroadcastSettings(self._storage)

@@ -35,7 +35,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.flying: Literal[0, PlayerAbilityFlags.FLYING] = PlayerAbilityFlags.FLYING
 
     @subscribe("close")
-    async def _broadcast_peer_base_event_close(self, _):
+    async def _broadcast_peer_base_event_close(self, _match, _data):
         # remove this client
         if self in self.proxy.clients:
             self.proxy.clients.remove(self)  # pyright: ignore[reportArgumentType]

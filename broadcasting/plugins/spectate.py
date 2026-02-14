@@ -306,7 +306,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             await asyncio.sleep(0.05)
 
     @subscribe("login_success")
-    async def _broadcast_peer_base_event_login_success(self, _):
+    async def _broadcast_peer_base_event_login_success(self, _match, _data):
         asyncio.create_task(self._update_spec_task())
         asyncio.create_task(self._update_watch())
 
@@ -472,7 +472,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
 
     @subscribe("setting:broadcast:titles")
-    async def _setting_broadcast_titles(self, data: list[Literal["ON", "OFF"]]):
+    async def _setting_broadcast_titles(self, _match, data: list[Literal["ON", "OFF"]]):
         _, new_state = data
         if new_state == "OFF":
             self.client.send_packet(0x45, VarInt.pack(4))  # reset
@@ -482,7 +482,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
                 self.client.send_packet(id, packet_data)
 
     @subscribe("setting:broadcast.fly_speed")
-    async def _setting_broadcast_fly_speed(self, _):
+    async def _setting_broadcast_fly_speed(self, _match, _data):
         self._send_abilities()
 
     def _send_abilities(self):

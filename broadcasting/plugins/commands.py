@@ -121,7 +121,7 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
         )
 
     @subscribe("chat:client:.*")
-    async def _broadcast_peer_base_event_chat_client_any(self, buff: Buffer):
+    async def _broadcast_peer_base_event_chat_client_any(self, _match, buff: Buffer):
         msg = buff.unpack(String)
         if msg.startswith("/"):
             return  # command plugin

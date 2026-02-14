@@ -1,3 +1,4 @@
+import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, TypeVar
 
@@ -13,7 +14,7 @@ T = TypeVar("T", bound="Plugin | Proxy")
 
 type ListenerFunction[T] = Callable[[T, Buffer], Awaitable[Any]]
 type DecoratorType[T] = Callable[[ListenerFunction[T]], ListenerFunction[T]]
-type EventListenerFunction = Callable[[Any, Any], Awaitable[Any]]
+type EventListenerFunction = Callable[[Any, re.Match[str], Any], Awaitable[Any]]
 type EventDecoratorType = Callable[[EventListenerFunction], EventListenerFunction]
 
 

@@ -1,10 +1,11 @@
 import asyncio
 from typing import Any, Literal, Optional
 
+from core.events import EventListenerFunction
 from protocol.datatypes import Buffer
 
 from .net import Client, Server, State
-from .proxy import ListenerList, Proxy
+from .proxy import PacketListenerList, Proxy
 
 class Plugin:
     server: Server
@@ -20,9 +21,9 @@ class Plugin:
 
     _packet_listeners: dict[
         Literal["client", "server"],
-        dict[tuple[int, State], ListenerList[Buffer]],
+        dict[tuple[int, State], PacketListenerList[Buffer]],
     ]
-    _event_listeners: dict[str, ListenerList[Any]]
+    _event_listeners: dict[str, list[EventListenerFunction]]
 
     async def handle_client(self) -> None: ...
     async def handle_server(self) -> None: ...

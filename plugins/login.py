@@ -295,7 +295,7 @@ class LoginPlugin(ProxhyPlugin):
                 break
 
     @subscribe("close")
-    async def _login_event_close(self, _):
+    async def _login_event_close(self, _match, _data):
         if self.keep_alive_task and not self.keep_alive_task.done():
             self.keep_alive_task.cancel()
             try:

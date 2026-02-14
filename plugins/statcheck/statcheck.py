@@ -431,7 +431,9 @@ class StatCheckPlugin(ProxhyPlugin):
         self.adjacent_teams_highlighted = False
 
     @subscribe("setting:bedwars.tablist.show_stats")
-    async def _statcheck_event_setting_bedwars_tablist_show_stats(self, data: list):
+    async def _statcheck_event_setting_bedwars_tablist_show_stats(
+        self, _match, _data: list
+    ):
         # data = [old_state, new_state]
         if data == ["OFF", "ON"]:
             self.received_who.clear()
@@ -444,7 +446,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.is_mode_specific")
     async def _statcheck_event_setting_bedwars_tablist_is_mode_specific(
-        self, data: list
+        self, _match, data: list
     ) -> None:
         """Callback when is_mode_specific setting changes - rebuild display names."""
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
@@ -478,7 +480,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.show_rankname")
     async def _statcheck_event_setting_bedwars_tablist_show_rankname(
-        self, data: list
+        self, _match, data: list
     ) -> None:
         """Callback when show_rankname setting changes - rebuild display names."""
         for player, player_data in self.players_with_stats.items():
@@ -496,7 +498,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.show_eliminated_players")
     async def _statcheck_event_setting_bedwars_tablist_show_eliminated_players(
-        self, data: list
+        self, _match, data: list
     ) -> None:
         # remove self from final_dead
         final_dead_no_self = self.final_dead.copy()
@@ -525,7 +527,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("cb_gamestate_update")
     async def _statcheck_event_cb_gamestate_update_teams(
-        self, data: tuple[int, *tuple[bytes, ...]]
+        self, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         if data[0] == 0x3E:
             self.keep_player_stats_updated()
@@ -1161,7 +1163,7 @@ class StatCheckPlugin(ProxhyPlugin):
                     )
 
     @subscribe("chat:server:ONLINE: .*")
-    async def _statcheck_event_chat_server_who(self, buff: Buffer):
+    async def _statcheck_event_chat_server_who(self, _match, buff: Buffer):
         message = buff.unpack(Chat)
 
         if not self.received_who.is_set():

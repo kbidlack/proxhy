@@ -563,7 +563,7 @@ class BroadcastPlugin(ProxhyPlugin):
         await new_proxy.join(self.username, identifier)
 
     @subscribe("login_success")
-    async def _broadcast_event_login_success(self, _):
+    async def _broadcast_event_login_success(self, _match, _data):
         bc_pyroh_server_task = asyncio.create_task(
             self.initialize_broadcast_pyroh_server()
         )
@@ -665,7 +665,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 await client.close()
 
     @subscribe("close")
-    async def _broadcast_event_close(self, reason):
+    async def _broadcast_event_close(self, _match, reason):
         for tsk in {"cb_gamestate_task", "sb_gamestate_task"}:  # tsk tsk
             # might not be neceessary to check this anymore bc of gamestate plugin
             if hasattr(self, tsk) and (task := getattr(self, tsk)):
@@ -872,7 +872,7 @@ class BroadcastPlugin(ProxhyPlugin):
     @subscribe("cb_gamestate_update")
     # needs to be async for subscribe -- TODO: allow sync subscribers?
     async def _broadcast_event_cb_gamestate_update(
-        self, data: tuple[int, *tuple[bytes, ...]]
+        self, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         packet_id, *packet_data = data
         """Forward a clientbound packet to spectators with appropriate transformations."""
@@ -901,7 +901,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
     @subscribe("sb_gamestate_update")
     async def _broadcast_event_sb_gamestate_update(
-        self, data: tuple[int, *tuple[bytes, ...]]
+        self, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         packet_id, *packet_data = data
         if self.clients:

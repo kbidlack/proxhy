@@ -322,6 +322,13 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             )
             self.proxy.client.send_packet(0x13, data)
 
+        await self.client.drain()
+
+        self.client.send_packet(
+            0x3F, String.pack("PROXHY|Events"), String.pack("login_success")
+        )
+        await self.client.drain()
+
     async def _delayed_npc_removal(self) -> None:
         """Remove NPCs from tab list after a delay to allow skin loading."""
         await asyncio.sleep(1.5)

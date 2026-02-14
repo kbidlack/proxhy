@@ -50,7 +50,7 @@ class GameStatePlugin(ProxhyPlugin):
         self.cb_gamestate_task = asyncio.create_task(self._update_clientbound())
 
     @subscribe("login_success")
-    async def _gamestate_event_login_success(self, _):
+    async def _gamestate_event_login_success(self, _match, _data):
         self.sb_gamestate_task = asyncio.create_task(self._update_serverbound())
 
     async def _update_clientbound(self):

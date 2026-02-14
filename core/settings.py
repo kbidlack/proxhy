@@ -148,9 +148,14 @@ class SettingGroup:
         if not path:
             return self
 
+        parts = path.split(".")
+        # strip leading segment if it matches this group's own key
+        if parts[0] == self.name:
+            parts = parts[1:]
+
         current = self
 
-        for attr in path.split("."):
+        for attr in parts:
             current = getattr(current, attr)
 
         return current

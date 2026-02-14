@@ -70,7 +70,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         )
 
     @subscribe("login_success")
-    async def _statcheck_event_login_success(self, _):
+    async def _statcheck_event_login_success(self, _match, _data):
         asyncio.create_task(self._login_success_helper())
 
     async def _login_success_helper(self):
@@ -79,7 +79,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         asyncio.create_task(self.log_stats("login"))
 
     @subscribe("close")
-    async def _statcheck_event_close(self, _):
+    async def _statcheck_event_close(self, _match, _data):
         asyncio.create_task(self._close_statcheck_helper())
 
     async def _close_statcheck_helper(self):

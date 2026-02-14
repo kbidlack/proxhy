@@ -62,7 +62,7 @@ class DebugPlugin(ProxhyPlugin):
         await self._samsung_ringtone()
 
     # @subscribe("chat:server:.*")
-    # async def log_chat_msg(self, buff: Buffer):
+    # async def log_chat_msg(self, _match, buff: Buffer):
     #     buff = Buffer(buff.getvalue())
     #     print(buff.unpack(Chat))
 

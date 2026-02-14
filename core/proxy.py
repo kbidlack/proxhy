@@ -3,14 +3,19 @@ import re
 import zlib  # pyright: ignore[reportShadowedImports]
 from collections import defaultdict
 from copy import deepcopy
-from typing import Any, Callable, Coroutine, Literal, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Literal, Optional
 
 from protocol.datatypes import Buffer, VarInt
 
 from .events import PacketListener
 from .net import Client, Server, State, StreamReader, StreamWriter
 
-type ListenerList[T] = list[tuple[Callable[[Any, T], Coroutine[Any, Any, Any]], bool]]
+if TYPE_CHECKING:
+    from core.events import EventListenerFunction, PacketListener
+
+type PacketListenerList[T] = list[
+    tuple[Callable[[Any, T], Coroutine[Any, Any, Any]], bool]
+]
 
 
 class Proxy:
@@ -18,11 +23,9 @@ class Proxy:
 
     _packet_listeners: dict[
         Literal["client", "server"],
-        dict[tuple[int, State], ListenerList[Buffer]],
+        dict[tuple[int, State], PacketListenerList[Buffer]],
     ] = {"client": defaultdict(list), "server": defaultdict(list)}
-    _event_listeners: dict[str, list[Callable[[Any, Any], Coroutine]]] = defaultdict(
-        list
-    )
+    _event_listeners: dict[str, list[EventListenerFunction]] = defaultdict(list)
 
     def __init__(
         self,
@@ -206,9 +209,9 @@ class Proxy:
         results = []
 
         for e in self._event_listeners:
-            if re.fullmatch(e, event):
+            if (match := re.fullmatch(e, event)) is not None:
                 for handler in self._event_listeners[e]:
-                    results.append(await handler(self, deepcopy(data)))
+                    results.append(await handler(self, match, deepcopy(data)))
 
         return results
 
