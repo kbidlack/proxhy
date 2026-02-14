@@ -419,10 +419,13 @@ class Command:
         function: Callable[..., Awaitable[Any]],
         name: str | None = None,
         aliases: tuple[str, ...] = (),
+        usage: list[str] | None = None,
     ) -> None:
         self.function = function
         self.name = name or function.__name__
         self.aliases = (self.name, *aliases)
+        self.description = inspect.getdoc(function)
+        self.usage = usage
 
         # Get type hints for proper annotation resolution
         try:
@@ -439,6 +442,34 @@ class Command:
             (i, p) for i, p in enumerate(self.parameters) if p.options
         ]
 
+    def _build_usage_message(self) -> TextComponent:
+        msg = TextComponent("Usage: ").color("yellow")
+
+        if self.usage:
+            msg.append(TextComponent(f"/{self.name} {self.usage[0]}").color("gold"))
+            padding = " " * (len("Usage: ") + len(f"/{self.name} "))
+            for overload in self.usage[1:]:
+                msg.append("\n")
+                msg.append(TextComponent(padding).color("yellow"))
+                msg.append(TextComponent(f"/{self.name} {overload}").color("gold"))
+        else:
+            usage_parts = f"/{self.name}"
+            for param in self.parameters:
+                name = param.name.lstrip("_")
+                if param.infinite:
+                    usage_parts += f" [{name}...]"
+                elif param.required:
+                    usage_parts += f" <{name}>"
+                else:
+                    usage_parts += f" [{name}]"
+            msg.append(TextComponent(usage_parts).color("gold"))
+
+        if self.description:
+            msg.append("\n")
+            msg.append(TextComponent(self.description).color("gray"))
+
+        return msg
+
     async def __call__(self, proxy: Any, args: list[str]) -> Any:
         """
         Execute the command with the given arguments.
@@ -452,35 +483,14 @@ class Command:
         """
         # Validate argument count
         if not self.parameters and args:
-            raise CommandException(
-                TextComponent("Command ")
-                .append(TextComponent(self.name).color("gold"))
-                .appends("takes no arguments!")
-            )
+            raise CommandException(self._build_usage_message())
 
         has_infinite = any(p.infinite for p in self.parameters)
         if len(args) > len(self.parameters) and not has_infinite:
-            raise CommandException(
-                TextComponent("Command ")
-                .append(TextComponent(self.name).color("gold"))
-                .appends("takes at most")
-                .appends(TextComponent(str(len(self.parameters))).color("dark_aqua"))
-                .appends("argument(s)!")
-            )
+            raise CommandException(self._build_usage_message())
 
         if len(args) < len(self.required_parameters):
-            names = ", ".join([p.name for p in self.required_parameters])
-            raise CommandException(
-                TextComponent("Command ")
-                .append(TextComponent(self.name).color("gold"))
-                .appends("needs at least")
-                .appends(
-                    TextComponent(str(len(self.required_parameters))).color("dark_aqua")
-                )
-                .appends("argument(s)! (")
-                .append(TextComponent(names).color("dark_aqua"))
-                .append(")")
-            )
+            raise CommandException(self._build_usage_message())
 
         # Validate restricted parameters (Literal types)
         for index, param in self.restricted_parameters:
@@ -639,7 +649,9 @@ class CommandGroup:
             return f"{self.parent.full_name} {self.name}"
         return self.name
 
-    def command(self, name: str | None = None, *aliases: str):
+    def command(
+        self, name: str | None = None, *aliases: str, usage: list[str] | None = None
+    ):
         """
         Decorator to register a command in this group.
 
@@ -647,6 +659,7 @@ class CommandGroup:
             name: Subcommand name. If None, this becomes the base command
                   (executed when no subcommand is given).
             *aliases: Additional aliases for this subcommand.
+            usage: Optional list of usage overloads.
 
         Example:
             @group.command()  # Base command
@@ -657,7 +670,7 @@ class CommandGroup:
         """
 
         def decorator(func: Callable[..., Awaitable[Any]]):
-            cmd = Command(func, name=name or self.name, aliases=aliases)
+            cmd = Command(func, name=name or self.name, aliases=aliases, usage=usage)
 
             if name is None:
                 self._base_command = cmd
@@ -707,6 +720,10 @@ class CommandGroup:
         options = sorted(subcommand_names)
         msg.append(TextComponent("|".join(options)).color("white"))
         msg.append(TextComponent(">").color("gray"))
+
+        if self._base_command and self._base_command.description:
+            msg.append("\n")
+            msg.append(TextComponent(self._base_command.description).color("gray"))
 
         return msg
 
@@ -821,7 +838,7 @@ class CommandRegistry:
 # =============================================================================
 
 
-def command(name: str, *aliases: str):
+def command(name: str, *aliases: str, usage: list[str] | None = None):
     """
     Decorator to create a simple command (no subcommands).
 
@@ -831,19 +848,21 @@ def command(name: str, *aliases: str):
     Args:
         name: The command name (required).
         *aliases: Additional command aliases.
+        usage: Optional list of usage overloads (e.g. ["<player>", "<x> <y> <z>"]).
 
     Example:
         @command("bc", "broadcast")
         async def _command_bc(self, message: str):
             return f"Broadcasting: {message}"
 
-        @command("ping")
-        async def _command_ping(self):
-            return "Pong!"
+        @command("tp", "teleport", usage=["<player>", "<x> <y> <z>"])
+        async def _command_tp(self, target: Player | float, y: float = None, z: float = None):
+            \"\"\"Teleport to a player or coordinate set.\"\"\"
+            ...
     """
 
     def decorator(func: Callable[..., Awaitable[Any]]):
-        cmd = Command(func, name=name, aliases=aliases)
+        cmd = Command(func, name=name, aliases=aliases, usage=usage)
         # Store as attribute for discovery by CommandsPlugin
         setattr(func, "_command", cmd)
         return func

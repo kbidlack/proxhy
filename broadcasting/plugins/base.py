@@ -68,14 +68,16 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             UUID.pack(uuid.UUID(self.uuid)),
         )
 
-    @command("tp", "teleport")
+    @command("tp", "teleport", usage=["<player>", "<x> <y> <z>"])
     async def _command_tp(
         self,
-        target: ServerPlayer | float,
+        target_or_x: ServerPlayer | float,
         y: float | None = None,
         z: float | None = None,
     ) -> TextComponent:
-        if isinstance(target, ServerPlayer):
+        """Teleport to a player or coordinate set."""
+        if isinstance(target_or_x, ServerPlayer):
+            target = target_or_x
             # compare by username since UUIDs may differ in offline/local mode
             if target.name.casefold() == self.proxy.username.casefold():
                 pos = self.proxy.gamestate.position
@@ -112,7 +114,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
             )
 
         # target is a float (x coordinate)
-        x = target
+        x = target_or_x
         if y is None or z is None:
             raise CommandException(
                 "Position teleport requires x, y, and z coordinates!"

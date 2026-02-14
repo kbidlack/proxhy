@@ -40,7 +40,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
     ):
-        """Check player stats. Usage: /sc [player] [mode]"""
+        """Check player stats."""
         player = await _player if _player else _player
         return await self._sc_internal(player=player, mode=mode, stat_names=stats)
 
@@ -52,7 +52,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         window: float = 7.0,
         *stats: Statistic,
     ):
-        """Check player's weekly (or timed) stats. Usage: /scw [player] [mode] [window (default: 7)] [stats]"""
+        """Check player's weekly (or timed) stats."""
         player = await _player if _player else _player
         return await self._sc_internal(player, window, mode, stat_names=stats)
 
@@ -63,7 +63,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
     ):
-        """Check player stats with all modes. Usage: /scfull [player] [mode] [stats]"""
+        """Check player stats with all modes."""
         player = await _player if _player else _player
         return await self._sc_internal(
             player=player, mode=mode, stat_names=stats, display_abridged=False

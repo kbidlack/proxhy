@@ -1241,7 +1241,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @command("key", "apikey")
     async def _command_key(self, key: str):
-        """Set your Hypixel API key. Usage: /key <api_key>"""
+        """Set your Hypixel API key."""
         try:
             new_client = hypixel.Client(key)
             await new_client.player("gamerboy80")  # test key
