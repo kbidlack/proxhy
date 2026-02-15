@@ -362,7 +362,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         stat_names: tuple[Statistic, ...] = tuple(),
         display_abridged=True,
     ):
-        gamemode = mode.mode
+        gamemode = mode.mode_str
 
         # resolve player
         try:

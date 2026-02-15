@@ -1,5 +1,6 @@
 from protocol.datatypes import Item, SlotData, String, TextComponent
 from protocol.nbt import dumps, from_dict
+from proxhy.argtypes import Gamemode, Submode
 from proxhy.command import command
 from proxhy.errors import CommandException
 from proxhy.plugin import ProxhyPlugin
@@ -18,6 +19,20 @@ class MiscPlugin(ProxhyPlugin):
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
         self.server.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
+
+    @command("play")
+    async def _command_play(self, mode: Gamemode, *submodes: Submode):
+        """Convenient aliases for Hypixel's /play command. Ex. /play bedwars solo"""
+        server = self.client  # TEST: remove
+        if not submodes:
+            if Submode.SUBMODES.get(mode.mode_str):
+                raise CommandException("Please specify a submode!")
+            # no submodes for this game, play directly
+            server.chat(f"/play {mode.mode_str}")
+        elif submodes[-1].play_id is None:
+            raise CommandException("Please specify a complete submode!")
+        else:
+            server.chat(f"/play {submodes[-1].play_id}")
 
     @command("pos")
     async def _command_pos(self):
