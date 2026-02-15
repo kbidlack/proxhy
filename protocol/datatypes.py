@@ -1,4 +1,3 @@
-import json
 import re
 import struct
 import uuid
@@ -6,6 +5,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
 from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol, overload
+
+import orjson
 
 from assets import load_json_asset
 
@@ -277,7 +278,7 @@ class TextComponent:
 
     def __repr__(self) -> str:
         """Return a string representation of the component"""
-        return f"TextComponent({json.dumps(self.data, separators=(',', ':'))})"
+        return f"TextComponent({orjson.dumps(self.data).decode()})"
 
     def _validate_and_normalize(self):
         """Validate component structure and auto-detect content type"""
@@ -509,7 +510,7 @@ class TextComponent:
     # Utility methods
     def copy(self) -> TextComponent:
         """Create a deep copy of this component"""
-        return TextComponent(json.loads(json.dumps(self.data)))
+        return TextComponent(orjson.loads(orjson.dumps(self.data)))
 
     def to_dict(self) -> dict:
         """Get the underlying dictionary representation"""
@@ -517,7 +518,7 @@ class TextComponent:
 
     def to_json(self) -> str:
         """Convert to JSON string"""
-        return json.dumps(self.data, separators=(",", ":"))
+        return orjson.dumps(self.data).decode()
 
     def is_empty(self) -> bool:
         """Check if component has no content"""
@@ -738,11 +739,11 @@ class Chat(DataType[str, str]):
         if isinstance(value, TextComponent):
             return String.pack(value.to_json())
         elif isinstance(value, str):
-            return String.pack(json.dumps({"text": value}))
+            return String.pack(orjson.dumps({"text": value}).decode())
         elif isinstance(value, dict):
-            return String.pack(json.dumps(value))
+            return String.pack(orjson.dumps(value).decode())
         else:
-            return String.pack(json.dumps({"text": str(value)}))
+            return String.pack(orjson.dumps({"text": str(value)}).decode())
 
     @staticmethod
     def pack_msg(value: str | TextComponent | dict) -> bytes:
@@ -753,7 +754,7 @@ class Chat(DataType[str, str]):
     def unpack(buff) -> str:
         """Unpack to plain text string (legacy behavior)"""
         # https://github.com/barneygale/quarry/blob/master/quarry/types/chat.py#L86-L107
-        data = json.loads(buff.unpack(String))
+        data = orjson.loads(buff.unpack(String))
 
         def parse(data):
             text = ""
@@ -778,7 +779,7 @@ class Chat(DataType[str, str]):
     @staticmethod
     def unpack_component(buff) -> TextComponent:
         """Unpack to TextComponent object"""
-        data = json.loads(buff.unpack(String))
+        data = orjson.loads(buff.unpack(String))
         return TextComponent(data)
 
 

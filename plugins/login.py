@@ -1,6 +1,5 @@
 import asyncio
 import base64
-import json
 import random
 import uuid
 from importlib.resources import files
@@ -9,6 +8,7 @@ from typing import Literal, Optional
 from unittest.mock import Mock
 
 import aiohttp
+import orjson
 
 import auth
 import hypixel
@@ -384,7 +384,9 @@ class LoginPlugin(ProxhyPlugin):
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
-        self.client.send_packet(0x00, String.pack(json.dumps(self.server_list_ping)))
+        self.client.send_packet(
+            0x00, String.pack(orjson.dumps(self.server_list_ping).decode())
+        )
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self, buff: Buffer):

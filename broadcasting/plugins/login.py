@@ -1,8 +1,8 @@
 import asyncio
-import json
 import uuid
 from unittest.mock import Mock
 
+import orjson
 import pyroh
 
 from broadcasting.plugin import BroadcastPeerPlugin
@@ -68,7 +68,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             # since we get self.proxy after plugin init function runs
         )
 
-        self.client.send_packet(0x00, String.pack(json.dumps(self.server_list_ping)))
+        self.client.send_packet(
+            0x00, String.pack(orjson.dumps(self.server_list_ping).decode())
+        )
 
     @listen(0x13)
     async def packet_serverbound_player_abilities(self, buff: Buffer):

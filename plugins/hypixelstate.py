@@ -1,7 +1,8 @@
 import asyncio
-import json
 from dataclasses import dataclass
 from typing import Literal, Optional
+
+import orjson
 
 from assets import load_json_asset
 from core.events import listen_client, listen_server, subscribe
@@ -120,10 +121,10 @@ class HypixelStatePlugin(ProxhyPlugin):
                     return self.server.send_packet(0x01, String.pack("/locraw"))
             else:
                 self.received_locraw.set()
-                self._update_game(json.loads(message))
+                self._update_game(orjson.loads(message))
         else:
             self.client.send_packet(0x02, buff.getvalue())
-            self._update_game(json.loads(message))
+            self._update_game(orjson.loads(message))
 
     @listen_client(0x17)
     async def packet_plugin_channel(self, buff: Buffer):

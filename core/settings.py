@@ -2,9 +2,10 @@
 Type-safe Settings API with automatic state management and validation.
 """
 
-import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
+
+import orjson
 
 if TYPE_CHECKING:
     from protocol.datatypes import Color_T, Item
@@ -207,17 +208,17 @@ class SettingsStorage:
         """Load settings from disk."""
         if self.storage_file.exists():
             try:
-                with open(self.storage_file, "r") as f:
-                    self._data = json.load(f)
-            except (json.JSONDecodeError, IOError):
+                with open(self.storage_file, "rb") as f:
+                    self._data = orjson.loads(f.read())
+            except (orjson.JSONDecodeError, IOError):
                 self._data = {}
 
     def _save(self) -> None:
         """Save settings to disk."""
         try:
             self.storage_file.parent.mkdir(parents=True, exist_ok=True)
-            with open(self.storage_file, "w") as f:
-                json.dump(self._data, f, indent=2)
+            with open(self.storage_file, "wb") as f:
+                f.write(orjson.dumps(self._data, option=orjson.OPT_INDENT_2))
         except IOError:
             pass  # Silently fail if we can't save
 

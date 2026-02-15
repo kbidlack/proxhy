@@ -22,13 +22,13 @@ Usage:
     result = await auth.load_auth_info(username)
 """
 
-import json
 import time
 from pathlib import Path
 from typing import Any
 
 import jwt
 import keyring
+import orjson
 from cryptography.fernet import Fernet
 from platformdirs import user_data_dir
 
@@ -301,16 +301,14 @@ def _encrypt_data(data: dict[str, Any]) -> bytes:
     """Encrypt auth data using Fernet."""
     key = _get_or_create_encryption_key()
     fernet = Fernet(key)
-    json_data = json.dumps(data).encode()
-    return fernet.encrypt(json_data)
+    return fernet.encrypt(orjson.dumps(data))
 
 
 def _decrypt_data(encrypted_data: bytes) -> dict[str, Any]:
     """Decrypt auth data using Fernet."""
     key = _get_or_create_encryption_key()
     fernet = Fernet(key)
-    json_data = fernet.decrypt(encrypted_data)
-    return json.loads(json_data.decode())
+    return orjson.loads(fernet.decrypt(encrypted_data))
 
 
 def safe_set(service: str, user: str, auth_data: str) -> None:

@@ -1,10 +1,11 @@
 import asyncio
 import datetime
-import json
 import os
 import re
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Optional
+
+import orjson
 
 import hypixel
 from core.command import CommandException, Lazy, command
@@ -136,7 +137,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
                     lines = f.readlines()
                 if lines:
                     last_line = lines[-1].strip()
-                    last_entry = json.loads(last_line)
+                    last_entry = orjson.loads(last_line)
                     if (
                         last_entry.get("bedwars") == bedwars_stats
                         and last_entry.get("skywars") == skywars_stats
@@ -149,7 +150,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
         try:
             with open(self.log_path, "a") as f:
-                f.write(json.dumps(log_entry) + "\n")
+                f.write(orjson.dumps(log_entry).decode() + "\n")
         except Exception as e:
             print(f"Error writing stat log: {e}")
             pass  # TODO: log this
@@ -170,7 +171,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         names_to_resolve: set[str] = set()
         for line in lines:
             try:
-                entry = json.loads(line.strip())
+                entry = orjson.loads(line.strip())
                 player = entry.get("player", "")
                 if player and not self._is_uuid(player):
                     names_to_resolve.add(player)
@@ -197,11 +198,11 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         new_lines = []
         for line in lines:
             try:
-                entry = json.loads(line.strip())
+                entry = orjson.loads(line.strip())
                 player = entry.get("player", "")
                 if player in name_to_uuid:
                     entry["player"] = name_to_uuid[player]
-                new_lines.append(json.dumps(entry) + "\n")
+                new_lines.append(orjson.dumps(entry).decode() + "\n")
             except Exception:
                 new_lines.append(line)
 
@@ -219,7 +220,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         with open(self.log_path, "r") as f:
             for line in f:
                 try:
-                    entry = json.loads(line.strip())
+                    entry = orjson.loads(line.strip())
                     if entry.get("player", "").casefold() == uuid and entry.get(
                         "bedwars"
                     ):
