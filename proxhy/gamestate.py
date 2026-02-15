@@ -265,7 +265,7 @@ _vec3d_spec = [
 ]
 
 
-@jitclass(_vec3d_spec)  # type: ignore[misc]
+@jitclass(_vec3d_spec)
 class Vec3d:
     """3D position with double precision."""
 
@@ -314,7 +314,7 @@ _vec3i_spec = [
 ]
 
 
-@jitclass(_vec3i_spec)  # type: ignore[misc]
+@jitclass(_vec3i_spec)
 class Vec3i:
     """3D position with integer precision."""
 

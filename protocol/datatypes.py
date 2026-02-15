@@ -64,7 +64,7 @@ class SlotData:
     __slots__ = ("item", "count", "damage", "nbt")
 
     @overload
-    def __init__(self, item: None) -> None: ...
+    def __init__(self, item: None = None) -> None: ...
     @overload
     def __init__(
         self, item: Item, count: int = 1, damage: int = 0, nbt: bytes = b""
@@ -215,7 +215,7 @@ class UnsignedByte(DataType[int, int]):
 class ByteArray(DataType[bytes, bytes]):
     @staticmethod
     def pack(value: bytes) -> bytes:
-        return VarInt(len(value)) + value
+        return VarInt.pack(len(value)) + value
 
     @staticmethod
     def unpack(buff) -> bytes:
@@ -266,7 +266,7 @@ class TextComponent:
             if data:
                 first = data[0] if isinstance(data[0], dict) else {"text": str(data[0])}
                 if len(data) > 1:
-                    first["extra"] = data[1:]  # type: ignore
+                    first["extra"] = data[1:]
                 data = first
             else:
                 data = {}
@@ -577,7 +577,7 @@ class TextComponent:
                     else {"text": str(component[0])}
                 )
                 if len(component) > 1:
-                    first["extra"] = component[1:]  # type: ignore
+                    first["extra"] = component[1:]
                 return first
             return {}
         else:
@@ -738,13 +738,13 @@ class Chat(DataType[str, str]):
     def pack(value: str | TextComponent | dict) -> bytes:
         """Pack a text component or string to bytes"""
         if isinstance(value, TextComponent):
-            return String(value.to_json())
+            return String.pack(value.to_json())
         elif isinstance(value, str):
-            return String(json.dumps({"text": value}))
+            return String.pack(json.dumps({"text": value}))
         elif isinstance(value, dict):
-            return String(json.dumps(value))
+            return String.pack(json.dumps(value))
         else:
-            return String(json.dumps({"text": str(value)}))
+            return String.pack(json.dumps({"text": str(value)}))
 
     @staticmethod
     def pack_msg(value: str | TextComponent | dict) -> bytes:
@@ -788,7 +788,7 @@ class String(DataType[str | TextComponent, str]):
     @staticmethod
     def pack(value: str | TextComponent) -> bytes:
         bvalue = str(value).encode("utf-8")
-        return VarInt(len(bvalue)) + bvalue
+        return VarInt.pack(len(bvalue)) + bvalue
 
     @staticmethod
     def unpack(buff) -> str:
@@ -877,7 +877,7 @@ class Float(DataType[float, float]):
 class Angle(DataType[float, float]):
     @staticmethod
     def pack(value: float) -> bytes:
-        return UnsignedByte(int(256 * ((value % 360) / 360)))
+        return UnsignedByte.pack(int(256 * ((value % 360) / 360)))
         # return struct.pack(">B", int(value * 256 / 360) & 0xFF)
 
     @staticmethod

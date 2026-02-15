@@ -150,18 +150,18 @@ class Stream:
             pass
 
     def send_packet(self, id: int, *data: bytes) -> None:
-        packet = VarInt(id) + b"".join(data)
-        packet_length = VarInt(len(packet))
+        packet = VarInt.pack(id) + b"".join(data)
+        packet_length = VarInt.pack(len(packet))
 
         if self.compression:
             if len(packet) >= self.compression_threshold:
                 compressed_packet = zlib.compress(packet)
                 data_length = packet_length
                 packet = data_length + compressed_packet
-                packet_length = VarInt(len(packet))
+                packet_length = VarInt.pack(len(packet))
             else:
-                packet = VarInt(0) + VarInt(id) + b"".join(data)
-                packet_length = VarInt(len(packet))
+                packet = VarInt.pack(0) + VarInt.pack(id) + b"".join(data)
+                packet_length = VarInt.pack(len(packet))
 
         self.write(packet_length + packet)
         self.pqueue.put_nowait((id, *data))
@@ -181,17 +181,23 @@ class Client(Stream):
     ):
         # set subtitle
         if subtitle:
-            self.send_packet(0x45, VarInt(1), Chat.pack(subtitle))
+            self.send_packet(0x45, VarInt.pack(1), Chat.pack(subtitle))
         # set timings
-        self.send_packet(0x45, VarInt(2), Int(fade_in), Int(duration), Int(fade_out))
+        self.send_packet(
+            0x45,
+            VarInt.pack(2),
+            Int.pack(fade_in),
+            Int.pack(duration),
+            Int.pack(fade_out),
+        )
         # main title; triggers display
-        self.send_packet(0x45, VarInt(0), Chat.pack(title))
+        self.send_packet(0x45, VarInt.pack(0), Chat.pack(title))
 
     def hide_title(self):
-        self.send_packet(0x45, VarInt(3))
+        self.send_packet(0x45, VarInt.pack(3))
 
     def reset_title(self):
-        self.send_packet(0x45, VarInt(4))
+        self.send_packet(0x45, VarInt.pack(4))
 
     def set_actionbar_text(self, msg: str | TextComponent):
         self.send_packet(0x02, Chat.pack(msg) + b"\x02")
@@ -201,4 +207,4 @@ class Server(Stream):
     def chat(self, message: str | TextComponent) -> None:
         # technically messages to the server should only be strings
         # but I'm allowing TextComponents if they're needed for whatever reason
-        self.send_packet(0x01, String(message))
+        self.send_packet(0x01, String.pack(message))

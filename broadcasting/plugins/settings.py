@@ -66,6 +66,6 @@ class BroadcastPeerSettingsPlugin(BroadcastPeerPlugin, SettingsPlugin):
             )
             return
 
-        setting.set(new_value)  # ty: ignore[invalid-argument-type]
+        setting.set(new_value)
 
         await self.emit(f"setting:{setting_path}", [old_value, new_value])

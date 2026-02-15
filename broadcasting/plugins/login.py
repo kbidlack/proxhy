@@ -68,7 +68,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             # since we get self.proxy after plugin init function runs
         )
 
-        self.client.send_packet(0x00, String(json.dumps(self.server_list_ping)))
+        self.client.send_packet(0x00, String.pack(json.dumps(self.server_list_ping)))
 
     @listen(0x13)
     async def packet_serverbound_player_abilities(self, buff: Buffer):
@@ -147,7 +147,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         self.client.send_packet(
             0x07,  # respawn
-            Int(fake_dim),
+            Int.pack(fake_dim),
             UnsignedByte.pack(self.proxy.gamestate.difficulty.value),
             UnsignedByte.pack(2),  # gamemode: adventure
             String.pack(self.proxy.gamestate.level_type),
@@ -202,7 +202,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # respawn back to actual dimension
         self.client.send_packet(
             0x07,
-            Int(current_dim),
+            Int.pack(current_dim),
             UnsignedByte.pack(self.proxy.gamestate.difficulty.value),
             UnsignedByte.pack(2),  # gamemode: adventure
             String.pack(self.proxy.gamestate.level_type),

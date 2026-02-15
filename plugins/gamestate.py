@@ -1,4 +1,3 @@
-import asyncio
 import time
 from typing import Hashable
 
@@ -75,7 +74,7 @@ class GameStatePlugin(ProxhyPlugin):
             self.in_combat_with.add(target)
 
     @property
-    def ein_combat_with(self) -> list[Entity]:  # pyright: ignore[reportIncompatibleVariableOverride]
+    def ein_combat_with(self) -> list[Entity]:
         entities = [self.gamestate.get_entity(e) for e in self.in_combat_with.values()]
 
         return [e for e in entities if e is not None]

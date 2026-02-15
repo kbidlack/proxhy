@@ -18,5 +18,5 @@ class BroadcastPeerPlugin(
     BroadcastPeerSettingsPluginState,
     BroadcastPeerSpectatePluginState,
 ):
-    proxy: Proxhy  # type: ignore
+    proxy: Proxhy
     eid: int

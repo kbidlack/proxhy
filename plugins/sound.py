@@ -7,13 +7,12 @@ from proxhy.plugin import ProxhyPlugin
 
 class SoundPluginState:
     note_to_pitch: Callable[[int], int]
-    _play_sound: Callable[[str, float, int], None]
     _samsung_ringtone: Callable[[], Coroutine[None, None, None]]
     _iphone_ringtone: Callable[[], Coroutine[None, None, None]]
 
 
 class SoundPlugin(ProxhyPlugin):
-    def note_to_pitch(self, note: int) -> int:  # pyright: ignore[reportIncompatibleMethodOverride]
+    def note_to_pitch(self, note: int) -> int:
         """
         Convert Minecraft note-block semitone index to 1.8.9 pitch byte.
         note: 0–24 (F#3 → F#5)
@@ -21,7 +20,7 @@ class SoundPlugin(ProxhyPlugin):
         pitch = round(63 * (2 ** ((note - 12) / 12)))
         return max(0, min(255, pitch))
 
-    def _play_sound(self, sound: str, volume: float = 1.0, pitch: int = 63):  # pyright: ignore[reportIncompatibleMethodOverride]
+    def _play_sound(self, sound: str, volume: float = 1.0, pitch: int = 63):
         """Play a sound effect at the player's position.
 
         Args:
@@ -40,7 +39,7 @@ class SoundPlugin(ProxhyPlugin):
             UnsignedByte.pack(pitch),
         )
 
-    async def _samsung_ringtone(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def _samsung_ringtone(self):
         eighth = 0.2
         quarter = 0.4
         notes = [
@@ -55,7 +54,7 @@ class SoundPlugin(ProxhyPlugin):
                 self._play_sound("note.pling", pitch=self.note_to_pitch(note))
             await asyncio.sleep(duration)
 
-    async def _iphone_ringtone(self):  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def _iphone_ringtone(self):
         sixteenth = 0.2
 
         notes = [

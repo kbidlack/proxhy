@@ -918,11 +918,10 @@ class Statistic(CommandArg):
         if gamemode is not None:
             statistics = list(cls.STATS[gamemode.mode].keys())
         else:
-            statistics = []
-            gamemodes = (
-                [gamemode.mode] if gamemode is not None else list(Gamemode.GAMES.keys())
-            )
-            for gm in gamemodes:
+            statistics: list[str] = []
+            for gm in Gamemode.GAMES:
                 statistics.extend(cls.STATS[gm].keys())
 
-        return sorted([stat for stat in statistics if stat.startswith(s)], key=len)
+        matches = [stat for stat in statistics if stat.startswith(s)]
+        matches.sort(key=len)
+        return matches

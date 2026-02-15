@@ -90,7 +90,7 @@ class AutoboopPlugin(ProxhyPlugin):
         self.command_registry.register(self.autoboop_group)
 
     @subscribe(r"chat:server:(Guild|Friend) > ([A-Za-z0-9_]+) joined.$")
-    async def _autoboop_event_chat_server_guild_join(self, buff: Buffer):
+    async def _autoboop_event_chat_server_guild_join(self, _match, buff: Buffer):
         player = re.match(
             r"^(Guild|Friend) > ([A-Za-z0-9_]+) joined\.$", buff.unpack(Chat)
         )

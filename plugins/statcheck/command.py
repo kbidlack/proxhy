@@ -41,7 +41,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         *stats: Statistic,
     ):
         """Check player stats."""
-        player = await _player if _player else _player
+        player = await _player if _player else None
         return await self._sc_internal(player=player, mode=mode, stat_names=stats)
 
     @command("scw", "scweekly")
@@ -53,7 +53,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         *stats: Statistic,
     ):
         """Check player's weekly (or timed) stats."""
-        player = await _player if _player else _player
+        player = await _player if _player else None
         return await self._sc_internal(player, window, mode, stat_names=stats)
 
     @command("scfull")
@@ -64,7 +64,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         *stats: Statistic,
     ):
         """Check player stats with all modes."""
-        player = await _player if _player else _player
+        player = await _player if _player else None
         return await self._sc_internal(
             player=player, mode=mode, stat_names=stats, display_abridged=False
         )
@@ -96,7 +96,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         except AttributeError:
             pass  # TODO: log
 
-    async def log_stats(self, event: str) -> None:  # type: ignore
+    async def log_stats(self, event: str) -> None:
         if self.dev_mode:
             return
 

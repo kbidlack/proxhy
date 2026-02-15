@@ -87,15 +87,15 @@ class SpatialPlugin(ProxhyPlugin):
             )
         self.client.send_packet(
             0x2A,  # display particle
-            Int(particle_id),  # particle id
-            Boolean(True),  # long distance?
-            Float(pos[0]),  # xyz particle coords
-            Float(pos[1]),
-            Float(pos[2]),
-            Float(offset[0]),  # xyz particle offset
-            Float(offset[1]),
-            Float(offset[2]),
-            Float(particle_data),
-            Int(count),  # num of particles
+            Int.pack(particle_id),  # particle id
+            Boolean.pack(True),  # long distance?
+            Float.pack(pos[0]),  # xyz particle coords
+            Float.pack(pos[1]),
+            Float.pack(pos[2]),
+            Float.pack(offset[0]),  # xyz particle offset
+            Float.pack(offset[1]),
+            Float.pack(offset[2]),
+            Float.pack(particle_data),
+            Int.pack(count),  # num of particles
             # VarInt.pack(data),  # array of VarInt; most particles have length 0
         )

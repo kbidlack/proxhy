@@ -1,6 +1,6 @@
 import asyncio
 import re
-import zlib  # pyright: ignore[reportShadowedImports]
+import zlib
 from collections import defaultdict
 from copy import deepcopy
 from typing import TYPE_CHECKING, Any, Callable, Coroutine, Literal, Optional

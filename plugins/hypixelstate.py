@@ -101,7 +101,7 @@ class HypixelStatePlugin(ProxhyPlugin):
         self.received_locraw.clear()
 
         if not self.client_type == "lunar":
-            self.server.send_packet(0x01, String("/locraw"))
+            self.server.send_packet(0x01, String.pack("/locraw"))
 
     def _update_game(self, game: dict):
         self.game.update(game)
@@ -111,7 +111,7 @@ class HypixelStatePlugin(ProxhyPlugin):
             return
 
     @subscribe(r"chat:server:\{.*\}$")
-    async def _hypixelstate_event_chat_server_locraw(self, buff: Buffer):
+    async def _hypixelstate_event_chat_server_locraw(self, _match, buff: Buffer):
         message = buff.unpack(Chat)
 
         if not self.received_locraw.is_set():
@@ -120,7 +120,7 @@ class HypixelStatePlugin(ProxhyPlugin):
                     return
                 elif self.client_type != "lunar":
                     await asyncio.sleep(0.1)
-                    return self.server.send_packet(0x01, String("/locraw"))
+                    return self.server.send_packet(0x01, String.pack("/locraw"))
             else:
                 self.received_locraw.set()
                 self._update_game(json.loads(message))

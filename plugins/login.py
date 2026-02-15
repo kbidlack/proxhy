@@ -14,7 +14,7 @@ import hypixel
 import auth
 from auth.errors import AuthException
 from core.cache import Cache
-from core.events import listen_client, listen_server, subscribe
+from core.events import listen_client, listen_server
 from core.net import Server, State
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
@@ -111,7 +111,7 @@ class LoginPlugin(ProxhyPlugin):
             # removes weird bugs when you join
             self.client.send_packet(
                 0x07,
-                Int(-1),  # dimension: nether
+                Int.pack(-1),  # dimension: nether
                 UnsignedByte.pack(0),  # difficulty: peaceful
                 UnsignedByte.pack(3),  # gamemode: spectator
                 String.pack("default"),  # level type
@@ -127,7 +127,7 @@ class LoginPlugin(ProxhyPlugin):
 
             self.client.send_packet(
                 0x07,
-                Int(dimension),  # dimension
+                Int.pack(dimension),  # dimension
                 UnsignedByte.pack(difficulty),  # difficulty
                 UnsignedByte.pack(gamemode),  # gamemode
                 String.pack(level_type),  # level type
@@ -175,10 +175,10 @@ class LoginPlugin(ProxhyPlugin):
 
         self.server.send_packet(
             0x00,
-            VarInt(47),
-            String(self.FAKE_CONNECT_HOST[0]),
-            UnsignedShort(self.FAKE_CONNECT_HOST[1]),
-            VarInt(State.LOGIN.value),
+            VarInt.pack(47),
+            String.pack(self.FAKE_CONNECT_HOST[0]),
+            UnsignedShort.pack(self.FAKE_CONNECT_HOST[1]),
+            VarInt.pack(State.LOGIN.value),
         )
 
         if self.CONNECT_HOST[0] not in {"localhost", "127.0.0.1", "::1"}:
@@ -195,7 +195,7 @@ class LoginPlugin(ProxhyPlugin):
                         self._session_encrypt(server_id, public_key)
                     )
 
-        self.server.send_packet(0x00, String(self.username))
+        self.server.send_packet(0x00, String.pack(self.username))
 
     async def _start_device_code_flow(self):
         try:
@@ -289,7 +289,7 @@ class LoginPlugin(ProxhyPlugin):
         while True:
             await asyncio.sleep(10)
             if self.state == State.PLAY and self.client.open and self.logging_in:
-                self.client.send_packet(0x00, VarInt(random.randint(0, 256)))
+                self.client.send_packet(0x00, VarInt.pack(random.randint(0, 256)))
             else:
                 await self.close()
                 break
@@ -318,22 +318,28 @@ class LoginPlugin(ProxhyPlugin):
             uuid_ = await c._get_uuid(self.username)
 
         self.client.send_packet(
-            0x02, String(str(uuid.UUID(uuid_))), String(self.username)
+            0x02, String.pack(str(uuid.UUID(uuid_))), String.pack(self.username)
         )
 
         self.client.send_packet(
             0x01,
-            Int(0),
-            UnsignedByte(3),
-            Byte(b"\x01"),
-            UnsignedByte(0),
-            UnsignedByte(1),
-            String("default"),
-            Boolean(True),
+            Int.pack(0),
+            UnsignedByte.pack(3),
+            Byte.pack(b"\x01"),
+            UnsignedByte.pack(0),
+            UnsignedByte.pack(1),
+            String.pack("default"),
+            Boolean.pack(True),
         )
 
         self.client.send_packet(
-            0x08, Double(0), Double(0), Double(0), Float(0), Float(0), Byte(b"\x00")
+            0x08,
+            Double.pack(0),
+            Double.pack(0),
+            Double.pack(0),
+            Float.pack(0),
+            Float.pack(0),
+            Byte.pack(b"\x00"),
         )
 
         self.keep_alive_task = self.create_task(self.login_keep_alive())
@@ -378,7 +384,7 @@ class LoginPlugin(ProxhyPlugin):
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
-        self.client.send_packet(0x00, String(json.dumps(self.server_list_ping)))
+        self.client.send_packet(0x00, String.pack(json.dumps(self.server_list_ping)))
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self, buff: Buffer):
@@ -430,8 +436,8 @@ class LoginPlugin(ProxhyPlugin):
 
         self.server.send_packet(
             0x01,
-            ByteArray(encrypted_secret),
-            ByteArray(encrypted_verify_token),
+            ByteArray.pack(encrypted_secret),
+            ByteArray.pack(encrypted_verify_token),
         )
 
         # enable encryption

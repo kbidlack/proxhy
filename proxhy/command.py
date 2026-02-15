@@ -392,11 +392,7 @@ class Parameter:
                     suggestions.extend(member_suggestions)
             # Deduplicate while preserving order
             seen = set()
-            suggestions = [
-                s
-                for s in suggestions
-                if not (s in seen or seen.add(s))  # type: ignore
-            ]
+            suggestions = [s for s in suggestions if not (s in seen or seen.add(s))]
         elif self.is_custom_type:
             suggestions = await self.type_hint.suggest(ctx, partial)
         return suggestions
@@ -422,7 +418,7 @@ class Command:
         usage: list[str] | None = None,
     ) -> None:
         self.function = function
-        self.name = name or function.__name__
+        self.name = name or function.__name__  # ty: ignore[unresolved-attribute]
         self.aliases = (self.name, *aliases)
         self.description = inspect.getdoc(function)
         self.usage = usage

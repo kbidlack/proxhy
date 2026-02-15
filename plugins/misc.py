@@ -17,7 +17,7 @@ class MiscPlugin(ProxhyPlugin):
         """Requeue for the last played game."""
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
-        self.server.send_packet(0x01, String(f"/play {self.rq_game.mode}"))
+        self.server.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
 
     @command("garlicbread")  # Mmm, garlic bread.
     async def _command_garlicbread(self):  # Mmm, garlic bread.

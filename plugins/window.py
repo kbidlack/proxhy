@@ -116,7 +116,7 @@ class Slots(list[SlotType]):
     @overload
     def __getitem__(self, s: slice) -> list[SlotType]: ...
 
-    def __getitem__(self, s: SupportsIndex | slice) -> SlotType | list[SlotType]:  # type: ignore[override]
+    def __getitem__(self, s: SupportsIndex | slice) -> SlotType | list[SlotType]:
         if isinstance(s, int):
             if s == -999 or s >= len(self):
                 return (SlotData(), None, False)

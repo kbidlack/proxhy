@@ -1,14 +1,11 @@
-# pyright: reportMissingModuleSource=false
-# pyright: reportMissingImports=false
-
 import json
 import re
 import time
 from urllib.parse import urljoin
 
-import requests
-from bs4 import BeautifulSoup, Tag
-from tqdm import tqdm
+import requests  # ty: ignore[unresolved-import]
+from bs4 import BeautifulSoup, Tag  # ty: ignore[unresolved-import]
+from tqdm import tqdm  # ty: ignore[unresolved-import]
 
 BASE = "https://hypixel.fandom.com"
 CATEGORY_URL = "https://hypixel.fandom.com/wiki/Category:Bed_Wars_maps"

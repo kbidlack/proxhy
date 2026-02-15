@@ -94,7 +94,7 @@ class SettingsMenu(Window):
         self.subsetting_path = subsetting_path
         self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
             subsetting_path
-        )  # type: ignore
+        )
 
         self.DISABLED_STATES = {"off", "none", "disabled"}
         self.menu_slots: dict[int, str] = {}
@@ -205,7 +205,7 @@ class SettingsMenu(Window):
             lore = ["§7" + t for t in lore]
             lore.extend(["", "§8(Click to toggle)"])
 
-            display_nbt: dict[str, Any] = {  # pyright: ignore[reportRedeclaration]
+            display_nbt: dict[str, Any] = {
                 "display": {"Name": f"§r§l{s.display_name}", "Lore": lore}
             }
             if s.get().lower() not in self.DISABLED_STATES:

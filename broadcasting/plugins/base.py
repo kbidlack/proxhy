@@ -38,7 +38,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
     async def _broadcast_peer_base_event_close(self, _match, _data):
         # remove this client
         if self in self.proxy.clients:
-            self.proxy.clients.remove(self)  # pyright: ignore[reportArgumentType]
+            self.proxy.clients.remove(self)  # ty: ignore[invalid-argument-type]
 
         try:
             self.writer.close()

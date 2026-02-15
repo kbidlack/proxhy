@@ -174,7 +174,7 @@ COLOR_CODE_TO_NAME = {
 class PlayersWithStats(TypedDict):
     uuid: str
     display_name: str
-    fplayer: dict | Nick
+    fplayer: dict[str, str | int | float] | Nick
 
 
 class TeamColor(TypedDict):
@@ -335,10 +335,12 @@ class StatCheckPlugin(ProxhyPlugin):
 
         self.client.send_packet(
             0x38,
-            VarInt(3),
-            VarInt(len(updates)),
+            VarInt.pack(3),
+            VarInt.pack(len(updates)),
             *(
-                UUID(uuid.UUID(str(player_uuid))) + Boolean(True) + Chat(display_name)
+                UUID.pack(uuid.UUID(str(player_uuid)))
+                + Boolean.pack(True)
+                + Chat.pack(display_name)
                 for player_uuid, display_name in updates
             ),
         )
@@ -432,7 +434,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.show_stats")
     async def _statcheck_event_setting_bedwars_tablist_show_stats(
-        self, _match, _data: list
+        self, _match, data: list
     ):
         # data = [old_state, new_state]
         if data == ["OFF", "ON"]:
@@ -453,14 +455,15 @@ class StatCheckPlugin(ProxhyPlugin):
             # Recalculate display names with new mode-specific setting
             for player, player_data in self.players_with_stats.items():
                 fdict = player_data["fplayer"]
-                if isinstance(fdict, dict):
-                    # Rebuild display name with new setting
-                    display_name = self._build_player_display_name(player, fdict)
-                    self.players_with_stats[player] = {
-                        "uuid": player_data["uuid"],
-                        "display_name": display_name,
-                        "fplayer": fdict,
-                    }
+                if isinstance(fdict, Nick):
+                    continue
+                # Rebuild display name with new setting
+                display_name = self._build_player_display_name(player, fdict)
+                self.players_with_stats[player] = PlayersWithStats(
+                    uuid=player_data["uuid"],
+                    display_name=display_name,
+                    fplayer=fdict,
+                )
 
             # Update the tab list immediately
             self.keep_player_stats_updated()
@@ -485,14 +488,15 @@ class StatCheckPlugin(ProxhyPlugin):
         """Callback when show_rankname setting changes - rebuild display names."""
         for player, player_data in self.players_with_stats.items():
             fdict = player_data["fplayer"]
-            if isinstance(fdict, dict):
-                # Rebuild display name with new setting
-                display_name = self._build_player_display_name(player, fdict)
-                self.players_with_stats[player] = {
-                    "uuid": player_data["uuid"],
-                    "display_name": display_name,
-                    "fplayer": fdict,
-                }
+            if isinstance(fdict, Nick):
+                continue
+            # Rebuild display name with new setting
+            display_name = self._build_player_display_name(player, fdict)
+            self.players_with_stats[player] = PlayersWithStats(
+                uuid=player_data["uuid"],
+                display_name=display_name,
+                fplayer=fdict,
+            )
         self.keep_player_stats_updated()
         self._update_dead_players_in_tablist()
 
@@ -511,10 +515,10 @@ class StatCheckPlugin(ProxhyPlugin):
             for player, u in final_dead_no_self.items():
                 packet += UUID.pack(uuid.UUID(u))
                 packet += String.pack(player)
-                packet += VarInt(0)  # properties
-                packet += VarInt(3)  # gamemode; spectator
-                packet += VarInt(0)  # ping
-                packet += Boolean(True)  # has display name
+                packet += VarInt.pack(0)  # properties
+                packet += VarInt.pack(3)  # gamemode; spectator
+                packet += VarInt.pack(0)  # ping
+                packet += Boolean.pack(True)  # has display name
                 packet += Chat.pack(self._get_dead_display_name(player))
 
             self.client.send_packet(0x38, packet)
@@ -804,21 +808,21 @@ class StatCheckPlugin(ProxhyPlugin):
                         fdict["raw_fkdr"] = player.bedwars.fkdr
                         fdict["rankname"] = get_rankname(player)
                         fdict["raw_name"] = player.name
-                    else:  # if is a nicked player
+                    elif isinstance(player, Nick):  # nicked player
                         # get team color for nicked player
                         for team in self.gamestate.teams.values():
                             if player.name in team.members:
                                 self.nick_team_colors.update({player.name: team.prefix})
                                 break
                         fdict = player
+                    else:
+                        continue
 
                     display_name = self._build_player_display_name(player.name, fdict)
 
-                    self.players_with_stats[player.name] = {
-                        "uuid": player.uuid,
-                        "display_name": display_name,
-                        "fplayer": fdict,
-                    }
+                    self.players_with_stats[player.name] = PlayersWithStats(
+                        uuid=player.uuid, display_name=display_name, fplayer=fdict
+                    )
 
                     if self.settings.bedwars.tablist.show_stats.get() == "ON":
                         if player.name in self.dead | self.final_dead:
@@ -900,6 +904,8 @@ class StatCheckPlugin(ProxhyPlugin):
                 fp1 = self.players_with_stats[first_players[0]]["fplayer"]
                 fp2 = self.players_with_stats[first_players[1]]["fplayer"]
 
+                better: dict[str, Any] | Nick
+                worse: dict[str, Any] | Nick
                 if isinstance(fp1, Nick):
                     better = fp1
                     worse = fp2
@@ -909,19 +915,21 @@ class StatCheckPlugin(ProxhyPlugin):
                 else:
                     better, worse = sorted((fp1, fp2), key=key, reverse=True)
 
-                if isinstance(better, dict):
-                    title = self.players_with_stats[better["raw_name"]]["display_name"]
-                else:
+                if isinstance(better, Nick):
                     title = self.players_with_stats[better.name]["display_name"]
+                else:
+                    title = self.players_with_stats[str(better["raw_name"])][
+                        "display_name"
+                    ]
 
                 if self.settings.bedwars.announce_first_rush.get() == "FIRST RUSH":
                     # if we aren't showing alt rush team stats, we can show both players from first rush
-                    if isinstance(worse, dict):
-                        subtitle = self.players_with_stats[worse["raw_name"]][
+                    if isinstance(worse, Nick):
+                        subtitle = self.players_with_stats[worse.name]["display_name"]
+                    else:
+                        subtitle = self.players_with_stats[str(worse["raw_name"])][
                             "display_name"
                         ]
-                    else:
-                        subtitle = self.players_with_stats[worse.name]["display_name"]
             case _:
                 raise ValueError(
                     f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
@@ -938,6 +946,8 @@ class StatCheckPlugin(ProxhyPlugin):
                 case 2:
                     fp1 = self.players_with_stats[other_adjacent_players[0]]["fplayer"]
                     fp2 = self.players_with_stats[other_adjacent_players[1]]["fplayer"]
+                    better: dict[str, Any] | Nick
+                    worse: dict[str, Any] | Nick
                     if isinstance(fp1, Nick):
                         better = fp1
                         worse = fp2
@@ -947,12 +957,12 @@ class StatCheckPlugin(ProxhyPlugin):
                     else:
                         better, worse = sorted((fp1, fp2), key=key, reverse=True)
 
-                    if isinstance(better, dict):
-                        subtitle = self.players_with_stats[better["raw_name"]][
+                    if isinstance(better, Nick):
+                        subtitle = self.players_with_stats[better.name]["display_name"]
+                    else:
+                        subtitle = self.players_with_stats[str(better["raw_name"])][
                             "display_name"
                         ]
-                    else:
-                        subtitle = self.players_with_stats[better.name]["display_name"]
                 case _:
                     raise ValueError(
                         f"wtf how are there {len(other_adjacent_players)} ppl on that team???\nplayers on alt rush team: {other_adjacent_players}"
@@ -1037,37 +1047,39 @@ class StatCheckPlugin(ProxhyPlugin):
 
             # Handle regular players with stats
             fdict = player_data["fplayer"]
-            if isinstance(fdict, dict):
-                # Calculate ranking value
-                if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
-                    mode = self.game.mode[8:].lower()
-                    fkdr = fdict[f"{mode}_fkdr"]
-                    f_fkdr = fdict[f"{mode}_fkdr"]
-                else:
-                    fkdr = fdict["raw_fkdr"]
-                    f_fkdr = fdict["fkdr"]
+            if isinstance(fdict, Nick):
+                continue
 
-                fkdr = int(fdict["raw_fkdr"])
-                stars = int(fdict["raw_level"])
+            # Calculate ranking value
+            if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
+                mode = self.game.mode[8:].lower()
+                fkdr = fdict[f"{mode}_fkdr"]
+                f_fkdr = fdict[f"{mode}_fkdr"]
+            else:
+                fkdr = fdict["raw_fkdr"]
+                f_fkdr = fdict["fkdr"]
 
-                if self.settings.bedwars.display_top_stats.get() == "FKDR":
-                    rank_value = fkdr
-                elif self.settings.bedwars.display_top_stats.get() == "STARS":
-                    rank_value = stars
-                elif self.settings.bedwars.display_top_stats.get() == "INDEX":
-                    rank_value = fkdr**2 * stars
-                else:
-                    rank_value = fkdr
+            fkdr = int(fdict["raw_fkdr"])
+            stars = int(fdict["raw_level"])
 
-                enemy_players.append(
-                    {
-                        "name": player_name,
-                        "star_formatted": fdict["star"],
-                        "fkdr_formatted": f_fkdr,
-                        "rank_value": rank_value,
-                        "team_color": player_team.prefix,
-                    }
-                )
+            if self.settings.bedwars.display_top_stats.get() == "FKDR":
+                rank_value = fkdr
+            elif self.settings.bedwars.display_top_stats.get() == "STARS":
+                rank_value = stars
+            elif self.settings.bedwars.display_top_stats.get() == "INDEX":
+                rank_value = fkdr**2 * stars
+            else:
+                rank_value = fkdr
+
+            enemy_players.append(
+                {
+                    "name": player_name,
+                    "star_formatted": fdict["star"],
+                    "fkdr_formatted": f_fkdr,
+                    "rank_value": rank_value,
+                    "team_color": player_team.prefix,
+                }
+            )
 
         # Build output
         result = ""
@@ -1133,7 +1145,7 @@ class StatCheckPlugin(ProxhyPlugin):
         self._send_bulk_tablist_update(living_players)
 
     @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
-    async def _statcheck_event_chat_server_player_joined(self, buff: Buffer):
+    async def _statcheck_event_chat_server_player_joined(self, _match, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
         if self.settings.bedwars.api_key_reminder.get() == "ON":
             message = buff.unpack(Chat)
@@ -1184,13 +1196,13 @@ class StatCheckPlugin(ProxhyPlugin):
     @subscribe(
         "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
-    async def _statcheck_event_chat_server_bedwars_rejoin(self, buff: Buffer):
+    async def _statcheck_event_chat_server_bedwars_rejoin(self, _match, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
         # refresh stats
         self.players_without_stats.add(self.username)  # TODO: does not work with nicks
-        self.server.send_packet(0x01, String("/who"))
+        self.server.send_packet(0x01, String.pack("/who"))
         self.received_who.clear()
 
         self.game.started = True
@@ -1209,7 +1221,7 @@ class StatCheckPlugin(ProxhyPlugin):
         return self.game.gametype == "bedwars" and self.game.mode
 
     @subscribe(f"chat:server:({'|'.join(GAME_START_MESSAGES)})")
-    async def _statcheck_event_chat_server_game_start(self, buff: Buffer):
+    async def _statcheck_event_chat_server_game_start(self, _match, buff: Buffer):
         if self.game.gametype != "bedwars" or self.stats_highlighted:
             return self.client.send_packet(0x02, buff.getvalue())
 
@@ -1219,7 +1231,7 @@ class StatCheckPlugin(ProxhyPlugin):
             self.settings.bedwars.display_top_stats.get() != "OFF" and not is_duels
         )
         if message in {msg_set[-2] for msg_set in GAME_START_MESSAGE_SETS}:  # runs once
-            self.server.send_packet(0x01, String("/who"))
+            self.server.send_packet(0x01, String.pack("/who"))
             self.received_who.clear()
             self.game.started = True
 
@@ -1254,7 +1266,7 @@ class StatCheckPlugin(ProxhyPlugin):
         if self.hypixel_client:
             await self.hypixel_client.close()
 
-        self.hypixel_api_key = key  # type: ignore
+        self.hypixel_api_key = key
         self.hypixel_client = hypixel.Client(key)
         self._api_key_valid = True
         self._api_key_validated_at = asyncio.get_event_loop().time()
@@ -1298,22 +1310,22 @@ class StatCheckPlugin(ProxhyPlugin):
         if real_u:
             self.client.send_packet(
                 0x38,
-                VarInt(4),
-                VarInt(1),
+                VarInt.pack(4),
+                VarInt.pack(1),
                 UUID.pack(uuid.UUID(real_u)),
             )
 
         # spawn player
         self.client.send_packet(
             0x38,
-            VarInt(0),
-            VarInt(1),
+            VarInt.pack(0),
+            VarInt.pack(1),
             UUID.pack(uuid.UUID(self.dead[player])),
-            String(player),
-            VarInt(0),  # 0 properties
-            VarInt(3),  # gamemode
-            VarInt(0),  # ping
-            Boolean(True),
+            String.pack(player),
+            VarInt.pack(0),  # 0 properties
+            VarInt.pack(3),  # gamemode
+            VarInt.pack(0),  # ping
+            Boolean.pack(True),
             Chat.pack(self._get_dead_display_name(player)),
         )
 
@@ -1332,13 +1344,13 @@ class StatCheckPlugin(ProxhyPlugin):
 
         self.client.send_packet(
             0x38,
-            VarInt(4),
-            VarInt(1),
+            VarInt.pack(4),
+            VarInt.pack(1),
             UUID.pack(uuid.UUID(player_uuid)),
         )
 
     @subscribe(r"chat:server:(.+?) reconnected\.$")
-    async def _statcheck_event_chat_server_player_recon(self, buff: Buffer):
+    async def _statcheck_event_chat_server_player_recon(self, _match, buff: Buffer):
         self.client.send_packet(0x02, buff.getvalue())
 
         await self.received_locraw.wait()  # so that we can run the next check
@@ -1359,7 +1371,7 @@ class StatCheckPlugin(ProxhyPlugin):
         asyncio.create_task(self.respawn_timer(player, reconnect=True))
 
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
-    async def _statcheck_event_chat_server_kill_msg(self, buff: Buffer):
+    async def _statcheck_event_chat_server_kill_msg(self, _match, buff: Buffer):
         if not self.in_bedwars_game():
             return self.client.send_packet(0x02, buff.getvalue())
 
@@ -1384,14 +1396,14 @@ class StatCheckPlugin(ProxhyPlugin):
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
                 self.client.send_packet(
                     0x38,
-                    VarInt(0),  # spawn player
-                    VarInt(1),  # number of players
+                    VarInt.pack(0),  # spawn player
+                    VarInt.pack(1),  # number of players
                     UUID.pack(u),
-                    String(killed),
-                    VarInt(0),
-                    VarInt(3),  # gamemode; spectator
-                    VarInt(0),  # ping
-                    Boolean(True),
+                    String.pack(killed),
+                    VarInt.pack(0),
+                    VarInt.pack(3),  # gamemode; spectator
+                    VarInt.pack(0),  # ping
+                    Boolean.pack(True),
                     Chat.pack(self._get_dead_display_name(killed)),
                 )
         else:

@@ -59,7 +59,7 @@ class CommandsPlugin(ProxhyPlugin):
     async def _commands_event_chat_client_command(self, _match, buff: Buffer):
         await self._run_command(buff.unpack(String))
 
-    async def _run_command(self, message: str):  # pyright: ignore[reportIncompatibleMethodOverride]
+    async def _run_command(self, message: str):
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 

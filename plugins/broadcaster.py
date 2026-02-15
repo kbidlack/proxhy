@@ -45,7 +45,7 @@ BROKER_URL = "http://163.192.4.69:3000"
 
 class BroadcastPluginState:
     BC_DATA_PATH: Path
-    clients: list[BroadcastPeerProxy]  # type: ignore
+    clients: list[BroadcastPeerProxy]
     broadcast_invites: dict[str, ConnectionRequest]
     broadcast_requests: set[str]
     compass_client: MinecraftPeerClient | None
@@ -873,7 +873,7 @@ class BroadcastPlugin(ProxhyPlugin):
             for client in self.clients:
                 if client.state == State.PLAY:
                     client.client.send_packet(
-                        packet_id, Int(client.eid) + buff_data[4:]
+                        packet_id, Int.pack(client.eid) + buff_data[4:]
                     )
         else:
             # Use transformer for other packets
@@ -897,7 +897,7 @@ class BroadcastPlugin(ProxhyPlugin):
             if client.state == State.PLAY:
                 self._spawn_player_for_client(client)
 
-    def _spawn_player_for_client(self, client: BroadcastPeerProxy):  # type: ignore
+    def _spawn_player_for_client(self, client: BroadcastPeerProxy):
         """Spawn the player entity for a specific spectator client."""
         if client.eid in self._transformer.player_spawned_for:
             return
@@ -988,7 +988,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         self._transformer.mark_spawned(client.eid)
 
-    def _ensure_player_in_tab_list(self, client: BroadcastPeerProxy):  # type: ignore
+    def _ensure_player_in_tab_list(self, client: BroadcastPeerProxy):
         """Ensure the player being watched is in the spectator's tab list."""
         # Normalize UUID to hyphenated format to match gamestate storage
         try:
