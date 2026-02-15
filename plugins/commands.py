@@ -23,6 +23,10 @@ _OTHER_COMMANDS: set[str] = {
     "player_list",
     "garlicbread",
     "fribidiskigma",
+    # for when spectating a broadcast
+    # since these are just blocked (do nothing)
+    "locraw",
+    "tip",
 }
 
 
@@ -207,10 +211,11 @@ class CommandsPlugin(ProxhyPlugin):
 
             if description or is_group:
                 hover = TextComponent(description).color("gray").italic(False)
-                if description:
-                    hover.append("\n")
                 if is_group:
-                    hover.append(TextComponent("[+]").color("dark_aqua").italic(False))
+                    prefix = "\n" if description else ""
+                    hover.append(
+                        TextComponent(f"{prefix}[+]").color("dark_aqua").italic(False)
+                    )
                     hover.appends(
                         TextComponent("- Contains multiple commands")
                         .color("gray")
