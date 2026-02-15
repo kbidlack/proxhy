@@ -34,19 +34,10 @@ class SettingsPlugin(ProxhyPlugin):
     @command("setting", "set")
     async def _command_setting(
         self,
-        setting: SettingPath = None,  # type: ignore
-        value: SettingValue = None,  # type: ignore
+        setting: SettingPath,
+        value: SettingValue,
     ):
         """Toggle or set a setting value."""
-        if setting is None:
-            return (
-                TextComponent("Usage: ")
-                .color("yellow")
-                .append(TextComponent("/setting <path> [value]").color("gold"))
-            )
-
-        # Note: SettingValue validation is now handled automatically via CommandContext
-
         # Get old state and set new state
         old_state = setting.setting.get()
         _, old_color = setting.setting.states[old_state]
