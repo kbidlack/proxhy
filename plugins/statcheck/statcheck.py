@@ -171,7 +171,7 @@ COLOR_CODE_TO_NAME = {
 }
 
 
-class PlayersWithStats(TypedDict):
+class PlayerWithStats(TypedDict):
     uuid: str
     display_name: str
     fplayer: dict[str, str | int | float] | Nick
@@ -198,7 +198,7 @@ def minecraft_uuid_v2():
 
 
 class StatCheckPluginState:
-    players_with_stats: dict[str, PlayersWithStats]
+    players_with_stats: dict[str, PlayerWithStats]
     nick_team_colors: dict[str, str]
     players_without_stats: set[str]
     final_dead: dict[str, str]
@@ -220,7 +220,7 @@ class StatCheckPluginState:
 
 class StatCheckPlugin(ProxhyPlugin):
     def _init_statcheck(self):
-        self.players_with_stats: dict[str, PlayersWithStats] = {}
+        self.players_with_stats: dict[str, PlayerWithStats] = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: set[str] = set()  # players from /who
 
@@ -459,7 +459,7 @@ class StatCheckPlugin(ProxhyPlugin):
                     continue
                 # Rebuild display name with new setting
                 display_name = self._build_player_display_name(player, fdict)
-                self.players_with_stats[player] = PlayersWithStats(
+                self.players_with_stats[player] = PlayerWithStats(
                     uuid=player_data["uuid"],
                     display_name=display_name,
                     fplayer=fdict,
@@ -492,7 +492,7 @@ class StatCheckPlugin(ProxhyPlugin):
                 continue
             # Rebuild display name with new setting
             display_name = self._build_player_display_name(player, fdict)
-            self.players_with_stats[player] = PlayersWithStats(
+            self.players_with_stats[player] = PlayerWithStats(
                 uuid=player_data["uuid"],
                 display_name=display_name,
                 fplayer=fdict,
@@ -820,7 +820,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
                     display_name = self._build_player_display_name(player.name, fdict)
 
-                    self.players_with_stats[player.name] = PlayersWithStats(
+                    self.players_with_stats[player.name] = PlayerWithStats(
                         uuid=player.uuid, display_name=display_name, fplayer=fdict
                     )
 
