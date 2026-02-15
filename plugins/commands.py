@@ -175,7 +175,9 @@ class CommandsPlugin(ProxhyPlugin):
 
             if aliases:
                 line.append(
-                    TextComponent(f" ({', '.join(aliases)})").color("dark_gray")
+                    TextComponent(
+                        f" ({', '.join(map(lambda s: f'/{s}', aliases))})"
+                    ).color("dark_gray")
                 )
 
             if description:
