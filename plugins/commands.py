@@ -167,7 +167,7 @@ class CommandsPlugin(ProxhyPlugin):
                 )
 
         for name, description, aliases, help_path, is_group in entries:
-            line = TextComponent("\n•").color("white")
+            line = TextComponent("\n  •").color("white")
             line.appends(TextComponent(f"/{name}").color("yellow"))
 
             if is_group:
@@ -179,7 +179,7 @@ class CommandsPlugin(ProxhyPlugin):
                 )
 
             if description:
-                line.hover_text(TextComponent(f" - {description}").color("gray"))
+                line.hover_text(TextComponent(f"{description}").color("gray"))
 
             line.click_event("suggest_command", f"/help {help_path}")
             line.bold(False)
