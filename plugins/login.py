@@ -9,9 +9,9 @@ from typing import Literal, Optional
 from unittest.mock import Mock
 
 import aiohttp
-import hypixel
 
 import auth
+import hypixel
 from auth.errors import AuthException
 from core.cache import Cache
 from core.events import listen_client, listen_server
@@ -60,7 +60,7 @@ class LoginPlugin(ProxhyPlugin):
 
         # load favicon
         # https://github.com/barneygale/quarry/blob/master/quarry/net/server.py/#L356-L357
-        favicon_path = files("proxhy").joinpath("assets/favicon.png")
+        favicon_path = files("assets").joinpath("favicon.png")
         with favicon_path.open("rb") as file:
             b64_favicon = (
                 base64.encodebytes(file.read()).decode("ascii").replace("\n", "")

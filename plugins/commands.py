@@ -2,17 +2,17 @@ import asyncio
 import re
 from typing import Any, Callable, Coroutine, Union
 
-from core.events import listen_client, listen_server, subscribe
-from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
-from proxhy.command import (
+from core.command import (
     Command,
     CommandArg,
     CommandContext,
+    CommandException,
     CommandGroup,
     CommandRegistry,
     command,
 )
-from proxhy.errors import CommandException
+from core.events import listen_client, listen_server, subscribe
+from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
 from proxhy.plugin import ProxhyPlugin
 
 

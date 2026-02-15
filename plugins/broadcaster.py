@@ -18,9 +18,11 @@ from broadcasting.transform import (
     build_player_list_add_packet,
     build_spawn_player_packet,
 )
+from core.command import CommandException, CommandGroup
 from core.events import listen_server, subscribe
 from core.net import State
 from core.proxy import Proxy
+from gamestate.state import Vec3d
 from protocol.datatypes import (
     UUID,
     Angle,
@@ -33,9 +35,6 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
-from proxhy.command import CommandGroup
-from proxhy.errors import CommandException
-from proxhy.gamestate import Vec3d
 from proxhy.plugin import ProxhyPlugin
 
 from .broadcastee.proxy import broadcastee_plugin_list

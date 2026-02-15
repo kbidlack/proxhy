@@ -3,7 +3,9 @@ import uuid
 from typing import Literal, Optional
 
 from broadcasting.plugin import BroadcastPeerPlugin
+from core.command import CommandException, command
 from core.events import subscribe
+from gamestate.state import PlayerAbilityFlags
 from protocol.datatypes import (
     UUID,
     Byte,
@@ -13,9 +15,6 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import ServerPlayer
-from proxhy.command import command
-from proxhy.errors import CommandException
-from proxhy.gamestate import PlayerAbilityFlags
 
 
 class BroadcastPeerBasePluginState:

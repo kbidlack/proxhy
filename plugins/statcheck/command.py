@@ -7,24 +7,23 @@ from pathlib import Path
 from typing import Any, Callable, Coroutine, Optional
 
 import hypixel
-
+from core.command import CommandException, Lazy, command
 from core.events import subscribe
-from protocol.datatypes import TextComponent
-from proxhy.argtypes import Gamemode, Gamemode_T, HypixelPlayer, Stat, Statistic
-from proxhy.command import Lazy, command
-from proxhy.errors import CommandException
-from proxhy.formatting import (
+from hypixel.formatting import (
     format_bedwars_dict,
     format_bw_star,
     get_rankname,
 )
-from proxhy.hypixels import (
+from hypixel.mappings import (
     BEDWARS_DREAM_MAPPING_SIMPLE,
     BEDWARS_MAPPING_SIMPLE,
     BEDWARS_NON_DREAM_MAPPING,
 )
+from protocol.datatypes import TextComponent
+from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
+from proxhy.argtypes.hypixel import Gamemode_T, Stat
 from proxhy.plugin import ProxhyPlugin
-from proxhy.utils import _Client
+from proxhy.utils import APIClient
 
 
 class StatcheckCommandPluginState:
@@ -170,7 +169,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
         # Resolve names to UUIDs via Mojang API
         name_to_uuid: dict[str, str] = {}
-        async with _Client() as client:
+        async with APIClient() as client:
             for name in names_to_resolve:
                 try:
                     info = await client.get_profile(name)

@@ -4,9 +4,10 @@ import struct
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from importlib.resources import files  # noqa: F401
 from io import BytesIO
 from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol, overload
+
+from assets import load_json_asset
 
 from . import nbt
 
@@ -25,10 +26,7 @@ class Pos:
     z: int = 0
 
 
-im_path = files("proxhy").joinpath("assets/item_mappings.json")
-
-with im_path.open("r") as file:
-    item_mapping = json.load(file)
+item_mapping = load_json_asset("item_mappings.json")
 
 
 @dataclass

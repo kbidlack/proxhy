@@ -1,14 +1,3 @@
-from dataclasses import dataclass
-
-
-@dataclass(frozen=True)
-class Stat:
-    name: str
-    json_key: str
-    main: str
-    aliases: list[str]
-
-
 BEDWARS_NON_DREAM_MAPPING: dict[str, str] = {
     "Solo": "eight_one",
     "Doubles": "eight_two",

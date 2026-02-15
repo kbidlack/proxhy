@@ -4,12 +4,11 @@ from pathlib import Path
 
 from platformdirs import user_config_dir
 
+from core.command import CommandException, CommandGroup, Lazy
 from core.events import subscribe
+from hypixel.formatting import get_rankname
 from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import AutoboopPlayer, HypixelPlayer
-from proxhy.command import CommandGroup, Lazy
-from proxhy.errors import CommandException
-from proxhy.formatting import get_rankname
 from proxhy.plugin import ProxhyPlugin
 
 

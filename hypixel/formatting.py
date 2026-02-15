@@ -4,12 +4,11 @@ from collections import defaultdict
 from math import floor
 
 from hypixel import Player
-
-from proxhy.argtypes import Gamemode_T
-from proxhy.hypixels import (
+from hypixel.mappings import (
     BEDWARS_DREAM_MAPPING_SIMPLE,
     BEDWARS_MAPPING_FULL,
 )
+from proxhy.argtypes.hypixel import Gamemode_T
 from proxhy.utils import safe_div
 
 

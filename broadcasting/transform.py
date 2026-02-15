@@ -11,6 +11,7 @@ This module handles converting player packets (serverbound) into entity packets
 import uuid as uuid_mod
 from typing import Callable
 
+from gamestate.state import GameState, PlayerAbilityFlags, Rotation, Vec3d
 from protocol.datatypes import (
     UUID,
     Angle,
@@ -27,7 +28,6 @@ from protocol.datatypes import (
     UnsignedByte,
     VarInt,
 )
-from proxhy.gamestate import GameState, PlayerAbilityFlags, Rotation, Vec3d
 
 from . import packets
 

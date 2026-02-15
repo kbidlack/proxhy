@@ -2,6 +2,7 @@ import math
 from textwrap import fill
 from typing import Any
 
+from core.command import command
 from core.settings import Setting, SettingGroup
 from protocol.datatypes import (
     Item,
@@ -10,7 +11,6 @@ from protocol.datatypes import (
 )
 from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import SettingPath, SettingValue
-from proxhy.command import command
 from proxhy.plugin import ProxhyPlugin
 from proxhy.settings import ProxhySettings
 

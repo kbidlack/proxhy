@@ -1,15 +1,19 @@
 import asyncio
-import json
 import re
 import uuid
 from dataclasses import dataclass, field
 from functools import lru_cache
-from importlib.resources import files
 from pathlib import Path
 from typing import Any, Callable, Optional, TypedDict
 
-import hypixel
 import keyring
+from platformdirs import user_cache_dir
+
+import hypixel
+from assets import load_json_asset
+from core.command import CommandException, command
+from core.events import listen_server, subscribe
+from gamestate.state import Team
 from hypixel import (
     ApiError,
     InvalidApiKey,
@@ -19,9 +23,11 @@ from hypixel import (
     RateLimitError,
     TimeoutError,
 )
-from platformdirs import user_cache_dir
-
-from core.events import listen_server, subscribe
+from hypixel.formatting import (
+    format_bedwars_dict,
+    format_bw_star,
+    get_rankname,
+)
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -31,34 +37,11 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.command import command
-from proxhy.errors import CommandException
-from proxhy.formatting import (
-    format_bedwars_dict,
-    format_bw_star,
-    get_rankname,
-)
-from proxhy.gamestate import Team
 from proxhy.plugin import ProxhyPlugin
 
-with (
-    files("proxhy")
-    .joinpath("assets/bedwars_maps.json")
-    .open("r", encoding="utf-8") as f
-):
-    BW_MAPS: dict = json.load(f)
-with (
-    files("proxhy")
-    .joinpath("assets/rush_mappings.json")
-    .open("r", encoding="utf-8") as f
-):
-    RUSH_MAPPINGS = json.load(f)
-with (
-    files("proxhy")
-    .joinpath("assets/bedwars_chat.json")
-    .open("r", encoding="utf-8") as file
-):
-    KILL_MSGS: list[str] = json.load(file)["kill_messages"]
+BW_MAPS: dict = load_json_asset("bedwars_maps.json")
+RUSH_MAPPINGS = load_json_asset("rush_mappings.json")
+KILL_MSGS: list[str] = load_json_asset("bedwars_chat.json")["kill_messages"]
 
 GAME_START_MESSAGE_SETS = [  # block all the game start messages
     [

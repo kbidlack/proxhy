@@ -2,6 +2,7 @@ import re
 from typing import Optional
 
 from broadcasting.plugin import BroadcastPeerPlugin
+from core.command import Command, CommandException, CommandGroup
 from core.events import subscribe
 from plugins.commands import CommandsPlugin
 from protocol.datatypes import (
@@ -10,8 +11,6 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.command import Command, CommandGroup
-from proxhy.errors import CommandException
 
 
 class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):

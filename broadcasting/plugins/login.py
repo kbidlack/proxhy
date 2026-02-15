@@ -9,6 +9,7 @@ from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import listen_client as listen
 from core.net import Server
 from core.proxy import State
+from gamestate.state import PlayerAbilityFlags
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -24,8 +25,7 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
-from proxhy.gamestate import PlayerAbilityFlags
-from proxhy.utils import _Client
+from proxhy.utils import APIClient
 
 
 class BroadcastPeerLoginPluginState:
@@ -157,7 +157,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         packets = self.proxy.gamestate.sync_broadcast_spectator(self.eid)
         self.client.send_packet(*packets[0])  # join game
 
-        async with _Client() as c:
+        async with APIClient() as c:
             try:
                 async with asyncio.timeout(2):
                     self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))

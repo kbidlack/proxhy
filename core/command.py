@@ -15,7 +15,14 @@ from typing import (
 )
 
 from protocol.datatypes import TextComponent
-from proxhy.errors import CommandException
+from proxhy.errors import ProxhyException
+
+
+class CommandException(ProxhyException):
+    """If a command has an error then stuff happens"""
+
+    def __init__(self, message: str | TextComponent):
+        self.message = message
 
 
 class Lazy[T]:

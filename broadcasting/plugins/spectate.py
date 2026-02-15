@@ -3,14 +3,17 @@ import math
 import random
 from typing import Callable, Literal
 
-import hypixel
 import numba
 import numpy as np
 from numpy.typing import NDArray
 
+import hypixel
 from broadcasting.plugin import BroadcastPeerPlugin
+from core.command import CommandException, command
 from core.events import listen_client as listen
 from core.events import subscribe
+from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
+from hypixel.formatting import get_rankname
 from plugins.window import Window
 from protocol import nbt
 from protocol.datatypes import (
@@ -30,10 +33,6 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import ServerPlayer
-from proxhy.command import command
-from proxhy.errors import CommandException
-from proxhy.formatting import get_rankname
-from proxhy.gamestate import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
 
 # camera candidates: 8 azimuths x 4 elevations x 2 radii = 64 positions
 # elevations: 45°, 35°, 25°, 15° from horizontal

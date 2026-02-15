@@ -1,9 +1,9 @@
 import asyncio
 import json
 from dataclasses import dataclass
-from importlib.resources import files
 from typing import Literal, Optional
 
+from assets import load_json_asset
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Buffer, ByteArray, Chat, Int, String
 from proxhy.plugin import ProxhyPlugin
@@ -26,10 +26,7 @@ _MAPS: dict[str, BedwarsMap] = {}
 
 
 def _load_bedwars_maps():
-    bw_maps_path = files("proxhy").joinpath("assets/bedwars_maps.json")
-
-    with bw_maps_path.open("r") as file:
-        bw_maps_data: dict = json.load(file)
+    bw_maps_data: dict = load_json_asset("bedwars_maps.json")
 
     for map_name, map_data in bw_maps_data.items():
         _MAPS[map_name] = BedwarsMap(

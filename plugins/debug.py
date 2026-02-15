@@ -1,5 +1,5 @@
+from core.command import command
 from protocol.datatypes import TextComponent
-from proxhy.command import command
 from proxhy.plugin import ProxhyPlugin
 
 # from core.events import listen_server, subscribe

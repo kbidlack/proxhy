@@ -2,8 +2,8 @@ import time
 from typing import Hashable
 
 from core.events import listen_client, subscribe
+from gamestate.state import Entity, GameState
 from protocol.datatypes import Buffer, VarInt
-from proxhy.gamestate import Entity, GameState
 from proxhy.plugin import ProxhyPlugin
 
 

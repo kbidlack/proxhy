@@ -4,6 +4,8 @@ import operator
 from collections import namedtuple
 from typing import Optional
 
+from hypixel.client import JSON_DECODER, Client
+
 from hypixel import (
     ApiError,
     ClosedSession,
@@ -12,12 +14,11 @@ from hypixel import (
     RateLimitError,
     utils,
 )
-from hypixel.client import JSON_DECODER, Client
 
 PlayerInfo = namedtuple("PlayerInfo", ("name", "uuid"))
 
 
-class _Client(Client):
+class APIClient(Client):
     # literally just adds a profile function
     # because i don't wnat to have to query twice
     # to get uuid & name
