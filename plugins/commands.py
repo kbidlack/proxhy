@@ -15,6 +15,16 @@ from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
 from proxhy.plugin import ProxhyPlugin
 
+_OTHER_COMMANDS: set[str] = {
+    "compass",
+    "samsung_ringtone",
+    "iphone_ringtone",
+    "teams",
+    "player_list",
+    "garlicbread",
+    "fribidiskigma",
+}
+
 
 class HelpPath(CommandArg):
     """Suggests command names and subcommand paths."""
@@ -97,6 +107,9 @@ class CommandsPlugin(ProxhyPlugin):
     async def _command_help(self, *path: HelpPath):
         """Show available commands or get help for a specific command."""
         if path:
+            if path[0].value.lower() == "other":
+                return self._build_help_listing(other=True)
+
             root_name = path[0].value.lower()
             cmd: Command | CommandGroup | None = self.command_registry.get(root_name)
             if cmd is None:
@@ -131,7 +144,9 @@ class CommandsPlugin(ProxhyPlugin):
 
         return self._build_help_listing()
 
-    def _build_help_listing(self, group: CommandGroup | None = None) -> TextComponent:
+    def _build_help_listing(
+        self, group: CommandGroup | None = None, *, other: bool = False
+    ) -> TextComponent:
         seen: set[int] = set()
         # (name, description, aliases, help_path, is_group)
         entries: list[tuple[str, str, list[str], str, bool]] = []
@@ -141,6 +156,9 @@ class CommandsPlugin(ProxhyPlugin):
                 if id(cmd) in seen:
                     continue
                 seen.add(id(cmd))
+                is_other = cmd.name in _OTHER_COMMANDS
+                if is_other != other:
+                    continue
                 aliases = [a for a in cmd.aliases if a != cmd.name]
                 description = cmd.description or ""
                 is_group = isinstance(cmd, CommandGroup)
@@ -156,15 +174,18 @@ class CommandsPlugin(ProxhyPlugin):
 
         entries.sort(key=lambda c: c[0])
 
-        if group is None:
-            msg = TextComponent("Available Commands").color("gold").bold()
-            msg.append(TextComponent(f" ({len(entries)})").color("gray").bold(False))
-        else:
+        if group is not None:
             msg = TextComponent(f"/{group.full_name}").color("gold").bold()
             if group.description:
                 msg.append(
                     TextComponent(f" - {group.description}").color("gray").bold(False)
                 )
+        elif other:
+            msg = TextComponent("Other Commands").color("gold").bold()
+            msg.append(TextComponent(f" ({len(entries)})").color("gray").bold(False))
+        else:
+            msg = TextComponent("Available Commands").color("gold").bold()
+            msg.append(TextComponent(f" ({len(entries)})").color("gray").bold(False))
 
         msg.append(
             TextComponent("\nHover for info.").color("gray").bold(False).italic()
@@ -184,13 +205,38 @@ class CommandsPlugin(ProxhyPlugin):
                     ).color("dark_gray")
                 )
 
-            if description:
-                line.hover_text(TextComponent(f"{description}").color("gray"))
+            if description or is_group:
+                hover = TextComponent(description).color("gray").italic(False)
+                if description:
+                    hover.append("\n")
+                if is_group:
+                    hover.append(TextComponent("[+]").color("dark_aqua").italic(False))
+                    hover.appends(
+                        TextComponent("- Contains multiple commands")
+                        .color("gray")
+                        .italic()
+                    )
+                line.hover_text(hover)
 
             line.click_event("suggest_command", f"/help {help_path}")
             line.bold(False)
 
             msg.append(line)
+
+        if group is None and not other:
+            footer = (
+                TextComponent("\n\n")
+                .bold(False)
+                .append(
+                    TextComponent(
+                        "Click to view technical, internal, and easter egg commands\n"
+                    )
+                    .color("gray")
+                    .italic()
+                    .click_event("run_command", "/help other")
+                )
+            )
+            msg.append(footer)
 
         return msg
 
