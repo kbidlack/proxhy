@@ -166,6 +166,10 @@ class CommandsPlugin(ProxhyPlugin):
                     TextComponent(f" - {group.description}").color("gray").bold(False)
                 )
 
+        msg.append(
+            TextComponent("\nHover for info.").color("gray").bold(False).italic()
+        )
+
         for name, description, aliases, help_path, is_group in entries:
             line = TextComponent("\n  •").color("white")
             line.appends(TextComponent(f"/{name}").color("yellow"))
