@@ -565,6 +565,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
 
     @command("spectate", "spec")
     async def _command_spectate(self, target: ServerPlayer):
+        """Spectate a player."""
         if target.name.casefold() == self.username.casefold():
             if self.spec_eid is None:
                 raise CommandException("You are not spectating anyone!")
@@ -578,6 +579,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
 
     @command("watch")
     async def _command_watch(self):
+        """Enter cinematic mode."""
         self.watching = True
         self._spectate(self.bat_eid)
 

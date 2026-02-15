@@ -136,10 +136,14 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
 
     @command("pos")
     async def _command_pos(self):
-        self.client.chat(str(self.gamestate.position))
+        """Get your current position."""
+        self.client.chat(
+            f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
+        )
 
     @command("fly")
     async def _command_fly(self):
+        """Enable or disable flight."""
         if self.flight == PlayerAbilityFlags.ALLOW_FLYING:
             self.flight = 0
             self.flying = 0
@@ -159,11 +163,13 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
 
     @command("locraw")
     async def _command_locraw(self):
+        """[INTERNAL] block /locraw"""
         # just do nothing
         # not really sure what we should be doing otherwise
         pass
 
     @command("tip")
     async def _command_tip(self):
+        """[INTERNAL] block /tip"""
         # see above
         pass

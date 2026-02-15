@@ -36,7 +36,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     @command("sc", "statcheck")
     async def _command_statcheck(
         self,
-        _player: Lazy[HypixelPlayer] = None,  # type: ignore[assignment]
+        _player: Optional[Lazy[HypixelPlayer]] = None,
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
     ):
@@ -47,19 +47,19 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     @command("scw", "scweekly")
     async def _command_scweekly(
         self,
-        _player: Lazy[HypixelPlayer] = None,  # type: ignore[assignment]
+        _player: Optional[Lazy[HypixelPlayer]] = None,
         mode: Gamemode = Gamemode("bedwars"),
         window: float = 7.0,
         *stats: Statistic,
     ):
-        """Check player's weekly (or timed) stats."""
+        """Check a player's weekly (or timed) stats."""
         player = await _player if _player else None
         return await self._sc_internal(player, window, mode, stat_names=stats)
 
     @command("scfull")
     async def _command_scfull(
         self,
-        _player: Lazy[HypixelPlayer] = None,  # type: ignore[assignment]
+        _player: Optional[Lazy[HypixelPlayer]] = None,
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
     ):

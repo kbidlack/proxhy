@@ -422,6 +422,7 @@ class Command:
         self.aliases = (self.name, *aliases)
         self.description = inspect.getdoc(function)
         self.usage = usage
+        self.parent: CommandGroup | None = None
 
         # Get type hints for proper annotation resolution
         try:
@@ -438,18 +439,27 @@ class Command:
             (i, p) for i, p in enumerate(self.parameters) if p.options
         ]
 
+    @property
+    def full_name(self) -> str:
+        """Get the full command path (e.g., 'broadcast trust add')."""
+        if self.parent:
+            return f"{self.parent.full_name} {self.name}"
+        return self.name
+
     def _build_usage_message(self) -> TextComponent:
         msg = TextComponent("Usage: ").color("yellow")
 
         if self.usage:
-            msg.append(TextComponent(f"/{self.name} {self.usage[0]}").color("gold"))
-            padding = " " * (len("Usage: ") + len(f"/{self.name} "))
+            msg.append(
+                TextComponent(f"/{self.full_name} {self.usage[0]}").color("gold")
+            )
+            padding = " " * (len("Usage: ") + len(f"/{self.full_name} "))
             for overload in self.usage[1:]:
                 msg.append("\n")
                 msg.append(TextComponent(padding).color("yellow"))
-                msg.append(TextComponent(f"/{self.name} {overload}").color("gold"))
+                msg.append(TextComponent(f"/{self.full_name} {overload}").color("gold"))
         else:
-            usage_parts = f"/{self.name}"
+            usage_parts = f"/{self.full_name}"
             for param in self.parameters:
                 name = param.name.lstrip("_")
                 if param.infinite:
@@ -462,7 +472,12 @@ class Command:
 
         if self.description:
             msg.append("\n")
-            msg.append(TextComponent(self.description).color("gray"))
+            msg.append(
+                # TextComponent("∟")
+                TextComponent("→")
+                .color("dark_gray")
+                .appends(TextComponent(self.description).color("gray"))
+            )
 
         return msg
 
@@ -629,9 +644,16 @@ class CommandGroup:
             return f"Added {name}={value}"
     """
 
-    def __init__(self, name: str, *aliases: str, parent: CommandGroup | None = None):
+    def __init__(
+        self,
+        name: str,
+        *aliases: str,
+        help: str | None = None,
+        parent: CommandGroup | None = None,
+    ):
         self.name = name
         self.aliases = (name, *aliases)
+        self.help = help
         self.parent = parent
 
         self._base_command: Command | None = None
@@ -639,11 +661,47 @@ class CommandGroup:
         self._subgroups: dict[str, CommandGroup] = {}
 
     @property
+    def description(self) -> str | None:
+        return self.help or (
+            self._base_command.description if self._base_command else None
+        )
+
+    @property
     def full_name(self) -> str:
         """Get the full command path (e.g., 'broadcast setting')."""
         if self.parent:
             return f"{self.parent.full_name} {self.name}"
         return self.name
+
+    def iter_subcommands(
+        self, *, recursive: bool = False
+    ) -> list[tuple[str, Command | CommandGroup]]:
+        """
+        Iterate over unique subcommands and subgroups (no alias duplicates).
+
+        Args:
+            recursive: If True, also include children of nested subgroups.
+
+        Returns a list of (full_name, cmd_or_group) tuples.
+        """
+        seen: set[int] = set()
+        result: list[tuple[str, Command | CommandGroup]] = []
+
+        for cmd in self._subcommands.values():
+            if id(cmd) in seen:
+                continue
+            seen.add(id(cmd))
+            result.append((f"{self.full_name} {cmd.name}", cmd))
+
+        for grp in self._subgroups.values():
+            if id(grp) in seen:
+                continue
+            seen.add(id(grp))
+            result.append((f"{grp.full_name}", grp))
+            if recursive:
+                result.extend(grp.iter_subcommands(recursive=True))
+
+        return result
 
     def command(
         self, name: str | None = None, *aliases: str, usage: list[str] | None = None
@@ -667,6 +725,7 @@ class CommandGroup:
 
         def decorator(func: Callable[..., Awaitable[Any]]):
             cmd = Command(func, name=name or self.name, aliases=aliases, usage=usage)
+            cmd.parent = self
 
             if name is None:
                 self._base_command = cmd
@@ -680,18 +739,19 @@ class CommandGroup:
 
         return decorator
 
-    def group(self, name: str, *aliases: str) -> CommandGroup:
+    def group(self, name: str, *aliases: str, help: str | None = None) -> CommandGroup:
         """
         Create a nested subgroup.
 
         Args:
             name: The subgroup name
             *aliases: Additional aliases for this subgroup
+            help: Optional help text for this subgroup
 
         Returns:
             The new CommandGroup instance
         """
-        subgroup = CommandGroup(name, *aliases, parent=self)
+        subgroup = CommandGroup(name, *aliases, help=help, parent=self)
 
         # Register under primary name and all aliases
         self._subgroups[name.lower()] = subgroup
@@ -717,9 +777,9 @@ class CommandGroup:
         msg.append(TextComponent("|".join(options)).color("white"))
         msg.append(TextComponent(">").color("gray"))
 
-        if self._base_command and self._base_command.description:
+        if self.description:
             msg.append("\n")
-            msg.append(TextComponent(self._base_command.description).color("gray"))
+            msg.append(TextComponent(self.description).color("gray"))
 
         return msg
 

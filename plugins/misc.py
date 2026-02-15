@@ -14,13 +14,21 @@ class MiscPluginState:
 class MiscPlugin(ProxhyPlugin):
     @command("rq")
     async def _command_requeue(self):
-        """Requeue for the last played game."""
+        """Requeue the last played game."""
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
         self.server.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
 
+    @command("pos")
+    async def _command_pos(self):
+        """Get your current position."""
+        self.client.chat(
+            f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
+        )
+
     @command("garlicbread")  # Mmm, garlic bread.
     async def _command_garlicbread(self):  # Mmm, garlic bread.
+        """Mmm, garlic bread."""  # Mmm, garlic bread.
         return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
     @command("fribidiskigma")

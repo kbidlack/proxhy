@@ -21,13 +21,14 @@ class AutoboopPluginState:
 class AutoboopPlugin(ProxhyPlugin):
     def _init_misc(self):
         self.AB_DATA_PATH = Path(user_config_dir("proxhy")) / "autoboop.db"
-        self.autoboop_group = CommandGroup("autoboop", "ab")
+        self.autoboop_group = CommandGroup("autoboop", "ab", help="Autoboop commands.")
 
         self._setup_autoboop_commands()
 
     def _setup_autoboop_commands(self):
         @self.autoboop_group.command("list", "ls")
         async def _autoboop_list(self):
+            """List all players in autoboop."""
             with shelve.open(self.AB_DATA_PATH) as db:
                 user_players = db.get(self.username, {})
                 players = sorted(user_players.keys())
@@ -44,6 +45,7 @@ class AutoboopPlugin(ProxhyPlugin):
 
         @self.autoboop_group.command("add")
         async def _autoboop_add(self, player: HypixelPlayer):
+            """Add a player to autoboop."""
             rankname = get_rankname(player._player)
             key = player.name.lower()
 
@@ -67,6 +69,7 @@ class AutoboopPlugin(ProxhyPlugin):
 
         @self.autoboop_group.command("remove", "rm")
         async def _autoboop_remove(self, _player: Lazy[AutoboopPlayer]):
+            """Remove a player from autoboop"""
             key = _player.value.lower()
 
             with shelve.open(self.AB_DATA_PATH) as db:

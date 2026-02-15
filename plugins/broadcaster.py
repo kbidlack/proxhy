@@ -81,10 +81,11 @@ class BroadcastPlugin(ProxhyPlugin):
         self._setup_compass_commands()
 
     def _setup_compass_commands(self):
-        compass = CommandGroup("compass")
+        compass = CommandGroup("compass", help="Compass client commands.")
 
         @compass.command("init")
         async def _command_compass_init(self: BroadcastPlugin):
+            """Initialize the compass client."""
             if self.compass_client is not None:
                 raise CommandException(
                     "The Compass client has already been initialized!"
@@ -97,6 +98,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @compass.command("status")
         async def _command_compass_status(self: BroadcastPlugin):
+            """Get the compass client status."""
             self.client.chat(TextComponent("Compass Client Status:").color("gold"))
             initialized = self.compass_client is not None
             self.client.chat(
@@ -125,16 +127,18 @@ class BroadcastPlugin(ProxhyPlugin):
         self.command_registry.register(compass)
 
     def _setup_broadcast_commands(self):
-        bc = CommandGroup("broadcast", "bc")
+        bc = CommandGroup("broadcast", "bc", help="Broadcast commands.")
 
         @bc.command("chat")
         async def _command_broadcast_chat(self, *message: str):
+            """Send a message to the broadcast chat."""
             if not message:
                 raise CommandException("Please provide a message to broadcast!")
             self.bc_chat(self.username, " ".join(message))
 
         @bc.command("list")
         async def _command_broadcast_list(self):
+            """List all players in the broadcast."""
             if not self.clients:
                 return TextComponent("No players are currently connected.").color(
                     "gold"
@@ -149,6 +153,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("joinid")
         async def _command_broadcast_joinid(self: BroadcastPlugin, node_id: str):
+            """Join a broadcast by Iroh node ID."""
             self.client.chat(
                 TextComponent("Joining")
                 .color("yellow")
@@ -163,6 +168,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("join")
         async def _command_broadcast_join(self, request_id: str):
+            """Join a broadcast invite."""
             if self.joining_broadcast:
                 raise CommandException(
                     TextComponent("You are already joining a broadcast!").color("red")
@@ -195,6 +201,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("accept")
         async def _command_broadcast_accept(self, request_id: str):
+            """Accept a broadcast request."""
             if self.compass_client is None:
                 raise CommandException(
                     "The compass client is not connected yet! (wait a second?)"
@@ -229,6 +236,7 @@ class BroadcastPlugin(ProxhyPlugin):
         async def _command_broadcast_slime(
             self: BroadcastPlugin, player: BroadcastPlayer
         ):
+            """Slime a player out of the broadcast."""
             client = player.client
 
             client.client.send_packet(
@@ -395,12 +403,13 @@ class BroadcastPlugin(ProxhyPlugin):
 
         self.command_registry.register(bc)
 
-        trust = bc.group("trust")
+        trust = bc.group("trust", help="Manage trusted players.")
 
         @trust.command("add")
         async def _command_broadcast_trust_add(
             self: BroadcastPlugin, player: MojangPlayer
         ):
+            """Add a trusted player."""
             with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
                 if player.uuid in db["trusted"]:
                     raise CommandException(
@@ -421,6 +430,7 @@ class BroadcastPlugin(ProxhyPlugin):
         async def _command_broadcast_untrust(
             self: BroadcastPlugin, player: MojangPlayer
         ):
+            """Remove a trusted player."""
             with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
                 if player.uuid not in db["trusted"]:
                     raise CommandException(
@@ -439,6 +449,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @trust.command("list")
         async def _command_broadcast_trust_list(self: BroadcastPlugin):
+            """List all trusted players."""
             with shelve.open(self.BC_DATA_PATH) as db:
                 players = db["trusted"].values()
 
@@ -457,8 +468,6 @@ class BroadcastPlugin(ProxhyPlugin):
                         msg.append(TextComponent(", ").color("green"))
                     msg.append(TextComponent(name).color("aqua"))
                 return msg
-
-        self.command_registry.register(trust)
 
     async def _join_broadcast_by_node_id(self, node_id: str):
         if self.joining_broadcast:

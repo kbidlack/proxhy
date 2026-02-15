@@ -4,9 +4,65 @@ from typing import Any, Callable, Coroutine, Union
 
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
-from proxhy.command import Command, CommandGroup, CommandRegistry
+from proxhy.command import (
+    Command,
+    CommandArg,
+    CommandContext,
+    CommandGroup,
+    CommandRegistry,
+    command,
+)
 from proxhy.errors import CommandException
 from proxhy.plugin import ProxhyPlugin
+
+
+class HelpPath(CommandArg):
+    """Suggests command names and subcommand paths."""
+
+    def __init__(self, value: str):
+        self.value = value
+
+    @classmethod
+    async def convert(cls, ctx: CommandContext, value: str) -> HelpPath:
+        return cls(value)
+
+    @classmethod
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
+        registry: CommandRegistry = ctx.proxy.command_registry
+        prior = ctx.raw_args[: ctx.param_index]
+
+        if not prior:
+            return [
+                name
+                for name in registry.command_names()
+                if name.startswith(partial.lower())
+            ]
+
+        root = registry.get(prior[0].lower())
+        if not isinstance(root, CommandGroup):
+            return []
+
+        group = root
+        for segment in prior[1:]:
+            lower = segment.lower()
+            if lower in group._subgroups:
+                group = group._subgroups[lower]
+            else:
+                return []
+
+        options: list[str] = []
+        seen: set[int] = set()
+        for cmd in group._subcommands.values():
+            if id(cmd) not in seen:
+                seen.add(id(cmd))
+                if cmd.name.startswith(partial.lower()):
+                    options.append(cmd.name)
+        for grp in group._subgroups.values():
+            if id(grp) not in seen:
+                seen.add(id(grp))
+                if grp.name.startswith(partial.lower()):
+                    options.append(grp.name)
+        return options
 
 
 class CommandsPluginState:
@@ -36,6 +92,101 @@ class CommandsPlugin(ProxhyPlugin):
                     self.command_registry.register(command)
             except AttributeError:
                 pass
+
+    @command("help")
+    async def _command_help(self, *path: HelpPath):
+        """Show available commands or get help for a specific command."""
+        if path:
+            root_name = path[0].value.lower()
+            cmd: Command | CommandGroup | None = self.command_registry.get(root_name)
+            if cmd is None:
+                raise CommandException(
+                    TextComponent("Unknown command '")
+                    .append(TextComponent(path[0].value).color("gold"))
+                    .append("'!")
+                )
+
+            for part in path[1:]:
+                if not isinstance(cmd, CommandGroup):
+                    raise CommandException(
+                        TextComponent("'")
+                        .append(TextComponent(cmd.name).color("gold"))
+                        .append("' has no subcommands!")
+                    )
+                lower = part.value.lower()
+                if lower in cmd._subgroups:
+                    cmd = cmd._subgroups[lower]
+                elif lower in cmd._subcommands:
+                    cmd = cmd._subcommands[lower]
+                else:
+                    raise CommandException(
+                        TextComponent("Unknown subcommand '")
+                        .append(TextComponent(part.value).color("gold"))
+                        .append("'!")
+                    )
+
+            if isinstance(cmd, CommandGroup):
+                return self._build_help_listing(cmd)
+            return cmd._build_usage_message()
+
+        return self._build_help_listing()
+
+    def _build_help_listing(self, group: CommandGroup | None = None) -> TextComponent:
+        seen: set[int] = set()
+        # (name, description, aliases, help_path, is_group)
+        entries: list[tuple[str, str, list[str], str, bool]] = []
+
+        if group is None:
+            for name, cmd in self.command_registry.all_commands().items():
+                if id(cmd) in seen:
+                    continue
+                seen.add(id(cmd))
+                aliases = [a for a in cmd.aliases if a != cmd.name]
+                description = cmd.description or ""
+                is_group = isinstance(cmd, CommandGroup)
+                entries.append((cmd.name, description, aliases, cmd.name, is_group))
+        else:
+            for sub_name, sub_cmd in group.iter_subcommands():
+                if id(sub_cmd) in seen:
+                    continue
+                seen.add(id(sub_cmd))
+                description = sub_cmd.description or ""
+                is_group = isinstance(sub_cmd, CommandGroup)
+                entries.append((sub_name, description, [], sub_name, is_group))
+
+        entries.sort(key=lambda c: c[0])
+
+        if group is None:
+            msg = TextComponent("Available Commands").color("gold").bold()
+            msg.append(TextComponent(f" ({len(entries)})").color("gray").bold(False))
+        else:
+            msg = TextComponent(f"/{group.full_name}").color("gold").bold()
+            if group.description:
+                msg.append(
+                    TextComponent(f" - {group.description}").color("gray").bold(False)
+                )
+
+        for name, description, aliases, help_path, is_group in entries:
+            line = TextComponent("\n•").color("white")
+            line.appends(TextComponent(f"/{name}").color("yellow"))
+
+            if is_group:
+                line.append(TextComponent(" [+]").color("dark_aqua"))
+
+            if aliases:
+                line.append(
+                    TextComponent(f" ({', '.join(aliases)})").color("dark_gray")
+                )
+
+            if description:
+                line.hover_text(TextComponent(f" - {description}").color("gray"))
+
+            line.click_event("suggest_command", f"/help {help_path}")
+            line.bold(False)
+
+            msg.append(line)
+
+        return msg
 
     def register_command(self, cmd: Command) -> None:
         """
@@ -90,8 +241,6 @@ class CommandsPlugin(ProxhyPlugin):
                 error_msg = TextComponent("∎ ").bold().color("blue").append(err.message)
                 if error_msg.data.get("clickEvent") is None:
                     error_msg = error_msg.click_event("suggest_command", message)
-                if error_msg.data.get("hoverEvent") is None:
-                    error_msg = error_msg.hover_text(message)
 
                 self.client.chat(error_msg)
             else:
@@ -104,8 +253,7 @@ class CommandsPlugin(ProxhyPlugin):
                         if isinstance(output, TextComponent):
                             if output.data.get("clickEvent") is None:
                                 output = output.click_event("suggest_command", message)
-                            if output.data.get("hoverEvent") is None:
-                                output = output.hover_text(message)
+
                         self.client.chat(output)
         else:
             self.server.send_packet(0x01, String.pack(message))

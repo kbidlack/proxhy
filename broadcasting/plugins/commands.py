@@ -44,8 +44,6 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                 error_msg = TextComponent("∎ ").bold().color("blue").append(err.message)
                 if error_msg.data.get("clickEvent") is None:
                     error_msg = error_msg.click_event("suggest_command", message)
-                if error_msg.data.get("hoverEvent") is None:
-                    error_msg = error_msg.hover_text(message)
 
                 self.client.chat(error_msg)
             else:
@@ -58,14 +56,11 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                         if isinstance(output, TextComponent):
                             if output.data.get("clickEvent") is None:
                                 output = output.click_event("suggest_command", message)
-                            if output.data.get("hoverEvent") is None:
-                                output = output.hover_text(message)
                         self.client.chat(output)
         else:
             self.client.chat(
                 TextComponent(f"Unknown command '{cmd_name}'")
                 .color("red")
-                .hover_text(TextComponent(message).color("yellow"))
                 .click_event("suggest_command", message)
             )
 
