@@ -251,7 +251,14 @@ class Parameter:
         self.type_hint = type_hint or param.annotation
 
         # Check for Lazy[X] wrapper — unwrap to get the inner type
+        # Also handles Optional[Lazy[X]] (i.e. Union[Lazy[X], None])
         self.is_lazy = get_origin(self.type_hint) is Lazy
+        if not self.is_lazy and _is_union_type(self.type_hint):
+            union_args = _get_union_args(self.type_hint)
+            non_none_args = [a for a in union_args if a is not type(None)]
+            if len(non_none_args) == 1 and get_origin(non_none_args[0]) is Lazy:
+                self.is_lazy = True
+                self.type_hint = non_none_args[0]
         if self.is_lazy:
             lazy_args = get_args(self.type_hint)
             self.type_hint = lazy_args[0] if lazy_args else self.type_hint

@@ -32,6 +32,16 @@ class StatcheckCommandPluginState:
 
 
 class StatcheckCommandPlugin(ProxhyPlugin):
+    SUPPORTED_GAMEMODES = {"bedwars"}
+
+    def _check_gamemode(self, gamemode: Gamemode):
+        if gamemode.mode_str not in self.SUPPORTED_GAMEMODES:
+            raise CommandException(
+                TextComponent(gamemode.display_name)
+                .color("gold")
+                .appends("is not a supported gamemode!")
+            )
+
     @command("sc", "statcheck")
     async def _command_statcheck(
         self,
@@ -40,6 +50,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         *stats: Statistic,
     ):
         """Check player stats."""
+        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(player=player, mode=mode, stat_names=stats)
 
@@ -52,6 +63,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         *stats: Statistic,
     ):
         """Check a player's weekly (or timed) stats."""
+        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(player, window, mode, stat_names=stats)
 
@@ -63,6 +75,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         *stats: Statistic,
     ):
         """Check player stats with all modes."""
+        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(
             player=player, mode=mode, stat_names=stats, display_abridged=False

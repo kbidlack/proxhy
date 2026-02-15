@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 from core.command import CommandArg, CommandException
 from protocol.datatypes import TextComponent
@@ -30,34 +30,55 @@ type Gamemode_T = Literal[
 ]
 
 
+class GameInfo(TypedDict):
+    display_name: str
+    aliases: list[str]
+
+
 class Gamemode(CommandArg):
     mode: Gamemode_T
 
-    GAMES: dict[Gamemode_T, dict[Literal["aliases"], list[str]]] = {
-        "arcade": {"aliases": ["arcade-games", "arcadegames", "arc"]},
+    GAMES: dict[Gamemode_T, GameInfo] = {
+        "arcade": {
+            "display_name": "Arcade Games",
+            "aliases": ["arcade-games", "arcadegames", "arc"],
+        },
         "bedwars": {
+            "display_name": "Bed Wars",
             "aliases": ["bedwar", "bw", "bws"],
         },
-        "blitz": {"aliases": []},
-        "build-battle": {"aliases": ["buildbattle", "bb"]},
-        "classic": {"aliases": []},
-        "cops-and-crims": {"aliases": ["copsandcrims", "copsncrims", "cnc"]},
-        "duels": {"aliases": ["duel"]},
-        "mega-walls": {"aliases": ["megawalls", "mw"]},
-        "murder-mystery": {"aliases": ["murdermystery", "mm"]},
-        "skyblock": {"aliases": ["sb"]},
-        "smash": {"aliases": ["smash-heroes", "smashheroes", "sh"]},
-        "speed-uhc": {"aliases": ["speeduhc", "suhc"]},
-        "pit": {"aliases": []},
-        "tnt": {"aliases": ["tntgames"]},
-        "uhc": {"aliases": []},
-        "warlords": {"aliases": ["wl"]},
-        "wool-games": {"aliases": ["woolgames", "wg"]},
+        "blitz": {"display_name": "Blitz Survival Games", "aliases": []},
+        "build-battle": {
+            "display_name": "Build Battle",
+            "aliases": ["buildbattle", "bb"],
+        },
+        "classic": {"display_name": "Classic Games", "aliases": []},
+        "cops-and-crims": {
+            "display_name": "Cops and Crims",
+            "aliases": ["copsandcrims", "copsncrims", "cnc"],
+        },
+        "duels": {"display_name": "Duels", "aliases": ["duel"]},
+        "mega-walls": {"display_name": "Mega Walls", "aliases": ["megawalls", "mw"]},
+        "murder-mystery": {
+            "display_name": "Murder Mystery",
+            "aliases": ["murdermystery", "mm"],
+        },
+        "skyblock": {"display_name": "SkyBlock", "aliases": ["sb"]},
+        "smash": {
+            "display_name": "Smash Heroes",
+            "aliases": ["smash-heroes", "smashheroes", "sh"],
+        },
+        "speed-uhc": {"display_name": "Speed UHC", "aliases": ["speeduhc", "suhc"]},
+        "pit": {"display_name": "The Pit", "aliases": []},
+        "tnt": {"display_name": "TNT Games", "aliases": ["tntgames"]},
+        "uhc": {"display_name": "UHC Champions", "aliases": []},
+        "warlords": {"display_name": "Warlords", "aliases": ["wl"]},
+        "wool-games": {"display_name": "Wool Games", "aliases": ["woolgames", "wg"]},
     }
 
     @staticmethod
     def _build_reverse_lookup(
-        games: dict[Gamemode_T, dict[Literal["aliases"], list[str]]],
+        games: dict[Gamemode_T, GameInfo],
     ) -> dict[str, Gamemode_T]:
         out: dict[str, Gamemode_T] = {}
         for canonical, data in games.items():
@@ -70,6 +91,7 @@ class Gamemode(CommandArg):
 
     def __init__(self, mode_str: Gamemode_T):
         self.mode_str = mode_str  # e.g. "bedwars" or "skywars"
+        self.display_name = self.GAMES[mode_str]["display_name"]
 
     @classmethod
     async def convert(cls, ctx: CommandContext, value: str) -> Gamemode:
