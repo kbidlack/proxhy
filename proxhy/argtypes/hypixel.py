@@ -388,6 +388,31 @@ class Submode(CommandArg):
                 out[alias] = canonical
         return out
 
+    @staticmethod
+    def _build_all_lookups(
+        submodes: dict[Gamemode_T, dict[str, SubNode]],
+    ) -> dict[int, dict[str, str]]:
+        lookups: dict[int, dict[str, str]] = {}
+
+        def _traverse(level: dict[str, SubNode]):
+            if id(level) in lookups:
+                return
+            out: dict[str, str] = {}
+            for canonical, node in level.items():
+                out[canonical] = canonical
+                for alias in node.aliases:
+                    out[alias] = canonical
+                if node.children is not None:
+                    _traverse(node.children)
+            lookups[id(level)] = out
+
+        for level in submodes.values():
+            _traverse(level)
+
+        return lookups
+
+    _LOOKUPS = _build_all_lookups(SUBMODES)
+
     def __init__(self, name: str, node: SubNode):
         self.name = name
         self.node = node
@@ -414,7 +439,7 @@ class Submode(CommandArg):
         for raw in ctx.raw_args[mode_index + 1 : ctx.param_index]:
             if level is None:
                 return None
-            lookup = cls._build_reverse_lookup(level)
+            lookup = cls._LOOKUPS[id(level)]
             canonical = lookup.get(raw.lower().strip())
             if canonical is None:
                 return None
@@ -437,7 +462,7 @@ class Submode(CommandArg):
                 TextComponent(path).color("gold").appends("does not have any submodes!")
             )
 
-        lookup = cls._build_reverse_lookup(level)
+        lookup = cls._LOOKUPS[id(level)]
         canonical = lookup.get(s)
         if canonical is None:
             options = ", ".join(sorted(level.keys()))
