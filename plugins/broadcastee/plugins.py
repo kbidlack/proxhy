@@ -59,13 +59,13 @@ class BroadcasteeSettingsPlugin(BroadcasteePlugin):
     @listen_server(0x3F)
     async def packet_client_plugin_message(self, buff: Buffer):
         channel = buff.unpack(String)  # e.g. PROXHY|Events for proxhy events channel
-        data = buff.read()
+        data = Buffer(buff.read())
 
         await self.emit(f"plugin:{channel}", data)
 
     @subscribe(r"plugin:PROXHY\|Events")
-    async def _event_login_success(self, _match, _data):
-        if Buffer(_data).unpack(String) == "login_success":
+    async def _event_login_success(self, _match: re.Match, buff: Buffer):
+        if buff.unpack(String) == "login_success":
             for setting in self.settings.broadcast.get_all_settings():
                 value = setting.get()
                 self.server.send_packet(

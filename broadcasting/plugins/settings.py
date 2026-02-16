@@ -40,14 +40,12 @@ class BroadcastPeerSettingsPlugin(BroadcastPeerPlugin, SettingsPlugin):
         channel = buff.unpack(
             String
         )  # e.g. PROXHY|Settings for proxhy settings channel
-        data = buff.read()
+        data = Buffer(buff.read())
 
         await self.emit(f"plugin:{channel}", data)
 
     @subscribe(r"plugin:PROXHY\|Settings")
-    async def _settings_event_plugin_message(self, _match, data: bytes):
-        buff = Buffer(data)
-
+    async def _settings_event_plugin_message(self, _match, buff: Buffer):
         setting_path, old_value, new_value = (buff.unpack(String) for _ in range(3))
 
         # TODO: log these failures if they happen
