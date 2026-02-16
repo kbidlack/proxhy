@@ -1,3 +1,4 @@
+from .commands import HelpPath
 from .hypixel import Gamemode, Statistic, Submode
 from .players import (
     AutoboopPlayer,
@@ -25,4 +26,6 @@ __all__ = (
     # ./settings.py
     "SettingPath",
     "SettingValue",
+    # ./commands.py
+    "HelpPath",
 )
