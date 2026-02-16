@@ -1,16 +1,19 @@
 from plugins.chat import ChatPlugin
-from plugins.commands import CommandsPlugin
 from plugins.gamestate import GameStatePlugin
 from plugins.settings import SettingsPlugin
 from plugins.window import WindowPlugin
 
-from .plugins import BroadcasteeClosePlugin, BroadcasteeSettingsPlugin
+from .plugins import (
+    BroadcasteeClosePlugin,
+    BroadcasteeCommandsPlugin,
+    BroadcasteeSettingsPlugin,
+)
 
 broadcastee_plugin_list: tuple[type, ...] = (
     BroadcasteeClosePlugin,
     BroadcasteeSettingsPlugin,
+    BroadcasteeCommandsPlugin,
     ChatPlugin,
-    CommandsPlugin,
     SettingsPlugin,
     WindowPlugin,
     GameStatePlugin,

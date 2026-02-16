@@ -5,16 +5,19 @@ from typing import TYPE_CHECKING
 
 import pyroh
 
-from core.events import listen_server, subscribe
+from core.command import command
+from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from core.plugin import Plugin
+from plugins.broadcastee.plugin import BroadcasteePlugin
+from plugins.commands import CommandsPlugin
 from protocol.datatypes import Buffer, Short, String, VarInt
 
 if TYPE_CHECKING:
     from proxhy.settings import ProxhySettings
 
 
-class BroadcasteeClosePlugin(Plugin):
+class BroadcasteeClosePlugin(BroadcasteePlugin):
     @subscribe("close")
     async def _broadcastee_event_close(self, _match, _data):
         typing.cast(pyroh.StreamWriter, self.server.writer)
@@ -50,7 +53,7 @@ class BroadcasteeClosePlugin(Plugin):
         self.state = State.PLAY
 
 
-class BroadcasteeSettingsPlugin(Plugin):
+class BroadcasteeSettingsPlugin(BroadcasteePlugin):
     settings: ProxhySettings
 
     @listen_server(0x3F)
@@ -85,3 +88,17 @@ class BroadcasteeSettingsPlugin(Plugin):
             String.pack(old_value),
             String.pack(new_value),
         )
+
+
+class BroadcasteeCommandsPlugin(CommandsPlugin, Plugin):
+    @command("help")
+    async def _command_help(self, *args: str):
+        self.server.chat(f"/help {' '.join(args)}")
+
+    @listen_client(0x14)
+    async def packet_tab_complete(self, buff: Buffer):
+        self.server.send_packet(0x14, buff.getvalue())
+
+    @listen_server(0x3A)
+    async def packet_server_tab_complete(self, buff: Buffer):
+        self.client.send_packet(0x3A, buff.getvalue())

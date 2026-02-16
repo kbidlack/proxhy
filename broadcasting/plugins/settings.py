@@ -9,7 +9,6 @@ from core.settings import Setting, SettingsStorage
 from plugins.settings import SettingsPlugin
 from protocol.datatypes import (
     Buffer,
-    ByteArray,
     String,
 )
 
