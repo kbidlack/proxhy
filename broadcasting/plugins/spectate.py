@@ -475,14 +475,19 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             if pos.y < -100:
                 owner = self.proxy.username
                 self.client.chat(
-                    TextComponent(f"Click here to teleport back to {owner}")
+                    TextComponent("Click here to teleport back to")
                     .color("green")
                     .bold()
+                    .appends(TextComponent(owner).color("aqua"))
                     .click_event(
                         "run_command",
                         f"/tp {owner}",
                     )
-                    .hover_text(TextComponent(f"Teleport to {owner}").color("yellow"))
+                    .hover_text(
+                        TextComponent("Teleport to")
+                        .color("yellow")
+                        .appends(TextComponent(owner).color("aqua"))
+                    )
                 )
                 await asyncio.sleep(10)
             else:

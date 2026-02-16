@@ -324,13 +324,13 @@ class BroadcastPlugin(ProxhyPlugin):
             except httpx.HTTPStatusError as e:
                 raise CommandException(
                     TextComponent("Unable to connect to ")
-                    .append(TextComponent(name).color("blue"))
+                    .append(TextComponent(name).color("gold"))
                     .append(f" due to a compass error :( ({e.response.status_code})")
                 )
             except asyncio.TimeoutError:
                 raise CommandException(
                     TextComponent(expired_msg)
-                    .append(TextComponent(name).color("blue"))
+                    .append(TextComponent(name).color("gold"))
                     .append(" expired!")
                 )
             finally:
@@ -350,7 +350,7 @@ class BroadcastPlugin(ProxhyPlugin):
             if result is None:
                 raise CommandException(
                     TextComponent(player.name)
-                    .color("aqua")
+                    .color("gold")
                     .appends("denied your invite!")
                 )
             reader, writer = result
@@ -370,7 +370,7 @@ class BroadcastPlugin(ProxhyPlugin):
             if result is None:
                 raise CommandException(
                     TextComponent(player.name)
-                    .color("aqua")
+                    .color("gold")
                     .appends("denied your request!")
                 )
             # If we get here, the request was accepted - join their broadcast
@@ -413,7 +413,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 if player.uuid in db["trusted"]:
                     raise CommandException(
                         TextComponent(player.name)
-                        .color("aqua")
+                        .color("gold")
                         .appends("is already in your trusted player list!")
                     )
                 db["trusted"][player.uuid] = player.name
@@ -434,7 +434,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 if player.uuid not in db["trusted"]:
                     raise CommandException(
                         TextComponent(player.name)
-                        .color("aqua")
+                        .color("gold")
                         .appends("is not in your trusted players list!")
                     )
                 del db["trusted"][player.uuid]
@@ -442,7 +442,7 @@ class BroadcastPlugin(ProxhyPlugin):
             self.client.chat(
                 TextComponent("Removed")
                 .color("red")
-                .appends(TextComponent(player.name).color("aqua"))
+                .appends(TextComponent(player.name).color("gold"))
                 .appends("from trusted players!")
             )
 

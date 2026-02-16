@@ -130,7 +130,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         return (
             TextComponent("Teleported to ")
             .color("green")
-            .append(TextComponent(f"{x:.1f}, {y:.1f}, {z:.1f}").color("gold"))
+            .append(TextComponent(f"{x:.1f}, {y:.1f}, {z:.1f}").color("aqua"))
         )
 
     @command("pos")
