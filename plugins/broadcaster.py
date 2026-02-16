@@ -388,17 +388,26 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("server")
         async def _command_broadcast_server(self: BroadcastPlugin):
-            # TODO: add more info?
-            return (
-                TextComponent("Server Node ID:")
-                .color("green")
-                .appends(
-                    TextComponent(self.broadcast_pyroh_server.node_id)
-                    .color("yellow")
-                    .hover_text(TextComponent("Get Node ID to copy").color("yellow"))
-                    .click_event("suggest_command", self.broadcast_pyroh_server.node_id)
+            try:
+                # TODO: add more info?
+                return (
+                    TextComponent("Server Node ID:")
+                    .color("green")
+                    .appends(
+                        TextComponent(self.broadcast_pyroh_server.node_id)
+                        .color("yellow")
+                        .hover_text(
+                            TextComponent("Get Node ID to copy").color("yellow")
+                        )
+                        .click_event(
+                            "suggest_command", self.broadcast_pyroh_server.node_id
+                        )
+                    )
                 )
-            )
+            except AttributeError:
+                raise CommandException(
+                    "The broadcast server has not been initialized yet!"
+                )
 
         self.command_registry.register(bc)
 

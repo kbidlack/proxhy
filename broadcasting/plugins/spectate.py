@@ -1,19 +1,18 @@
 import asyncio
 import math
 import random
-from typing import Callable, Literal
+from typing import Callable, Literal, Optional, TypedDict
 
+import hypixel
 import numba
 import numpy as np
 from numpy.typing import NDArray
 
-import hypixel
 from broadcasting.plugin import BroadcastPeerPlugin
 from core.command import CommandException, command
 from core.events import listen_client as listen
 from core.events import subscribe
 from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
-from hypixel.formatting import get_rankname
 from plugins.window import Window
 from protocol import nbt
 from protocol.datatypes import (
@@ -33,6 +32,11 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import ServerPlayer
+from proxhypixel.formatting import (
+    SUPPORTED_MODES,
+    format_player_dict,
+    get_rankname,
+)
 
 # camera candidates: 8 azimuths x 4 elevations x 2 radii = 64 positions
 # elevations: 45°, 35°, 25°, 15° from horizontal
@@ -596,6 +600,10 @@ class PlayerSpectateWindow(Window):
         self.proxy = proxy
         self.entity = entity
 
+        self.health: Optional[float] = None
+        self.display_name: str = self.entity.name
+        self.player: Optional[hypixel.Player] = None
+
         super().__init__(
             proxy=self.proxy,  # type: ignore
             window_title=entity.name,
@@ -603,7 +611,7 @@ class PlayerSpectateWindow(Window):
             num_slots=9,
         )
 
-        asyncio.create_task(self._load_rankname())
+        asyncio.create_task(self._load_details())
         self.set_slot(
             1,
             SlotData(
@@ -638,32 +646,62 @@ class PlayerSpectateWindow(Window):
         )
         asyncio.create_task(self._update_slots())
 
-    async def _load_rankname(self):
-        def _set_slot_helper(display_name: str):
-            self.set_slot(
-                0,
-                SlotData(
-                    item=Item.from_name("minecraft:skull"),
-                    damage=3,
-                    nbt=nbt.dumps(
-                        nbt.from_dict(
-                            {
-                                "SkullOwner": self.entity.name,
-                                "display": {"Name": display_name},
-                            }
-                        )
-                    ),
-                ),
+    class Details(TypedDict):
+        Name: str
+        Lore: list[str]
+
+    def _update(self):
+        self.health = self.proxy.proxy.get_health(self.entity.name)
+
+        if self.player is not None:
+            if self.proxy.proxy.game.gametype in SUPPORTED_MODES:
+                self.fdict = format_player_dict(
+                    self.player,
+                    self.proxy.proxy.game.gametype,  # type: ignore
+                    # TODO: for now ^ type ignore
+                )
+                self.display_name = self.proxy.proxy._build_player_display_name(
+                    self.entity.name, self.fdict
+                )
+            else:
+                self.display_name = get_rankname(self.player)
+
+        details = self.Details(Name=f"{self.display_name}", Lore=[])
+        if self.health is not None:
+            details["Lore"].append(
+                TextComponent("Health:")
+                .color("yellow")
+                .appends(TextComponent(str(int(self.health))).color("white"))
+                .append(TextComponent("❤").color("red"))
+                .to_legacy()
             )
 
-        _set_slot_helper(f"Loading {self.entity.name}'s rank name...")
-        try:
-            rankname = get_rankname(
-                await self.proxy.proxy.hypixel_client.player(self.entity.name)
+        if self.player is not None:
+            details["Lore"].append(
+                TextComponent("Hypixel Level:")
+                .color("yellow")
+                .appends(TextComponent(str(self.player.level)).color("dark_aqua"))
+                .to_legacy()
             )
+
+        self.set_slot(
+            0,
+            SlotData(
+                item=Item.from_name("minecraft:skull"),
+                damage=3,
+                nbt=nbt.dumps(
+                    nbt.from_dict({"SkullOwner": self.entity.name, "display": details})
+                ),
+            ),
+        )
+        self.update()
+
+    async def _load_details(self):
+        self.display_name = f"Loading {self.entity.name}'s name..."
+        try:
+            self.player = await self.proxy.proxy.hypixel_client.player(self.entity.name)
         except hypixel.HypixelException:
-            _set_slot_helper(self.entity.name)
-        _set_slot_helper(rankname)
+            self.display_name = self.entity.name
 
     async def _update_slots(self):
         def _or_glass_pane(sd: SlotData, display_name: str) -> SlotData:
@@ -700,7 +738,7 @@ class PlayerSpectateWindow(Window):
                     4: _or_glass_pane(self.entity.equipment.held, "Main hand empty"),
                 }
             )
-            self.update()
+            self._update()
             await asyncio.sleep(1 / 20)
 
     async def _ender_eye_callback(

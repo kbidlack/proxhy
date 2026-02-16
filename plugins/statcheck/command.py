@@ -5,26 +5,26 @@ import re
 from pathlib import Path
 from typing import Any, Callable, Coroutine, Optional
 
+import hypixel
 import orjson
 
-import hypixel
 from core.command import CommandException, Lazy, command
 from core.events import subscribe
-from hypixel.formatting import (
-    format_bedwars_dict,
-    format_bw_star,
-    get_rankname,
-)
-from hypixel.mappings import (
-    BEDWARS_DREAM_MAPPING_SIMPLE,
-    BEDWARS_MAPPING_SIMPLE,
-    BEDWARS_NON_DREAM_MAPPING,
-)
 from protocol.datatypes import TextComponent
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import Gamemode_T, Stat
 from proxhy.plugin import ProxhyPlugin
 from proxhy.utils import APIClient
+from proxhypixel.formatting import (
+    format_bedwars_dict,
+    format_bw_star,
+    get_rankname,
+)
+from proxhypixel.mappings import (
+    BEDWARS_DREAM_MAPPING_SIMPLE,
+    BEDWARS_MAPPING_SIMPLE,
+    BEDWARS_NON_DREAM_MAPPING,
+)
 
 
 class StatcheckCommandPluginState:

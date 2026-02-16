@@ -729,6 +729,42 @@ class TextComponent:
             return cls(root.data["extra"][0])
         return root
 
+    _REVERSE_COLORS: dict[str, str] = {v: k for k, v in COLOR_CODES.items()}
+    _REVERSE_FORMATS: dict[str, str] = {
+        v: k for k, v in FORMAT_CODES.items() if v != "reset"
+    }
+
+    def to_legacy(self) -> str:
+        """Convert this TextComponent to a legacy §-formatted string."""
+        parts: list[str] = []
+        self._build_legacy(self.data, parts)
+        return "".join(parts)
+
+    @classmethod
+    def _build_legacy(cls, data: dict | str | list, parts: list[str]) -> None:
+        if isinstance(data, str):
+            parts.append(data)
+            return
+        if isinstance(data, list):
+            for item in data:
+                cls._build_legacy(item, parts)
+            return
+
+        prefix = ""
+        color = data.get("color")
+        if color and color in cls._REVERSE_COLORS:
+            prefix += f"§{cls._REVERSE_COLORS[color]}"
+        for fmt, code in cls._REVERSE_FORMATS.items():
+            if data.get(fmt):
+                prefix += f"§{code}"
+
+        text = data.get("text", "")
+        if text or prefix:
+            parts.append(f"{prefix}{text}")
+
+        for child in data.get("extra", []):
+            cls._build_legacy(child, parts)
+
 
 class Chat(DataType[str, str]):
     """Chat message from the server - enhanced with TextComponent support"""

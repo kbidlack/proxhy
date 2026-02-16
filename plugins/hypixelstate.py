@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Callable, Literal, Optional
 
 import orjson
 
@@ -78,6 +78,7 @@ class HypixelStatePluginState:
     received_locraw: asyncio.Event
     received_who: asyncio.Event
     entity_id: int
+    get_health: Callable[[str], Optional[int | float]]
 
 
 class HypixelStatePlugin(ProxhyPlugin):
@@ -137,3 +138,18 @@ class HypixelStatePlugin(ProxhyPlugin):
                 self.client_type = "lunar"
             elif b"vanilla" in data:
                 self.client_type = "vanilla"
+
+    def get_health(self, player_name: str) -> Optional[float]:
+        health = None
+
+        for name, score in (self.gamestate.scores.get("health") or {}).items():
+            if name.casefold() == player_name.casefold():
+                health = float(score.value)
+
+        if player_name.casefold() == self.username.casefold():
+            health = float(self.gamestate.health)
+
+        if health is not None:
+            return round(health, 1)
+
+        return None

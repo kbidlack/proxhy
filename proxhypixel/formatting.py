@@ -4,49 +4,111 @@ from collections import defaultdict
 from math import floor
 
 from hypixel import Player
-from hypixel.mappings import (
+from hypixel.color import Color
+
+from proxhy.argtypes.hypixel import Gamemode_T
+from proxhy.utils import safe_div
+from proxhypixel.mappings import (
     BEDWARS_DREAM_MAPPING_SIMPLE,
     BEDWARS_MAPPING_FULL,
 )
-from proxhy.argtypes.hypixel import Gamemode_T
-from proxhy.utils import safe_div
+
+SUPPORTED_MODES: set[Gamemode_T] = {"bedwars"}
 
 
-def get_rank(player: Player):
-    if player.rank == "VIP":
+def _resolve_player(player: Player | dict) -> dict:
+    """Return the raw player data dict from a Player or dict."""
+    if isinstance(player, dict):
+        return player
+    return player._data
+
+
+def _resolve_rank(data: dict) -> str | None:
+    """Resolve rank string from raw player data, mirroring hypixel.py logic."""
+    pr = data.get("packageRank")
+    npr = data.get("newPackageRank")
+    mpr = data.get("monthlyPackageRank")
+    prefix = data.get("prefix")
+    rank = data.get("rank")
+    if prefix:
+        # strip §X color codes and brackets
+        for c in (
+            "§0",
+            "§1",
+            "§2",
+            "§3",
+            "§4",
+            "§5",
+            "§6",
+            "§7",
+            "§8",
+            "§9",
+            "§a",
+            "§b",
+            "§c",
+            "§d",
+            "§e",
+            "§f",
+        ):
+            prefix = prefix.replace(c, "")
+        return prefix.replace("[", "").replace("]", "")
+    elif rank:
+        if rank == "YOUTUBER":
+            return "YOUTUBE"
+        elif pr:
+            return pr.replace("_", "").replace("PLUS", "+")
+        elif rank == "NORMAL":
+            return None
+        return rank.replace("_", " ")
+    elif mpr == "SUPERSTAR":
+        return "MVP++"
+    elif npr and npr != "NONE":
+        return npr.replace("_", "").replace("PLUS", "+")
+    return None
+
+
+def get_rank(player: Player | dict):
+    data = _resolve_player(player)
+    rank = _resolve_rank(data)
+    if rank == "VIP":
         return "§a[VIP]"
-    elif player.rank == "VIP+":
+    elif rank == "VIP+":
         return "§a[VIP§6+§a]"
-    elif player.rank == "MVP":
+    elif rank == "MVP":
         return "§b[MVP]"
-    elif player.rank == "MVP+":
+    elif rank == "MVP+":
         plus = return_plus_color(player)
         return f"§b[MVP{plus}+§b]"
-    elif player.rank == "MVP++":
+    elif rank == "MVP++":
         plus = return_plus_color(player)
         return f"§6[MVP{plus}++§6]"
-    elif player.rank == "ADMIN" or player.rank == "OWNER":
-        return f"§c[{player.rank}]"
-    elif player.rank == "GAME MASTER":
+    elif rank == "ADMIN" or rank == "OWNER":
+        return f"§c[{rank}]"
+    elif rank == "GAME MASTER":
         return "§2[GM]"
-    elif player.rank == "YOUTUBE":
+    elif rank == "YOUTUBE":
         return "§c[§fYOUTUBE§c]"
-    elif player.rank == "PIG+++":
+    elif rank == "PIG+++":
         return "§d[PIG§b+++§d]"
     return "§7"  # if there are any other weird ranks because you never know ig, also nons lol
 
 
-def get_rankname(player: Player):
+def get_rankname(player: Player | dict) -> str:
+    data = _resolve_player(player)
     rank = get_rank(player)
-    sep: str = "" if player.rank == "NONE" else " "  # no space for non
-    return sep.join((f"{rank}", f"{player.name}"))
+    name = data.get("displayname", "")
+    sep = " "
+    return sep.join((f"{rank}", f"{name}"))
 
 
-def return_plus_color(player: Player):
-    if player.plus_color:
-        return player.plus_color.chat_code
-    else:
-        return "§c"
+def return_plus_color(player: Player | dict):
+    data = _resolve_player(player)
+    plus_color_name = data.get("rankPlusColor")
+    if plus_color_name:
+        color = Color.from_type(plus_color_name)
+        if color:
+            return color.chat_code
+    return "§c"
 
 
 def format_other(other):
@@ -465,9 +527,20 @@ def format_sw_star(level, player: Player):
     return stars
 
 
-def format_player_dict(data: dict, gamemode: Gamemode_T):
+def format_player_dict(player: Player | dict, gamemode: Gamemode_T):
+    data = _resolve_player(player)
     if gamemode == "bedwars":
-        return format_bedwars_dict(data)
+        bedwars_data = data.get("stats", {}).get("Bedwars", {})
+        fdict = dict(format_bedwars_dict(bedwars_data))
+        level = bedwars_data.get("bedwars_level", 1)
+        finals = bedwars_data.get("final_kills_bedwars", 0)
+        final_deaths = bedwars_data.get("final_deaths_bedwars", 0)
+        fdict["star"] = format_bw_star(level)
+        fdict["raw_level"] = level
+        fdict["raw_fkdr"] = safe_div(finals, final_deaths)
+        fdict["rankname"] = get_rankname(data)
+        fdict["raw_name"] = data.get("displayname", "")
+        return fdict
     else:
         raise NotImplementedError("this is not implemented 🤯")
 

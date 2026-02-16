@@ -6,14 +6,8 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable, Optional, TypedDict
 
-import keyring
-from platformdirs import user_cache_dir
-
 import hypixel
-from assets import load_json_asset
-from core.command import CommandException, command
-from core.events import listen_server, subscribe
-from gamestate.state import Team
+import keyring
 from hypixel import (
     ApiError,
     InvalidApiKey,
@@ -23,11 +17,12 @@ from hypixel import (
     RateLimitError,
     TimeoutError,
 )
-from hypixel.formatting import (
-    format_bedwars_dict,
-    format_bw_star,
-    get_rankname,
-)
+from platformdirs import user_cache_dir
+
+from assets import load_json_asset
+from core.command import CommandException, command
+from core.events import listen_server, subscribe
+from gamestate.state import Team
 from protocol.datatypes import (
     UUID,
     Boolean,
@@ -38,6 +33,10 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.plugin import ProxhyPlugin
+from proxhypixel.formatting import (
+    SUPPORTED_MODES,
+    format_player_dict,
+)
 
 BW_MAPS: dict = load_json_asset("bedwars_maps.json")
 RUSH_MAPPINGS = load_json_asset("rush_mappings.json")
@@ -199,6 +198,7 @@ class StatCheckPluginState:
     update_stats_complete: asyncio.Event
     hypixel_client: hypixel.Client
     hypixel_api_key: str
+    _build_player_display_name: Callable[[str, dict | Nick], str]
 
 
 class StatCheckPlugin(ProxhyPlugin):
@@ -678,7 +678,7 @@ class StatCheckPlugin(ProxhyPlugin):
                 return
 
             # update stats in tab in a game, bw supported so far
-            if self.game.gametype not in {"bedwars"}:
+            if self.game.gametype not in SUPPORTED_MODES:
                 return
 
             # not in an updatable stats mode
@@ -782,15 +782,9 @@ class StatCheckPlugin(ProxhyPlugin):
                     # Only cache actual Player objects, not Nick objects
                     if not isinstance(player, (PlayerNotFound, Nick)):
                         self._cached_players[player.name] = player
-                        bedwars_data = player._data.get("stats", {}).get("Bedwars", {})
-                        fdict: dict[str, Any] | Nick = dict(
-                            format_bedwars_dict(bedwars_data)
+                        fdict: dict[str, Any] | Nick = format_player_dict(
+                            player, "bedwars"
                         )
-                        fdict["star"] = format_bw_star(player.bedwars.level)
-                        fdict["raw_level"] = player.bedwars.level
-                        fdict["raw_fkdr"] = player.bedwars.fkdr
-                        fdict["rankname"] = get_rankname(player)
-                        fdict["raw_name"] = player.name
                     elif isinstance(player, Nick):  # nicked player
                         # get team color for nicked player
                         for team in self.gamestate.teams.values():
