@@ -168,7 +168,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         pass
 
     @command("tip")
-    async def _command_tip(self):
+    async def _command_tip(self, *args):
         """[INTERNAL] block /tip"""
         # see above
         pass

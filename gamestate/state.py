@@ -382,14 +382,45 @@ class GameState:
 
         return metadata
 
-    def _parse_chunk_section(self, buff: Buffer, has_sky_light: bool) -> ChunkSection:
-        """Parse a chunk section from buffer."""
-        section = ChunkSection()
-        section.blocks = bytearray(buff.read(8192))
-        section.block_light = bytearray(buff.read(2048))
+    def _parse_chunk_column(
+        self,
+        buff: Buffer,
+        primary_bitmask: int,
+        has_sky_light: bool,
+        ground_up_continuous: bool,
+        chunk: Chunk,
+    ) -> None:
+        """Parse a chunk column from buffer using the 1.8 data layout.
+
+        In 1.8, the data is ordered by type across all sections:
+        1. All sections' block data (8192 bytes each)
+        2. All sections' block light (2048 bytes each)
+        3. All sections' sky light (2048 bytes each, if overworld)
+        4. Biome data (256 bytes, if ground-up continuous)
+        """
+        # Pass 1: Read block data for all included sections
+        for section_y in range(16):
+            if primary_bitmask & (1 << section_y):
+                section = ChunkSection()
+                section.blocks = bytearray(buff.read(8192))
+                chunk.sections[section_y] = section
+
+        # Pass 2: Read block light for all included sections
+        for section_y in range(16):
+            if primary_bitmask & (1 << section_y):
+                if section := chunk.sections[section_y]:
+                    section.block_light = bytearray(buff.read(2048))
+
+        # Pass 3: Read sky light for all included sections (overworld only)
         if has_sky_light:
-            section.sky_light = bytearray(buff.read(2048))
-        return section
+            for section_y in range(16):
+                if primary_bitmask & (1 << section_y):
+                    if section := chunk.sections[section_y]:
+                        section.sky_light = bytearray(buff.read(2048))
+
+        # Pass 4: Read biome data
+        if ground_up_continuous:
+            chunk.biomes = bytearray(buff.read(256))
 
     # =========================================================================
     # Packet Handlers
@@ -841,14 +872,9 @@ class GameState:
         has_sky_light = self.dimension == Dimension.OVERWORLD
         chunk = Chunk(x=chunk_x, z=chunk_z, has_sky_light=has_sky_light)
 
-        data_buff = Buffer(data)
-        for section_y in range(16):
-            if primary_bitmask & (1 << section_y):
-                section = self._parse_chunk_section(data_buff, has_sky_light)
-                chunk.sections[section_y] = section
-
-        if ground_up_continuous:
-            chunk.biomes = bytearray(data_buff.read(256))
+        self._parse_chunk_column(
+            Buffer(data), primary_bitmask, has_sky_light, ground_up_continuous, chunk
+        )
 
         self.chunks[(chunk_x, chunk_z)] = chunk
 
@@ -923,12 +949,8 @@ class GameState:
         for chunk_x, chunk_z, primary_bitmask in chunk_metas:
             chunk = Chunk(x=chunk_x, z=chunk_z, has_sky_light=sky_light_sent)
 
-            for section_y in range(16):
-                if primary_bitmask & (1 << section_y):
-                    section = self._parse_chunk_section(buff, sky_light_sent)
-                    chunk.sections[section_y] = section
+            self._parse_chunk_column(buff, primary_bitmask, sky_light_sent, True, chunk)
 
-            chunk.biomes = bytearray(buff.read(256))
             self.chunks[(chunk_x, chunk_z)] = chunk
 
     def _handle_explosion(self, buff: Buffer) -> None:
@@ -1978,14 +2000,18 @@ class GameState:
             if primary_bitmask == 0:
                 continue  # Skip empty chunks
 
-            # Build chunk data
+            # Build chunk data in 1.8 layout order:
+            # all blocks, then all block light, then all sky light, then biomes
             chunk_data = b""
             for section in chunk.sections:
                 if section is not None:
                     chunk_data += bytes(section.blocks)
+            for section in chunk.sections:
+                if section is not None:
                     chunk_data += bytes(section.block_light)
-                    if section.sky_light is not None:
-                        chunk_data += bytes(section.sky_light)
+            for section in chunk.sections:
+                if section is not None and section.sky_light is not None:
+                    chunk_data += bytes(section.sky_light)
 
             # Add biome data
             chunk_data += bytes(chunk.biomes)
