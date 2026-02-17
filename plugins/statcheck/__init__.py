@@ -353,7 +353,7 @@ class StatCheckPlugin(ProxhyPlugin):
             (
                 f"{fdict['star']}{color['code']}",
                 name,
-                f" §7| {fkdr}",
+                f"§7| {fkdr}",
             )
         )
 
