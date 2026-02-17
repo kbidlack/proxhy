@@ -109,7 +109,7 @@ class GameState:
         self.on_ground: bool = False
 
         # Player health and food
-        self.health: float = 20.0
+        self.base_health: float = 20.0
         self.food: int = 20
         self.food_saturation: float = 5.0
 
@@ -208,6 +208,15 @@ class GameState:
 
         # Packet handlers
         self._handlers: dict[int, Callable[[Buffer], None]] = self._init_handlers()
+
+    @property
+    def health(self) -> float:
+        """Health including absorption hearts."""
+        health = self.base_health
+        player_entity = self.entities.get(self.player_entity_id)
+        if player_entity and 17 in player_entity.metadata:
+            health += player_entity.metadata[17].value
+        return health
 
     def _init_handlers(self) -> dict[int, Callable[[Buffer], None]]:
         """Initialize packet handlers."""
@@ -443,7 +452,7 @@ class GameState:
 
     def _handle_update_health(self, buff: Buffer) -> None:
         """Handle Update Health packet (0x06)."""
-        self.health = buff.unpack(Float)
+        self.base_health = buff.unpack(Float)
         self.food = buff.unpack(VarInt)
         self.food_saturation = buff.unpack(Float)
 
@@ -1825,7 +1834,7 @@ class GameState:
     def _build_update_health(self) -> Packet:
         """Build Update Health packet (0x06)."""
         data = (
-            Float.pack(self.health)
+            Float.pack(self.base_health)
             + VarInt.pack(self.food)
             + Float.pack(self.food_saturation)
         )
