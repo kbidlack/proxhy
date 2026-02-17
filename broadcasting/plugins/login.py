@@ -25,7 +25,7 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
-from proxhy.utils import APIClient
+from proxhy.utils import APIClient, offline_uuid, uuid_version
 
 
 class BroadcastPeerLoginPluginState:
@@ -101,6 +101,31 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
         self.username = buff.unpack(String)
+
+        self.uuid = str(offline_uuid(self.username))
+        self.skin_properties = None
+        profile_ready = asyncio.Event()
+
+        async def fetch_profile():
+            try:
+                async with APIClient() as c:
+                    async with asyncio.timeout(2):
+                        self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
+                        self.skin_properties = await c.get_skin_properties(self.uuid)
+            except asyncio.TimeoutError:
+                self.proxy.client.chat(
+                    TextComponent("Failed to fetch uuid for")
+                    .color("dark_red")
+                    .appends(TextComponent(self.username).color("gold"))
+                )
+            finally:
+                profile_ready.set()
+
+        if uuid_version(self.proxy.gamestate.player_uuid) == 3:
+            profile_ready.set()
+        else:
+            asyncio.create_task(fetch_profile())
+
         if self.username in self.proxy.broadcast_requests:
             # might not be if joining by ID
             self.proxy.broadcast_requests.remove(self.username)
@@ -117,7 +142,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # self.client.send_packet(
         #     0x02, String.pack(self.uuid), String.pack(self.username)
         # )
-        await self.emit("login_success")
 
         # send respawn to a different dimension first,
         # then join, then respawn back. this forces the client to properly
@@ -159,20 +183,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         packets = self.proxy.gamestate.sync_broadcast_spectator(self.eid)
         self.client.send_packet(*packets[0])  # join game
 
-        async with APIClient() as c:
-            try:
-                async with asyncio.timeout(2):
-                    self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
-                    self.skin_properties = await c.get_skin_properties(self.uuid)
-            except asyncio.TimeoutError:
-                self.proxy.client.chat(
-                    TextComponent("Failed to fetch uuid for")
-                    .color("dark_red")
-                    .appends(TextComponent(self.username).color("gold"))
-                )
-                self.uuid = str(uuid.uuid4())
-                self.skin_properties = None
-
         self.state = State.PLAY
 
         # set compression
@@ -184,19 +194,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.client.send_packet(0x46, VarInt.pack(self.client.compression_threshold))
         await self.client.drain()
         self.client.compression = True
-
-        properties_data = b""
-        if self.skin_properties:
-            properties_data = VarInt.pack(len(self.skin_properties))
-            for prop in self.skin_properties:
-                properties_data += String.pack(prop.get("name", ""))
-                properties_data += String.pack(prop.get("value", ""))
-                has_sig = prop.get("signature") is not None
-                properties_data += Boolean.pack(has_sig)
-                if has_sig:
-                    properties_data += String.pack(prop["signature"])
-        else:
-            properties_data = VarInt.pack(0)
 
         for packet_id, packet_data in packets[1:]:
             self.client.send_packet(packet_id, packet_data)
@@ -222,6 +219,21 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
                 # 0x04 = Entity Equipment
                 # 0x3E = Teams (for NPC nametag prefixes/suffixes)
                 self.client.send_packet(packet_id, packet_data)
+
+        await profile_ready.wait()
+
+        properties_data = b""
+        if self.skin_properties:
+            properties_data = VarInt.pack(len(self.skin_properties))
+            for prop in self.skin_properties:
+                properties_data += String.pack(prop.get("name", ""))
+                properties_data += String.pack(prop.get("value", ""))
+                has_sig = prop.get("signature") is not None
+                properties_data += Boolean.pack(has_sig)
+                if has_sig:
+                    properties_data += String.pack(prop["signature"])
+        else:
+            properties_data = VarInt.pack(0)
 
         self.client.send_packet(
             0x38,
@@ -249,15 +261,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Float.pack(rot.yaw),
             Float.pack(rot.pitch),
             Byte.pack(0),  # flags: all absolute
-        )
-
-        # resend player abilities (allow flying in adventure mode) so respawn doesn't clear them
-        abilities_flags = int(PlayerAbilityFlags.INVULNERABLE | self.flight)
-        self.client.send_packet(
-            0x39,
-            Byte.pack(abilities_flags)
-            + Float.pack(self.flight_speed)
-            + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
         await self.client.drain()
@@ -328,6 +331,17 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         self.client.send_packet(
             0x3F, String.pack("PROXHY|Events"), String.pack("login_success")
+        )
+
+        await self.emit("login_success")
+        # resend player abilities (allow flying in adventure mode) so respawn doesn't clear them
+        # needs to be after login success to get flight_speed
+        abilities_flags = int(PlayerAbilityFlags.INVULNERABLE | self.flight)
+        self.client.send_packet(
+            0x39,
+            Byte.pack(abilities_flags)
+            + Float.pack(self.flight_speed)
+            + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
         await self.client.drain()
 
