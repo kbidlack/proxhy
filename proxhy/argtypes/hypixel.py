@@ -7,89 +7,176 @@ from protocol.datatypes import TextComponent
 if TYPE_CHECKING:
     from core.command import CommandContext
 
-# https://hypixel.fandom.com/wiki/Commands
-type Gamemode_T = Literal[
+# https://api.hypixel.net/v2/resources/games
+type GAMETYPE_T = Literal[
     "arcade",
+    "arena",
+    "battleground",
     "bedwars",
-    "blitz",
-    "build-battle",
-    "classic",
-    "cops-and-crims",
+    "build_battle",
     "duels",
-    "mega-walls",
-    "murder-mystery",
+    "gingerbread",
+    "mcgo",
+    "murder_mystery",
+    "paintball",
+    "pit",
+    "quakecraft",
     "skyblock",
     "skywars",
-    "smash",
-    "speed-uhc",
-    "pit",
-    "tnt",
+    "speed_uhc",
+    "super_smash",
+    "survival_games",
+    "tntgames",
     "uhc",
-    "warlords",
-    "wool-games",
+    "vampirez",
+    "walls",
+    "walls3",
+    "wool_games",
 ]
 
 
 class GameInfo(TypedDict):
     display_name: str
+    main_alias: str
     aliases: list[str]
 
 
 class Gamemode(CommandArg):
-    mode: Gamemode_T
+    mode: GAMETYPE_T
 
-    GAMES: dict[Gamemode_T, GameInfo] = {
+    GAMES: dict[GAMETYPE_T, GameInfo] = {
         "arcade": {
             "display_name": "Arcade Games",
+            "main_alias": "arcade",
             "aliases": ["arcade-games", "arcadegames", "arc"],
+        },
+        "arena": {
+            "display_name": "Arena Brawl",
+            "main_alias": "arena",
+            "aliases": ["arena-brawl", "arenabrawl"],
+        },
+        "battleground": {
+            "display_name": "Warlords",
+            "main_alias": "warlords",
+            "aliases": ["wl"],
         },
         "bedwars": {
             "display_name": "Bed Wars",
+            "main_alias": "bedwars",
             "aliases": ["bedwar", "bw", "bws"],
         },
-        "blitz": {"display_name": "Blitz Survival Games", "aliases": []},
-        "build-battle": {
+        "build_battle": {
             "display_name": "Build Battle",
+            "main_alias": "build_battle",
             "aliases": ["buildbattle", "bb"],
         },
-        "classic": {"display_name": "Classic Games", "aliases": []},
-        "cops-and-crims": {
+        "duels": {
+            "display_name": "Duels",
+            "main_alias": "duels",
+            "aliases": ["duel"],
+        },
+        "gingerbread": {
+            "display_name": "Turbo Kart Racers",
+            "main_alias": "tkr",
+            "aliases": ["turbo-kart-racers", "turbokartracers"],
+        },
+        "mcgo": {
             "display_name": "Cops and Crims",
+            "main_alias": "cops_and_crims",
             "aliases": ["copsandcrims", "copsncrims", "cnc"],
         },
-        "duels": {"display_name": "Duels", "aliases": ["duel"]},
-        "mega-walls": {"display_name": "Mega Walls", "aliases": ["megawalls", "mw"]},
-        "murder-mystery": {
+        "murder_mystery": {
             "display_name": "Murder Mystery",
+            "main_alias": "murder_mystery",
             "aliases": ["murdermystery", "mm"],
         },
-        "skyblock": {"display_name": "SkyBlock", "aliases": ["sb"]},
-        "smash": {
+        "paintball": {
+            "display_name": "Paintball",
+            "main_alias": "paintball",
+            "aliases": [],
+        },
+        "pit": {
+            "display_name": "The Pit",
+            "main_alias": "pit",
+            "aliases": [],
+        },
+        "quakecraft": {
+            "display_name": "Quakecraft",
+            "main_alias": "quake",
+            "aliases": ["quakecraft"],
+        },
+        "skyblock": {
+            "display_name": "SkyBlock",
+            "main_alias": "skyblock",
+            "aliases": ["sb"],
+        },
+        "skywars": {
+            "display_name": "SkyWars",
+            "main_alias": "skywars",
+            "aliases": ["sw"],
+        },
+        "speed_uhc": {
+            "display_name": "Speed UHC",
+            "main_alias": "speed_uhc",
+            "aliases": ["speeduhc", "suhc"],
+        },
+        "super_smash": {
             "display_name": "Smash Heroes",
+            "main_alias": "smash",
             "aliases": ["smash-heroes", "smashheroes", "sh"],
         },
-        "speed-uhc": {"display_name": "Speed UHC", "aliases": ["speeduhc", "suhc"]},
-        "pit": {"display_name": "The Pit", "aliases": []},
-        "tnt": {"display_name": "TNT Games", "aliases": ["tntgames"]},
-        "uhc": {"display_name": "UHC Champions", "aliases": []},
-        "warlords": {"display_name": "Warlords", "aliases": ["wl"]},
-        "wool-games": {"display_name": "Wool Games", "aliases": ["woolgames", "wg"]},
+        "survival_games": {
+            "display_name": "Blitz Survival Games",
+            "main_alias": "blitz",
+            "aliases": ["blitz-survival-games", "bsg"],
+        },
+        "tntgames": {
+            "display_name": "TNT Games",
+            "main_alias": "tnt",
+            "aliases": ["tnt-games", "tntgames"],
+        },
+        "uhc": {
+            "display_name": "UHC Champions",
+            "main_alias": "uhc",
+            "aliases": [],
+        },
+        "vampirez": {
+            "display_name": "VampireZ",
+            "main_alias": "vampirez",
+            "aliases": ["vz"],
+        },
+        "walls": {
+            "display_name": "Walls",
+            "main_alias": "walls",
+            "aliases": [],
+        },
+        "walls3": {
+            "display_name": "Mega Walls",
+            "main_alias": "mega_walls",
+            "aliases": ["megawalls", "mw"],
+        },
+        "wool_games": {
+            "display_name": "Wool Games",
+            "main_alias": "wool_games",
+            "aliases": ["woolgames", "wg"],
+        },
     }
 
     @staticmethod
     def _build_reverse_lookup(
-        games: dict[Gamemode_T, GameInfo],
-    ) -> dict[str, Gamemode_T]:
-        out: dict[str, Gamemode_T] = {}
+        games: dict[GAMETYPE_T, GameInfo],
+    ) -> dict[str, GAMETYPE_T]:
+        out: dict[str, GAMETYPE_T] = {}
         for canonical, data in games.items():
             out[canonical] = canonical
+            out[data["main_alias"]] = canonical
             for alias in data["aliases"]:
                 out[alias] = canonical
         return out
 
     GAME_LOOKUP = _build_reverse_lookup(GAMES)
 
-    def __init__(self, mode_str: Gamemode_T):
+    def __init__(self, mode_str: GAMETYPE_T):
         self.mode_str = mode_str  # e.g. "bedwars" or "skywars"
         self.display_name = self.GAMES[mode_str]["display_name"]
 
@@ -107,10 +194,14 @@ class Gamemode(CommandArg):
             )
 
     @classmethod
-    async def suggest(cls, ctx: CommandContext, partial: str) -> list[Gamemode_T]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         s = partial.lower().strip()
 
-        return [g for g in cls.GAMES.keys() if g.startswith(s)]
+        return [
+            data["main_alias"]
+            for data in cls.GAMES.values()
+            if data["main_alias"].startswith(s)
+        ]
 
 
 @dataclass
@@ -133,7 +224,7 @@ class SubNode:
 
 
 class Submode(CommandArg):
-    SUBMODES: dict[Gamemode_T, dict[str, SubNode]] = {
+    SUBMODES: dict[GAMETYPE_T, dict[str, SubNode]] = {
         "arcade": {
             "zombies-prison": SubNode.leaf("arcade_zombies_prison", ["zp"]),
             "zombies-dead-end": SubNode.leaf("arcade_zombies_dead_end", ["zde"]),
@@ -159,6 +250,16 @@ class Submode(CommandArg):
             "blocking-dead": SubNode.leaf("arcade_day_one"),
             "creeper-attack": SubNode.leaf("arcade_creeper_defense"),
             "bounty-hunters": SubNode.leaf("arcade_bounty_hunters"),
+        },
+        "arena": {
+            "1v1": SubNode.leaf("arena_1v1"),
+            "2v2": SubNode.leaf("arena_2v2"),
+            "4v4": SubNode.leaf("arena_4v4"),
+        },
+        "battleground": {
+            "team-deathmatch": SubNode.leaf("warlords_team_deathmatch", ["tdm"]),
+            "domination": SubNode.leaf("warlords_domination", ["dom"]),
+            "ctf": SubNode.leaf("warlords_ctf_mini"),
         },
         "bedwars": {
             "solo": SubNode.leaf("bedwars_eight_one", ["solos", "1s"]),
@@ -200,11 +301,7 @@ class Submode(CommandArg):
             ),
             "castle": SubNode.leaf("bedwars_castle"),
         },
-        "blitz": {
-            "solo": SubNode.leaf("blitz_solo_normal", ["solos"]),
-            "teams": SubNode.leaf("blitz_teams_normal"),
-        },
-        "build-battle": {
+        "build_battle": {
             "solo": SubNode.leaf("build_battle_solo_normal", ["solos"]),
             "solo-1.14": SubNode.leaf(
                 "build_battle_solo_normal_latest", ["solos-1.14"]
@@ -212,30 +309,6 @@ class Submode(CommandArg):
             "teams": SubNode.leaf("build_battle_teams_normal"),
             "pro": SubNode.leaf("build_battle_solo_pro"),
             "guess-the-build": SubNode.leaf("build_battle_guess_the_build", ["gtb"]),
-        },
-        "classic": {
-            "walls": SubNode.leaf("walls"),
-            "vampirez": SubNode.leaf("vampirez", ["vz"]),
-            "tkr": SubNode.leaf("tkr", ["turbo-kart-racers"]),
-            "quake": SubNode.branch(
-                {
-                    "solo": SubNode.leaf("quake_solo"),
-                    "teams": SubNode.leaf("quake_teams"),
-                }
-            ),
-            "paintball": SubNode.leaf("paintball"),
-            "arena": SubNode.branch(
-                {
-                    "1v1": SubNode.leaf("arena_1v1"),
-                    "2v2": SubNode.leaf("arena_2v2"),
-                    "4v4": SubNode.leaf("arena_4v4"),
-                }
-            ),
-        },
-        "cops-and-crims": {
-            "defusal": SubNode.leaf("mcgo_normal"),
-            "gun-game": SubNode.leaf("mcgo_gungame", ["gg"]),
-            "team-deathmatch": SubNode.leaf("mcgo_deathmatch", ["tdm"]),
         },
         "duels": {
             "uhc": SubNode.branch(
@@ -288,15 +361,23 @@ class Submode(CommandArg):
             "bow": SubNode.leaf("duels_bow_duel"),
             "blitz": SubNode.leaf("duels_blitz_duel"),
         },
-        "mega-walls": {
-            "standard": SubNode.leaf("mw_standard"),
-            "face-off": SubNode.leaf("mw_face_off"),
+        "gingerbread": {},
+        "mcgo": {
+            "defusal": SubNode.leaf("mcgo_normal"),
+            "gun-game": SubNode.leaf("mcgo_gungame", ["gg"]),
+            "team-deathmatch": SubNode.leaf("mcgo_deathmatch", ["tdm"]),
         },
-        "murder-mystery": {
+        "murder_mystery": {
             "classic": SubNode.leaf("murder_classic"),
             "double-up": SubNode.leaf("murder_double_up"),
             "assassins": SubNode.leaf("murder_assassins"),
             "infection": SubNode.leaf("murder_infection"),
+        },
+        "paintball": {},
+        "pit": {},
+        "quakecraft": {
+            "solo": SubNode.leaf("quake_solo"),
+            "teams": SubNode.leaf("quake_teams"),
         },
         "skyblock": {},
         "skywars": {
@@ -340,19 +421,22 @@ class Submode(CommandArg):
                 }
             ),
         },
-        "smash": {
+        "speed_uhc": {
+            "solo": SubNode.leaf("speed_solo_normal"),
+            "teams": SubNode.leaf("speed_team_normal"),
+        },
+        "super_smash": {
             "solo": SubNode.leaf("super_smash_solo_normal"),
             "2v2": SubNode.leaf("super_smash_2v2_normal"),
             "teams": SubNode.leaf("super_smash_teams_normal"),
             "1v1": SubNode.leaf("super_smash_1v1_normal"),
             "friends": SubNode.leaf("super_smash_friends_normal"),
         },
-        "speed-uhc": {
-            "solo": SubNode.leaf("speed_solo_normal"),
-            "teams": SubNode.leaf("speed_team_normal"),
+        "survival_games": {
+            "solo": SubNode.leaf("blitz_solo_normal", ["solos"]),
+            "teams": SubNode.leaf("blitz_teams_normal"),
         },
-        "pit": {},
-        "tnt": {
+        "tntgames": {
             "tnt-run": SubNode.leaf("tnt_tntrun"),
             "tnt-tag": SubNode.leaf("tnt_tntag"),
             "pvp-run": SubNode.leaf("tnt_pvprun"),
@@ -363,12 +447,13 @@ class Submode(CommandArg):
             "solo": SubNode.leaf("uhc_solo"),
             "teams": SubNode.leaf("uhc_teams"),
         },
-        "warlords": {
-            "team-deathmatch": SubNode.leaf("warlords_team_deathmatch", ["tdm"]),
-            "domination": SubNode.leaf("warlords_domination", ["dom"]),
-            "ctf": SubNode.leaf("warlords_ctf_mini"),
+        "vampirez": {},
+        "walls": {},
+        "walls3": {
+            "standard": SubNode.leaf("mw_standard"),
+            "face-off": SubNode.leaf("mw_face_off"),
         },
-        "wool-games": {
+        "wool_games": {
             "wool-wars": SubNode.leaf("wool_wool_wars_two_four", ["ww"]),
             "sheep-wars": SubNode.leaf("wool_sheep_wars_two_six", ["sw"]),
             "ctw": SubNode.leaf(
@@ -390,7 +475,7 @@ class Submode(CommandArg):
 
     @staticmethod
     def _build_all_lookups(
-        submodes: dict[Gamemode_T, dict[str, SubNode]],
+        submodes: dict[GAMETYPE_T, dict[str, SubNode]],
     ) -> dict[int, dict[str, str]]:
         lookups: dict[int, dict[str, str]] = {}
 
@@ -423,7 +508,7 @@ class Submode(CommandArg):
 
     @classmethod
     def _resolve_current_level(cls, ctx: CommandContext) -> dict[str, SubNode] | None:
-        mode: Gamemode_T | None = None
+        mode: GAMETYPE_T | None = None
         mode_index = -1
         for i, raw in enumerate(ctx.raw_args):
             if m := Gamemode.GAME_LOOKUP.get(raw.lower().strip()):
@@ -495,7 +580,7 @@ class Stat:
 
 
 class Statistic(CommandArg):
-    STATS: dict[Gamemode_T, dict[str, Stat]] = {
+    STATS: dict[GAMETYPE_T, dict[str, Stat]] = {
         "bedwars": {
             # custom
             "fkdr": Stat(
@@ -865,7 +950,7 @@ class Statistic(CommandArg):
 
     @staticmethod
     def _build_stat_lookup(
-        stats: dict[Gamemode_T, dict[str, Stat]],
+        stats: dict[GAMETYPE_T, dict[str, Stat]],
     ) -> dict[str, dict[str, Stat]]:
         out: dict[str, dict[str, Stat]] = {}
 

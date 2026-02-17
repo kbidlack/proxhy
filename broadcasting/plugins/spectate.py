@@ -657,8 +657,7 @@ class PlayerSpectateWindow(Window):
             if self.proxy.proxy.game.gametype in SUPPORTED_MODES:
                 self.fdict = format_player_dict(
                     self.player,
-                    self.proxy.proxy.game.gametype,  # type: ignore
-                    # TODO: for now ^ type ignore
+                    self.proxy.proxy.game.gametype,
                 )
                 self.display_name = self.proxy.proxy._build_player_display_name(
                     self.entity.name, self.fdict

@@ -12,7 +12,7 @@ from core.command import CommandException, Lazy, command
 from core.events import subscribe
 from protocol.datatypes import TextComponent
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
-from proxhy.argtypes.hypixel import Gamemode_T, Stat
+from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
 from proxhy.plugin import ProxhyPlugin
 from proxhy.utils import APIClient
 from proxhypixel.formatting import (
@@ -210,7 +210,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             f.writelines(new_lines)
 
     def _find_closest_stat_log(
-        self, uuid: str, window: float, gamemode: Gamemode_T
+        self, uuid: str, window: float, gamemode: GAMETYPE_T
     ) -> tuple[dict, datetime.datetime]:
         now = datetime.datetime.now()
         target_time = now - datetime.timedelta(days=window)

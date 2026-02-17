@@ -7,6 +7,7 @@ import orjson
 from assets import load_json_asset
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Buffer, ByteArray, Chat, Int, String
+from proxhy.argtypes.hypixel import GAMETYPE_T
 from proxhy.plugin import ProxhyPlugin
 
 
@@ -44,7 +45,7 @@ _load_bedwars_maps()
 @dataclass
 class Game:
     server: str = ""
-    gametype: str = ""
+    gametype: GAMETYPE_T | Literal[""] = ""
     mode: str = ""
     map: Optional[BedwarsMap] = None
     lobbyname: str = ""

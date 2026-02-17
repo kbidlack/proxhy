@@ -6,14 +6,14 @@ from math import floor
 from hypixel import Player
 from hypixel.color import Color
 
-from proxhy.argtypes.hypixel import Gamemode_T
+from proxhy.argtypes.hypixel import GAMETYPE_T
 from proxhy.utils import safe_div
 from proxhypixel.mappings import (
     BEDWARS_DREAM_MAPPING_SIMPLE,
     BEDWARS_MAPPING_FULL,
 )
 
-SUPPORTED_MODES: set[Gamemode_T] = {"bedwars"}
+SUPPORTED_MODES: set[GAMETYPE_T] = {"bedwars"}
 
 
 def _resolve_player(player: Player | dict) -> dict:
@@ -527,7 +527,7 @@ def format_sw_star(level, player: Player):
     return stars
 
 
-def format_player_dict(player: Player | dict, gamemode: Gamemode_T):
+def format_player_dict(player: Player | dict, gamemode: GAMETYPE_T):
     data = _resolve_player(player)
     if gamemode == "bedwars":
         bedwars_data = data.get("stats", {}).get("Bedwars", {})
