@@ -38,20 +38,23 @@ class Player(CommandArg):
     @classmethod
     async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """
-        Suggest player names from server player list and dead players.
-
-        Checks for:
-        - proxy.players: Current players on server (dict uuid -> name)
-        - proxy.all_players: All players including dead (set of names)
+        Suggest player names from all_players (includes dead/eliminated)
+        or fall back to the gamestate player list.
         """
         suggestions: set[str] = set()
         partial_lower = partial.lower()
 
-        gamestate = _resolve_in_proxy_chain(ctx.proxy, "gamestate")
-        if gamestate is not None and hasattr(gamestate, "player_list"):
-            for _, player_info in gamestate.player_list.items():
-                if player_info.name.lower().startswith(partial_lower):
-                    suggestions.add(player_info.name)
+        all_players = _resolve_in_proxy_chain(ctx.proxy, "all_players")
+        if all_players is not None:
+            for name in all_players:
+                if name.lower().startswith(partial_lower):
+                    suggestions.add(name)
+        else:
+            gamestate = _resolve_in_proxy_chain(ctx.proxy, "gamestate")
+            if gamestate is not None:
+                for name in gamestate.real_players():
+                    if name.lower().startswith(partial_lower):
+                        suggestions.add(name)
 
         return sorted(suggestions)
 

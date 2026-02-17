@@ -233,21 +233,14 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @property
     def all_players(self) -> set[str]:
-        if self.game.gametype == "bedwars" and self.game.started:
-            real_player_teams: list[Team] = [
-                team
-                for team in self.gamestate.teams.values()
-                if re.match("§.§l[A-Z] §r§.", team.prefix)
-            ]
+        all_players = self.real_players()
 
-            real_players = set()
-            for player in set(self.players.values()):
-                if any(player in team.members for team in real_player_teams):
-                    real_players.add(player)
+        if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
+            all_players |= self.dead.keys()
+        if self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
+            all_players |= self.final_dead.keys()
 
-            return real_players | self.dead.keys() | self.final_dead.keys()
-        else:
-            return set(self.players.values())
+        return all_players
 
     @property
     def hypixel_api_key(self):

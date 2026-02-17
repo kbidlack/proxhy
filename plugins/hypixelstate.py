@@ -17,6 +17,7 @@ class HypixelStatePluginState:
     received_who: asyncio.Event
     entity_id: int
     get_health: Callable[[str], Optional[int | float]]
+    real_players: Callable[[], set[str]]
 
 
 class HypixelStatePlugin(ProxhyPlugin):
@@ -91,3 +92,6 @@ class HypixelStatePlugin(ProxhyPlugin):
             return round(health, 1)
 
         return None
+
+    def real_players(self) -> set[str]:
+        return self.gamestate.real_players()

@@ -77,6 +77,7 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
+from proxhy.utils import uuid_version
 
 type Packet = tuple[int, bytes]
 
@@ -1633,6 +1634,13 @@ class GameState:
             if player.name == name:
                 return player
         return None
+
+    def real_players(self) -> set[str]:
+        return {
+            p.name
+            for p in self.player_list.values()
+            if uuid_version(p.uuid) not in (None, 2)
+        }
 
     def get_slot(self, window_id: int, slot: int) -> SlotData | None:
         """

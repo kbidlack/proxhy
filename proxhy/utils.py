@@ -1,10 +1,9 @@
 import asyncio
 import inspect
 import operator
+import uuid as _uuid
 from collections import namedtuple
 from typing import Optional
-
-from hypixel.client import JSON_DECODER, Client
 
 from hypixel import (
     ApiError,
@@ -14,6 +13,7 @@ from hypixel import (
     RateLimitError,
     utils,
 )
+from hypixel.client import JSON_DECODER, Client
 
 PlayerInfo = namedtuple("PlayerInfo", ("name", "uuid"))
 
@@ -176,6 +176,13 @@ def safe_div(a: int | float, b: int | float) -> float:
         return float(a)
     else:
         return round(a / b, 2)
+
+
+def uuid_version(value: str) -> Optional[int]:
+    try:
+        return _uuid.UUID(value).version
+    except ValueError:
+        return None
 
 
 def current_ln() -> Optional[int]:
