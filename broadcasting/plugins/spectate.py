@@ -32,6 +32,7 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import ServerPlayer
+from proxhy.utils import uuid_version
 from proxhypixel.formatting import (
     SUPPORTED_MODES,
     format_player_dict,
@@ -555,12 +556,14 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         entity = self.gamestate.get_entity(target)
         if action == 0:
             if isinstance(entity, Player):
+                if uuid_version(entity.uuid) == 2:  # is npc
+                    return self._spectate(target)
                 spectate_player_menu = PlayerSpectateWindow(self, entity)
                 spectate_player_menu.open()
             elif isinstance(entity, Entity):
-                self._spectate(target)  # TODO: what?
+                return self._spectate(target)  # TODO: what?
             else:
-                self._spectate(target)
+                return self._spectate(target)
 
     def _find_eid(self, target: ServerPlayer):
         if target.name.casefold() == self.proxy.username.casefold():
