@@ -339,8 +339,10 @@ class StatCheckPlugin(ProxhyPlugin):
         else:
             fkdr = fdict["fkdr"]
 
-        show_rankname = self.settings.bedwars.tablist.show_rankname.get()
-        name = fdict["rankname"] if show_rankname == "ON" else fdict["raw_name"]
+        show_rankname = (self.settings.bedwars.tablist.show_rankname.get() == "ON") or (
+            not color["code"]
+        )
+        name = fdict["rankname"] if show_rankname else fdict["raw_name"]
 
         display_name = " ".join(
             (
@@ -350,8 +352,11 @@ class StatCheckPlugin(ProxhyPlugin):
             )
         )
 
-        prefix = color["code"] + "§l" + color["letter"] + "§r"
-        return prefix + " " + display_name
+        if color["code"] and color["letter"]:
+            prefix = color["code"] + "§l" + color["letter"] + "§r"
+        else:
+            prefix = ""
+        return (prefix + " " + display_name).strip()
 
     def _get_dead_display_name(self, player_name: str) -> str:
         """Get the grayed-out display name for a dead player.

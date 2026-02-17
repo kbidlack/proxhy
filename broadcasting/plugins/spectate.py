@@ -721,7 +721,7 @@ class PlayerSpectateWindow(Window):
             )
             return nsd if sd.item is None else sd
 
-        while self.open:
+        while self._open and self.proxy.open:
             self.set_slots(
                 {
                     8: _or_glass_pane(self.entity.equipment.boots, "Boots slot empty"),

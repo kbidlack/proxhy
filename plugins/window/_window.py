@@ -32,15 +32,15 @@ class _HasClientAndWindows(Protocol):
     windows: dict[int, "Window"]
 
 
-def ensure_open(open=True):
-    def decorator(func):
+def ensure_open[F: Callable[..., object]](open: bool = True) -> Callable[[F], F]:
+    def decorator(func: F) -> F:
         @wraps(func)
-        def wrapper(self: Window, *args, **kwargs):
+        def wrapper(self: Window, *args: object, **kwargs: object) -> object:
             if self._open == open:
                 return func(self, *args, **kwargs)
             return lambda: None
 
-        return wrapper
+        return wrapper  # type: ignore[return-value]
 
     return decorator
 

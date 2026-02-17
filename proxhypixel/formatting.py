@@ -97,7 +97,7 @@ def get_rankname(player: Player | dict) -> str:
     data = _resolve_player(player)
     rank = get_rank(player)
     name = data.get("displayname", "")
-    sep = " "
+    sep = " " if rank != "§7" else ""  # no space for nons
     return sep.join((f"{rank}", f"{name}"))
 
 
