@@ -1,17 +1,15 @@
-"""
-Type-safe Settings API with automatic state management and validation.
-"""
-
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 import orjson
 
+from protocol.datatypes import Item
+
 if TYPE_CHECKING:
-    from protocol.datatypes import Color_T, Item
+    from protocol.datatypes import Color_T
     from protocol.datatypes import ItemName as Item_T
 
-type SettingState = tuple[Item, Color_T]
+type SettingState = tuple[Item, "Color_T"]
 
 
 class Setting[S: str]:

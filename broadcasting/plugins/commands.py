@@ -2,9 +2,8 @@ import re
 from typing import Optional
 
 from broadcasting.plugin import BroadcastPeerPlugin
-from core.command import Command, CommandException, CommandGroup
 from core.events import subscribe
-from plugins.commands import CommandsPlugin
+from plugins.commands import Command, CommandException, CommandGroup, CommandsPlugin
 from protocol.datatypes import (
     Buffer,
     String,

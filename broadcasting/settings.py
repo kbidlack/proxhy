@@ -1,6 +1,6 @@
 from typing import Literal
 
-from core.settings import Setting, SettingGroup, SettingsStorage, create_setting
+from plugins.settings import Setting, SettingGroup, SettingsStorage, create_setting
 from protocol.datatypes import Item
 
 

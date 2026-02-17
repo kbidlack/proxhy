@@ -4,7 +4,11 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import hypixel
-from core.command import CommandArg, CommandException
+
+from plugins.commands._commands import (  # import directly to avoid circular imports
+    CommandArg,
+    CommandException,
+)
 from protocol.datatypes import TextComponent
 from proxhy.utils import APIClient, PlayerInfo
 
@@ -12,7 +16,9 @@ from ._argtypes import _resolve_in_proxy_chain
 
 if TYPE_CHECKING:
     from broadcasting.proxy import BroadcastPeerProxy
-    from core.command import CommandContext
+    from plugins.commands._commands import (
+        CommandContext,  # import directly to avoid circular imports
+    )
 
 
 class Player(CommandArg):

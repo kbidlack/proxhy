@@ -20,9 +20,9 @@ from hypixel import (
 from platformdirs import user_cache_dir
 
 from assets import load_json_asset
-from core.command import CommandException, command
 from core.events import listen_server, subscribe
 from gamestate.state import Team
+from plugins.commands import CommandException, command
 from protocol.datatypes import (
     UUID,
     Boolean,

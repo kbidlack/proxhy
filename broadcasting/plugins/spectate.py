@@ -9,10 +9,10 @@ import numpy as np
 from numpy.typing import NDArray
 
 from broadcasting.plugin import BroadcastPeerPlugin
-from core.command import CommandException, command
 from core.events import listen_client as listen
 from core.events import subscribe
 from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
+from plugins.commands import CommandException, command
 from plugins.window import Window
 from protocol import nbt
 from protocol.datatypes import (
@@ -605,7 +605,7 @@ class PlayerSpectateWindow(Window):
         self.player: Optional[hypixel.Player] = None
 
         super().__init__(
-            proxy=self.proxy,  # type: ignore
+            proxy=self.proxy,
             window_title=entity.name,
             window_type="minecraft:chest",
             num_slots=9,

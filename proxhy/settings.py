@@ -3,8 +3,12 @@ from typing import Literal
 
 from platformdirs import user_config_dir
 
-from broadcasting.settings import BroadcastSettings
-from core.settings import Setting, SettingGroup, SettingsStorage, create_setting
+from plugins.settings._settings import (  # import directly to avoid circular imports
+    Setting,
+    SettingGroup,
+    SettingsStorage,
+    create_setting,
+)
 from protocol.datatypes import Item
 
 config_dir = Path(user_config_dir("proxhy", ensure_exists=True))
@@ -197,6 +201,8 @@ class ProxhySettings(SettingGroup):
             item="minecraft:command_block",
         )
         self._storage = SettingsStorage(Path(settings_file))
+
+        from broadcasting.settings import BroadcastSettings  # avoid circular import
 
         self.bedwars = BedwarsGroup(self._storage)
         self.broadcast = BroadcastSettings(self._storage)

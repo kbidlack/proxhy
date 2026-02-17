@@ -1,13 +1,18 @@
 from typing import TYPE_CHECKING, Any
 
-from core.command import CommandArg, CommandException
+from plugins.commands._commands import (  # import directly to avoid circular imports
+    CommandArg,
+    CommandException,
+)
 from protocol.datatypes import TextComponent
 
 from ._argtypes import _resolve_in_proxy_chain
 
 if TYPE_CHECKING:
-    from core.command import CommandContext
-    from core.settings import Setting, SettingGroup
+    from plugins.commands._commands import (
+        CommandContext,  # import directly to avoid circular imports
+    )
+    from plugins.settings import Setting, SettingGroup
 
 
 class SettingPath(CommandArg):
@@ -29,7 +34,7 @@ class SettingPath(CommandArg):
     @classmethod
     def _get_all_setting_paths(cls, group: SettingGroup, prefix: str = "") -> list[str]:
         """Recursively get all setting paths from a SettingGroup."""
-        from core.settings import Setting, SettingGroup
+        from plugins.settings import Setting, SettingGroup
 
         paths: list[str] = []
 
@@ -55,7 +60,7 @@ class SettingPath(CommandArg):
         Raises:
             CommandException: If the path is invalid or doesn't point to a Setting
         """
-        from core.settings import Setting, SettingGroup
+        from plugins.settings import Setting, SettingGroup
 
         settings = _resolve_in_proxy_chain(ctx.proxy, "settings")
         if settings is None:

@@ -1,4 +1,4 @@
-from core.command import CommandException, command
+from plugins.commands import CommandException, command
 from protocol.datatypes import Item, SlotData, String, TextComponent
 from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import Gamemode, Submode

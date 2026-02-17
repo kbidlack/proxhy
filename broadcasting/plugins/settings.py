@@ -5,8 +5,7 @@ from platformdirs import user_config_dir
 from broadcasting.plugin import BroadcastPeerPlugin
 from broadcasting.settings import BroadcastSettings
 from core.events import listen_client, subscribe
-from core.settings import Setting, SettingsStorage
-from plugins.settings import SettingsPlugin
+from plugins.settings import Setting, SettingsPlugin, SettingsStorage
 from protocol.datatypes import (
     Buffer,
     String,

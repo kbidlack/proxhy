@@ -18,11 +18,11 @@ from broadcasting.transform import (
     build_player_list_add_packet,
     build_spawn_player_packet,
 )
-from core.command import CommandException, CommandGroup
 from core.events import listen_server, subscribe
 from core.net import State
 from core.proxy import Proxy
 from gamestate.state import Vec3d
+from plugins.commands import CommandException, CommandGroup
 from protocol.datatypes import (
     UUID,
     Angle,

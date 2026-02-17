@@ -4,8 +4,8 @@ from pathlib import Path
 
 from platformdirs import user_config_dir
 
-from core.command import CommandException, CommandGroup, Lazy
 from core.events import subscribe
+from plugins.commands import CommandException, CommandGroup, Lazy
 from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import AutoboopPlayer, HypixelPlayer
 from proxhy.plugin import ProxhyPlugin

@@ -1,4 +1,9 @@
-from core.command import CommandArg, CommandContext, CommandGroup, CommandRegistry
+from plugins.commands._commands import (  # import directly to avoid circular imports
+    CommandArg,
+    CommandContext,
+    CommandGroup,
+    CommandRegistry,
+)  # import directly to avoid circular imports
 
 
 class HelpPath(CommandArg):

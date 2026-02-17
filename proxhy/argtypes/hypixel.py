@@ -1,11 +1,16 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, TypedDict
 
-from core.command import CommandArg, CommandException
+from plugins.commands._commands import (  # import directly to avoid circular imports
+    CommandArg,
+    CommandException,
+)
 from protocol.datatypes import TextComponent
 
 if TYPE_CHECKING:
-    from core.command import CommandContext
+    from plugins.commands._commands import (
+        CommandContext,  # import directly to avoid circular imports
+    )
 
 # https://api.hypixel.net/v2/resources/games
 type GAMETYPE_T = Literal[

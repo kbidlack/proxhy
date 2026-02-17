@@ -8,8 +8,8 @@ from typing import Any, Callable, Coroutine, Optional
 import hypixel
 import orjson
 
-from core.command import CommandException, Lazy, command
 from core.events import subscribe
+from plugins.commands import CommandException, Lazy, command
 from protocol.datatypes import TextComponent
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat

@@ -1,4 +1,4 @@
-from core.command import command
+from plugins.commands import command
 from protocol.datatypes import TextComponent
 from proxhy.plugin import ProxhyPlugin
 

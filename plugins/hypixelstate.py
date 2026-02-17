@@ -5,7 +5,6 @@ from typing import Callable, Literal, Optional
 import orjson
 
 from assets import load_json_asset
-from core.command import command
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Buffer, ByteArray, Chat, Int, String
 from proxhy.argtypes.hypixel import GAMETYPE_T

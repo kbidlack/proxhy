@@ -5,12 +5,11 @@ from typing import TYPE_CHECKING
 
 import pyroh
 
-from core.command import command
 from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from core.plugin import Plugin
 from plugins.broadcastee.plugin import BroadcasteePlugin
-from plugins.commands import CommandsPlugin
+from plugins.commands import CommandsPlugin, command
 from protocol.datatypes import Buffer, Short, String, VarInt
 
 if TYPE_CHECKING:

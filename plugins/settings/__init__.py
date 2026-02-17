@@ -2,8 +2,8 @@ import math
 from textwrap import fill
 from typing import Any
 
-from core.command import command
-from core.settings import Setting, SettingGroup
+from plugins.commands import command
+from plugins.window import Window
 from protocol.datatypes import (
     Item,
     SlotData,
@@ -14,7 +14,7 @@ from proxhy.argtypes import SettingPath, SettingValue
 from proxhy.plugin import ProxhyPlugin
 from proxhy.settings import ProxhySettings
 
-from .window import Window
+from ._settings import Setting, SettingGroup, SettingsStorage, create_setting
 
 
 class SettingsPluginState:
@@ -330,3 +330,16 @@ class SettingsMenu(Window):
             self.subsetting_path = ".".join(parts[:-1])
             self.clear()
             self.build()
+
+
+__all__ = (
+    # ./_settings.py
+    "Setting",
+    "SettingGroup",
+    "SettingsStorage",
+    "create_setting",
+    # .
+    "SettingsPluginState",
+    "SettingsPlugin",
+    "SettingsMenu",
+)

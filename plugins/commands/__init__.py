@@ -2,17 +2,21 @@ import asyncio
 import re
 from typing import Any, Callable, Coroutine, Union
 
-from core.command import (
-    Command,
-    CommandException,
-    CommandGroup,
-    CommandRegistry,
-    command,
-)
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
 from proxhy.argtypes import HelpPath
 from proxhy.plugin import ProxhyPlugin
+
+from ._commands import (
+    Command,
+    CommandArg,
+    CommandContext,
+    CommandException,
+    CommandGroup,
+    CommandRegistry,
+    Lazy,
+    command,
+)
 
 _OTHER_COMMANDS: set[str] = {
     "compass",
@@ -343,3 +347,19 @@ class CommandsPlugin(ProxhyPlugin):
         self.client.send_packet(
             0x3A, VarInt.pack(len(suggestions)), *(String.pack(s) for s in suggestions)
         )
+
+
+__all__ = (
+    # ./_commands.py
+    "Command",
+    "CommandArg",
+    "CommandContext",
+    "CommandException",
+    "CommandGroup",
+    "CommandRegistry",
+    "Lazy",
+    "command",
+    # .
+    "CommandsPlugin",
+    "CommandsPluginState",
+)

@@ -3,9 +3,9 @@ import uuid
 from typing import Literal, Optional
 
 from broadcasting.plugin import BroadcastPeerPlugin
-from core.command import CommandException, command
 from core.events import subscribe
 from gamestate.state import PlayerAbilityFlags
+from plugins.commands import CommandException, command
 from protocol.datatypes import (
     UUID,
     Byte,

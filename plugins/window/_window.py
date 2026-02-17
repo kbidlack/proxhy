@@ -1,22 +1,18 @@
-import asyncio
-import inspect
 import random
 from copy import deepcopy
 from functools import wraps
-from types import NoneType, NotImplementedType
 from typing import (
     TYPE_CHECKING,
     Awaitable,
     Callable,
     Literal,
     Optional,
+    Protocol,
     SupportsIndex,
     overload,
 )
 
-from core.events import listen_client
 from protocol.datatypes import (
-    Buffer,
     Byte,
     Chat,
     Int,
@@ -26,72 +22,14 @@ from protocol.datatypes import (
     String,
     UnsignedByte,
 )
-from proxhy.plugin import ProxhyPlugin
 
 if TYPE_CHECKING:
-    from protocol.datatypes import WindowType
+    from core.net import Client
 
 
-class WindowPluginState:
+class _HasClientAndWindows(Protocol):
+    client: Client
     windows: dict[int, "Window"]
-
-
-class WindowPlugin(ProxhyPlugin):
-    def _init_window(self):
-        self.windows: dict[int, Window] = {}
-
-    @listen_client(0x0D)
-    async def packet_close_window(self, buff: Buffer):
-        window_id = buff.unpack(UnsignedByte)
-        if window_id in self.windows:
-            self.windows[window_id].close()
-        else:
-            self.server.send_packet(0x0D, buff.getvalue())
-
-    @listen_client(0x0E)
-    async def packet_click_window(self, buff: Buffer):
-        window_id = buff.unpack(UnsignedByte)
-        slot = buff.unpack(Short)
-        button = buff.unpack(Byte)
-        action_num = buff.unpack(Short)
-        mode = buff.unpack(Byte)
-        clicked_item = buff.unpack(Slot)
-
-        if (
-            window_id in self.windows
-            and not slot == -999
-            and self.windows[window_id]._open
-        ):
-            callback = self.windows[window_id].data[slot][1]
-            if not isinstance(callback, (NotImplementedType, NoneType)):
-                if inspect.iscoroutinefunction(callback):
-                    asyncio.create_task(
-                        callback(
-                            self.windows[window_id],
-                            slot,
-                            button,
-                            action_num,
-                            mode,
-                            clicked_item,
-                        )
-                    )
-                elif isinstance(callback, Callable):
-                    callback(
-                        self.windows[window_id],
-                        slot,
-                        button,
-                        action_num,
-                        mode,
-                        clicked_item,
-                    )
-            if self.windows[window_id].data[slot][2]:  # if locked
-                self.windows[window_id].update()
-                self.client.send_packet(*self.gamestate._build_player_inventory())
-                self.client.send_packet(
-                    0x2F, Byte.pack(-1), Short.pack(-1), Slot.pack(SlotData())
-                )
-        else:
-            self.server.send_packet(0x0E, buff.getvalue())
 
 
 def ensure_open(open=True):
@@ -108,6 +46,21 @@ def ensure_open(open=True):
 
 
 type SlotType = tuple[SlotData, Optional[Callable | Awaitable], bool]
+
+type WindowType = Literal[
+    "minecraft:chest",
+    "minecraft:crafting_table",
+    "minecraft:furnace",
+    "minecraft:dispenser",
+    "minecraft:enchanting_table",
+    "minecraft:brewing_stand",
+    "minecraft:villager",
+    "minecraft:beacon",
+    "minecraft:anvil",
+    "minecraft:hopper",
+    "minecraft:dropper",
+    "EntityHorse",
+]
 
 
 class Slots(list[SlotType]):
@@ -126,11 +79,9 @@ class Slots(list[SlotType]):
 
 
 class Window:
-    proxy: ProxhyPlugin
-
     def __init__(
         self,
-        proxy: ProxhyPlugin,
+        proxy: _HasClientAndWindows,
         window_title: str = "Chest",
         window_type: WindowType = "minecraft:chest",
         num_slots: int = 27,

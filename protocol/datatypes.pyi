@@ -267,21 +267,6 @@ class Slot(DataType[SlotData, SlotData]):
     @staticmethod
     def unpack(buff: Buffer) -> SlotData: ...
 
-type WindowType = Literal[
-    "minecraft:chest",
-    "minecraft:crafting_table",
-    "minecraft:furnace",
-    "minecraft:dispenser",
-    "minecraft:enchanting_table",
-    "minecraft:brewing_stand",
-    "minecraft:villager",
-    "minecraft:beacon",
-    "minecraft:anvil",
-    "minecraft:hopper",
-    "minecraft:dropper",
-    "EntityHorse",
-]
-
 # Auto-generated from ./assets/item_mappings.json
 type ItemName = Literal[
     "minecraft:acacia_door",
