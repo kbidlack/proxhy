@@ -738,7 +738,7 @@ class PlayerSpectateWindow(Window):
                 }
             )
             self._update()
-            await asyncio.sleep(1 / 20)
+            await asyncio.sleep(0.5)
 
     async def _ender_eye_callback(
         self,
