@@ -2112,6 +2112,30 @@ class GameState:
         )
         return (0x0C, data)
 
+    def build_entity_teleports(self) -> list[Packet]:
+        """Build Entity Teleport (0x18) packets for all tracked entities.
+
+        Used to correct entity positions after a gap where relative move
+        packets may have been missed (e.g. during broadcast client login).
+        """
+        packets: list[Packet] = []
+        for entity in self.entities.values():
+            if entity.entity_id == self.player_entity_id:
+                continue
+            packets.append(
+                (
+                    0x18,
+                    VarInt.pack(entity.entity_id)
+                    + Int.pack(int(entity.position.x * 32))
+                    + Int.pack(int(entity.position.y * 32))
+                    + Int.pack(int(entity.position.z * 32))
+                    + Angle.pack(entity.rotation.yaw)
+                    + Angle.pack(entity.rotation.pitch)
+                    + Boolean.pack(entity.on_ground),
+                )
+            )
+        return packets
+
     def _build_npc_player_spawns(self) -> list[Packet]:
         """Build packets to spawn NPC players (players not in tab list).
 
