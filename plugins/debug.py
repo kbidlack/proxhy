@@ -65,6 +65,13 @@ class DebugPlugin(ProxhyPlugin):
         """[DEBUG] Play the Samsung ringtone sound."""
         await self._samsung_ringtone()
 
+    @command("pos")
+    async def _command_pos(self):
+        """Get your current position."""
+        self.client.chat(
+            f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
+        )
+
     # @subscribe("chat:server:.*")
     # async def log_chat_msg(self, _match, buff: Buffer):
     #     buff = Buffer(buff.getvalue())

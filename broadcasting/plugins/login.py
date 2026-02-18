@@ -31,11 +31,13 @@ from proxhy.utils import APIClient, offline_uuid, uuid_version
 class BroadcastPeerLoginPluginState:
     writer: pyroh.StreamWriter
     username: str
+    compression_ready: asyncio.Event
 
 
 class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
     def _init_login(self):
         self.server = Server(reader=Mock(), writer=Mock())
+        self.compression_ready = asyncio.Event()
 
         self.server_list_ping = {
             "version": {"name": "1.8.9", "protocol": 47},
@@ -97,6 +99,10 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         )
 
         await self.client.drain()
+
+    @listen(0x46)
+    async def _packet_compression_ack(self, _: Buffer):
+        self.compression_ready.set()
 
     @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
@@ -190,7 +196,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # TODO: this needs logic for non proxhy broadcastees, in which compression
         # should be set with the login packet (0x03)
         self.client.compression_threshold = 256
+        # cb is set, sb is ack
         self.client.send_packet(0x46, VarInt.pack(self.client.compression_threshold))
+        await self.compression_ready.wait()
         self.client.compression = True
 
         for packet_id, packet_data in packets[1:]:
@@ -250,14 +258,10 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # Schedule delayed NPC removal from tab list to allow skin loading
         asyncio.create_task(self._delayed_npc_removal())
 
-        # Correct entity positions that may have drifted during the login
-        # await gaps (drain, profile_ready). The snapshot from
-        # sync_broadcast_spectator may be stale because server packets
-        # continued to update gamestate positions while we were awaiting.
-        # Use write_packet to avoid pushing into pqueue (which the broadcast
-        # peer's gamestate plugin would re-process as clientbound updates).
+        # correct entity positions that may have drifted during the login
+        # await gaps
         for tp_packet in self.proxy.gamestate.build_entity_teleports():
-            self.client.write_packet(*tp_packet)
+            self.client.send_packet(*tp_packet)
 
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]

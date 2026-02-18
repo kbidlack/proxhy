@@ -25,6 +25,7 @@ class BroadcasteeClosePlugin(BroadcasteePlugin):
 
     @listen_server(0x46, blocking=True)
     async def _packet_set_compression(self, buff: Buffer):
+        self.server.send_packet(0x46)
         self.server.compression_threshold = buff.unpack(VarInt)
         self.server.compression = True
 
@@ -47,7 +48,6 @@ class BroadcasteeClosePlugin(BroadcasteePlugin):
         )
         self.server.send_packet(0x00, String.pack(username))
 
-        self.client.pause(discard=True)
         await self.server.drain()
 
 
@@ -63,8 +63,6 @@ class BroadcasteeSettingsPlugin(BroadcasteePlugin):
 
     @subscribe(r"plugin:PROXHY\|Events")
     async def _event_login_success(self, _match: re.Match, buff: Buffer):
-        self.client.unpause()
-
         if buff.unpack(String) == "login_success":
             for setting in self.settings.broadcast.get_all_settings():
                 value = setting.get()
