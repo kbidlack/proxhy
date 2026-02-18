@@ -23,7 +23,7 @@ from core.events import listen_server, subscribe
 from core.net import State
 from core.proxy import Proxy
 from gamestate.state import Vec3d
-from plugins.commands import CommandException, CommandGroup
+from plugins.commands import CommandException, CommandGroup, command
 from protocol.datatypes import (
     UUID,
     Angle,
@@ -32,6 +32,7 @@ from protocol.datatypes import (
     Int,
     Short,
     Slot,
+    String,
     TextComponent,
     VarInt,
 )
@@ -51,6 +52,7 @@ class BroadcastPluginState:
     compass_client: MinecraftPeerClient | None
     broadcast_pyroh_server: pyroh.Server
     broadcast_server_task: asyncio.Task
+    broadcast_chat_toggled: bool
     _transformer: PlayerTransformer
 
 
@@ -66,6 +68,8 @@ class BroadcastPlugin(ProxhyPlugin):
         self.broadcast_invites: dict[str, ConnectionRequest] = {}
         self.broadcast_requests: set[str] = set()
         self.joining_broadcast: bool = False
+
+        self.broadcast_chat_toggled = False
 
         self._respawn_debounce_task: Optional[asyncio.Task] = None
 
@@ -1055,3 +1059,29 @@ class BroadcastPlugin(ProxhyPlugin):
                     client.client.send_packet(0x45, buff.getvalue())
 
         self.client.send_packet(0x45, buff.getvalue())
+
+    @command("chat", "ch")
+    async def _command_chat(self, channel: str):
+        if channel in {"b", "bc", "broadcast"}:
+            self.broadcast_chat_toggled = not self.broadcast_chat_toggled
+            self.client.chat(
+                TextComponent("Toggled broadcast chat")
+                .color("green")
+                .appends(
+                    TextComponent("ON" if self.broadcast_chat_toggled else "OFF")
+                    .color("green" if self.broadcast_chat_toggled else "red")
+                    .bold()
+                )
+            )
+        else:
+            self.server.chat(f"/chat {channel}")
+
+    @subscribe("chat:client:.*")
+    async def _event_chat_client_any(self, _match: re.Match, buff: Buffer):
+        msg = buff.unpack(String)
+        if msg.startswith("/"):
+            return  # let commands plugin handle it
+        elif self.broadcast_chat_toggled:
+            self.bc_chat(self.username, msg)
+        else:
+            self.server.send_packet(0x01, buff.getvalue())
