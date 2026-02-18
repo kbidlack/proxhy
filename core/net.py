@@ -149,7 +149,8 @@ class Stream:
             # Task was cancelled, normal when unpausing
             pass
 
-    def send_packet(self, id: int, *data: bytes) -> None:
+    def write_packet(self, id: int, *data: bytes) -> None:
+        """Send a packet to the wire without pushing to pqueue."""
         packet = VarInt.pack(id) + b"".join(data)
         packet_length = VarInt.pack(len(packet))
 
@@ -164,6 +165,9 @@ class Stream:
                 packet_length = VarInt.pack(len(packet))
 
         self.write(packet_length + packet)
+
+    def send_packet(self, id: int, *data: bytes) -> None:
+        self.write_packet(id, *data)
         self.pqueue.put_nowait((id, *data))
 
 

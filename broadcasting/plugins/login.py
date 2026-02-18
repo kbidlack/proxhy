@@ -272,8 +272,10 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # await gaps (drain, profile_ready). The snapshot from
         # sync_broadcast_spectator may be stale because server packets
         # continued to update gamestate positions while we were awaiting.
+        # Use write_packet to avoid pushing into pqueue (which the broadcast
+        # peer's gamestate plugin would re-process as clientbound updates).
         for tp_packet in self.proxy.gamestate.build_entity_teleports():
-            self.client.send_packet(*tp_packet)
+            self.client.write_packet(*tp_packet)
 
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]
