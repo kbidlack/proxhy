@@ -588,11 +588,12 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         self._set_gamemode(3)
         self.client.send_packet(0x43, VarInt.pack(eid))
 
-    @command("watch")
-    async def _command_watch(self):
-        """Enter cinematic mode."""
-        self.watching = True
-        self._spectate(self.bat_eid)
+    # WIP
+    # @command("watch")
+    # async def _command_watch(self):
+    #     """Enter cinematic mode."""
+    #     self.watching = True
+    #     self._spectate(self.bat_eid)
 
 
 class PlayerSpectateWindow(Window):
@@ -631,22 +632,23 @@ class PlayerSpectateWindow(Window):
             ),
             callback=self._ender_eye_callback,
         )
-        self.set_slot(
-            2,
-            SlotData(
-                item=Item.from_name("minecraft:ender_pearl"),
-                nbt=nbt.dumps(
-                    nbt.from_dict(
-                        {
-                            "display": {
-                                "Name": f"§d§lWatch {entity.name}",
-                            },
-                            "ench": [],
-                        }
-                    )
-                ),
-            ),
-        )
+        # WIP
+        # self.set_slot(
+        #     2,
+        #     SlotData(
+        #         item=Item.from_name("minecraft:ender_pearl"),
+        #         nbt=nbt.dumps(
+        #             nbt.from_dict(
+        #                 {
+        #                     "display": {
+        #                         "Name": f"§d§lWatch {entity.name}",
+        #                     },
+        #                     "ench": [],
+        #                 }
+        #             )
+        #         ),
+        #     ),
+        # )
         asyncio.create_task(self._update_slots())
 
     class Details(TypedDict):

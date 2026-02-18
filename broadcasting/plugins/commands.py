@@ -57,8 +57,12 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                         self.client.chat(output)
         else:
             self.client.chat(
-                TextComponent(f"Unknown command '{cmd_name}'")
+                TextComponent("Unknown command '")
                 .color("red")
+                .append(TextComponent(f"/{cmd_name}").color("gold"))
+                .append(TextComponent("'. Try").color("red"))
+                .appends(TextComponent("/help").color("gold"))
+                .appends(TextComponent("for a list of commands").color("red"))
                 .click_event("suggest_command", message)
             )
 
