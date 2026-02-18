@@ -1,5 +1,6 @@
 import asyncio
 import random
+import re
 import shelve
 import uuid
 import uuid as uuid_mod
@@ -27,10 +28,12 @@ from protocol.datatypes import (
     UUID,
     Angle,
     Buffer,
+    Byte,
     Chat,
     Int,
     Short,
     Slot,
+    String,
     TextComponent,
     VarInt,
 )
@@ -868,30 +871,43 @@ class BroadcastPlugin(ProxhyPlugin):
             ):
                 client.client.send_packet(packet_id, data)
 
+    def _filter_chat_message(self, buff: Buffer):
+        msg = buff.unpack(Chat)
+        system_msgs = {
+            "You already tipped everyone that has boosters active, "
+            "so there isn't anybody to be tipped right now!",  # <- + ^ = one message
+            "You are sending commands too fast! Please slow down.",
+            "Slow down! You can only use /tip every few seconds.",
+            r"\{.*\}",
+        }
+        system_message = any(re.fullmatch(bm, msg) for bm in system_msgs)
+        for client in self.clients:
+            if not system_message or client.settings.hide_system_messages.get() != "ON":
+                client.client.send_packet(0x02, buff.getvalue())
+
     @subscribe("cb_gamestate_update")
     # needs to be async for subscribe -- TODO: allow sync subscribers?
     async def _broadcast_event_cb_gamestate_update(
         self, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         packet_id, *packet_data = data
+        buff = Buffer(b"".join(packet_data))
         """Forward a clientbound packet to spectators with appropriate transformations."""
         if not self.clients:
             return
         # Handle Join Game specially to update EID per client
-        if id == 0x01:
-            buff_data = b"".join(packet_data)
-            # Extract player EID and update transformer
-            self._transformer._player_eid = int.from_bytes(
-                buff_data[:4], "big", signed=True
-            )
+        if packet_id == 0x01:
+            self._transformer._player_eid = buff.unpack(Int)
             self._transformer.reset()
 
             # Forward with modified EID for each client
             for client in self.clients:
                 if client.state == State.PLAY:
                     client.client.send_packet(
-                        packet_id, Int.pack(client.eid) + buff_data[4:]
+                        packet_id, Int.pack(client.eid) + buff.getvalue()[4:]
                     )
+        elif packet_id == 0x02:
+            self._filter_chat_message(buff=Buffer(buff.getvalue()))
         else:
             # Use transformer for other packets
             self._transformer.forward_clientbound_packet(

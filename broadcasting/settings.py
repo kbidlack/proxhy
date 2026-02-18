@@ -43,3 +43,18 @@ class BroadcastSettings(SettingGroup):
             default_state="ON",
             storage=self._storage,
         )
+
+        self.hide_system_messages: Setting[Literal["OFF", "ON"]] = create_setting(
+            key="broadcast.hide_system_messages",
+            display_name="Hide System Messages",
+            description="Hide messages that frequently come from automated client commands, "
+            "like /tip, /who, and /locraw. May also suppress some user-originated output "
+            "from these commands!",
+            item="minecraft:book",
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
+            default_state="ON",
+            storage=self._storage,
+        )
