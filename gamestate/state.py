@@ -1995,8 +1995,24 @@ class GameState:
         return packets
 
     def _build_chunk_data(self) -> list[Packet]:
-        """Build Chunk Data packets (0x21) for all loaded chunks."""
-        packets: list[Packet] = []
+        """Build Map Chunk Bulk packets (0x26) for all loaded chunks.
+
+        Chunks are batched into multiple 0x26 packets to stay under the
+        client's 21-bit (~2 MB) packet-length VarInt limit.  We cap the
+        uncompressed chunk *data* portion of each batch so that even with
+        modest zlib compression it stays well below the wire limit.
+        """
+        # The client Netty decoder rejects frames whose length VarInt exceeds
+        # 3 bytes, i.e. 2 097 151 bytes.  Chunk data compresses well with
+        # zlib, but we must be conservative: cap uncompressed payload at ~1.5 MB
+        # so that the compressed packet (+ meta overhead) fits comfortably.
+        MAX_UNCOMPRESSED_DATA = 1_500_000
+
+        sky_light_sent = self.dimension == Dimension.OVERWORLD
+
+        # Collect per-chunk metadata and serialised section data
+        chunk_metas: list[tuple[int, int, int]] = []  # (x, z, bitmask)
+        chunk_datas: list[bytes] = []
 
         for (chunk_x, chunk_z), chunk in self.chunks.items():
             # Calculate primary bitmask
@@ -2017,24 +2033,70 @@ class GameState:
             for section in chunk.sections:
                 if section is not None:
                     chunk_data += bytes(section.block_light)
-            for section in chunk.sections:
-                if section is not None and section.sky_light is not None:
-                    chunk_data += bytes(section.sky_light)
+            if sky_light_sent:
+                for section in chunk.sections:
+                    if section is not None and section.sky_light is not None:
+                        chunk_data += bytes(section.sky_light)
 
             # Add biome data
             chunk_data += bytes(chunk.biomes)
 
-            data = (
-                Int.pack(chunk_x)
-                + Int.pack(chunk_z)
-                + Boolean.pack(True)  # Ground-up continuous
-                + UnsignedShort.pack(primary_bitmask)
-                + VarInt.pack(len(chunk_data))
-                + chunk_data
+            chunk_metas.append((chunk_x, chunk_z, primary_bitmask))
+            chunk_datas.append(chunk_data)
+
+        if not chunk_metas:
+            return []
+
+        # Split into batches that each stay under the size cap
+        packets: list[Packet] = []
+        batch_start = 0
+        batch_data_size = 0
+
+        for i, cd in enumerate(chunk_datas):
+            # Would adding this chunk exceed the cap?  Flush current batch
+            # first (unless it's empty — always allow at least one chunk).
+            if batch_data_size + len(cd) > MAX_UNCOMPRESSED_DATA and i > batch_start:
+                packets.append(
+                    self._pack_chunk_bulk(
+                        sky_light_sent,
+                        chunk_metas[batch_start:i],
+                        chunk_datas[batch_start:i],
+                    )
+                )
+                batch_start = i
+                batch_data_size = 0
+            batch_data_size += len(cd)
+
+        # Flush remaining chunks
+        packets.append(
+            self._pack_chunk_bulk(
+                sky_light_sent,
+                chunk_metas[batch_start:],
+                chunk_datas[batch_start:],
             )
-            packets.append((0x21, data))
+        )
 
         return packets
+
+    @staticmethod
+    def _pack_chunk_bulk(
+        sky_light_sent: bool,
+        metas: list[tuple[int, int, int]],
+        datas: list[bytes],
+    ) -> Packet:
+        """Serialise one 0x26 Map Chunk Bulk packet from pre-built parts."""
+        # Header: Sky Light Sent (Boolean), Column Count (VarInt)
+        buf = Boolean.pack(sky_light_sent) + VarInt.pack(len(metas))
+
+        # Chunk meta array (Chunk X, Chunk Z, Primary Bit Mask per entry)
+        for cx, cz, bitmask in metas:
+            buf += Int.pack(cx) + Int.pack(cz) + UnsignedShort.pack(bitmask)
+
+        # Chunk data (concatenated, no per-chunk length prefix)
+        for cd in datas:
+            buf += cd
+
+        return (0x26, buf)
 
     def _build_block_entities(self) -> list[Packet]:
         """Build Update Block Entity packets (0x35)."""
@@ -2672,7 +2734,7 @@ class GameState:
         # 16. Teams (0x3E)
         packets.extend(self._build_teams())
 
-        # 17. Chunk Data (0x21) - All loaded chunks
+        # 17. Map Chunk Bulk (0x26) - All loaded chunks
         packets.extend(self._build_chunk_data())
 
         # 18. Block Entities (0x35)
@@ -2800,7 +2862,7 @@ class GameState:
         # 16. Teams (0x3E)
         packets.extend(self._build_teams())
 
-        # 17. Chunk Data (0x21) - All loaded chunks
+        # 17. Map Chunk Bulk (0x26) - All loaded chunks
         packets.extend(self._build_chunk_data())
 
         # 18. Block Entities (0x35)
@@ -2933,7 +2995,7 @@ class GameState:
         # 16. Teams (0x3E)
         packets.extend(self._build_teams())
 
-        # 17. Chunk Data (0x21) - All loaded chunks
+        # 17. Map Chunk Bulk (0x26) - All loaded chunks
         packets.extend(self._build_chunk_data())
 
         # 18. Block Entities (0x35)

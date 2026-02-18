@@ -55,6 +55,18 @@ class DebugPlugin(ProxhyPlugin):
         """[DEBUG] List all players known to Proxhy."""
         print([(p.name, p.uuid) for p in self.gamestate.player_list.values()])
 
+    @command("getblock", "gb")
+    async def _command_get_block(self):
+        self.client.chat(
+            str(
+                self.gamestate.get_block(
+                    int(self.gamestate.position.x),
+                    int(self.gamestate.position.y),
+                    int(self.gamestate.position.z),
+                )
+            )
+        )
+
     @command("iphone_ringtone")
     async def _command_iphone_ringtone(self):
         """[DEBUG] Play the iPhone ringtone sound."""

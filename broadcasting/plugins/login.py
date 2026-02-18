@@ -100,6 +100,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
     @listen(0x00, State.LOGIN)
     async def packet_login_start(self, buff: Buffer):
+        self.state = State.PLAY
         self.username = buff.unpack(String)
 
         self.uuid = str(offline_uuid(self.username))
@@ -183,8 +184,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         packets = self.proxy.gamestate.sync_broadcast_spectator(self.eid)
         self.client.send_packet(*packets[0])  # join game
 
-        self.state = State.PLAY
-
         # set compression
         # we are using 'broken' 0x46 packet because why not and because I can
         # I guess I could use a plugin channel but that's like so much effort
@@ -192,11 +191,11 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # should be set with the login packet (0x03)
         self.client.compression_threshold = 256
         self.client.send_packet(0x46, VarInt.pack(self.client.compression_threshold))
-        await self.client.drain()
         self.client.compression = True
 
         for packet_id, packet_data in packets[1:]:
-            self.client.send_packet(packet_id, packet_data)
+            if packet_id not in {0x21, 0x26}:  # send chunks later
+                self.client.send_packet(packet_id, packet_data)
 
         # respawn back to actual dimension
         self.client.send_packet(
@@ -208,8 +207,20 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         )
 
         # Resend player list, entity spawns, metadata, and equipment after respawn
+        # also send chunks now bc we don't want to send b4 respawn
         for packet_id, packet_data in packets[1:]:
-            if packet_id in (0x38, 0x0C, 0x0E, 0x0F, 0x1C, 0x04, 0x19, 0x3E):
+            if packet_id in {
+                0x38,
+                0x0C,
+                0x0E,
+                0x0F,
+                0x1C,
+                0x04,
+                0x19,
+                0x3E,
+                0x21,
+                0x26,
+            }:
                 # 0x38 = Player List Item
                 # 0x0C = Spawn Player
                 # 0x0E = Spawn Object
@@ -219,33 +230,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
                 # 0x04 = Entity Equipment
                 # 0x3E = Teams (for NPC nametag prefixes/suffixes)
                 self.client.send_packet(packet_id, packet_data)
-
-        await profile_ready.wait()
-
-        properties_data = b""
-        if self.skin_properties:
-            properties_data = VarInt.pack(len(self.skin_properties))
-            for prop in self.skin_properties:
-                properties_data += String.pack(prop.get("name", ""))
-                properties_data += String.pack(prop.get("value", ""))
-                has_sig = prop.get("signature") is not None
-                properties_data += Boolean.pack(has_sig)
-                if has_sig:
-                    properties_data += String.pack(prop["signature"])
-        else:
-            properties_data = VarInt.pack(0)
-
-        self.client.send_packet(
-            0x38,
-            VarInt.pack(0),  # action: add player
-            VarInt.pack(1),  # number of players
-            UUID.pack(uuid.UUID(self.uuid)),
-            String.pack(self.username),
-            properties_data,
-            VarInt.pack(2),  # gamemode: adventure
-            VarInt.pack(0),  # ping
-            Boolean.pack(False),  # no display name for self
-        )
 
         self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
 
@@ -262,8 +246,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Float.pack(rot.pitch),
             Byte.pack(0),  # flags: all absolute
         )
-
-        await self.client.drain()
 
         # Schedule delayed NPC removal from tab list to allow skin loading
         asyncio.create_task(self._delayed_npc_removal())
@@ -286,58 +268,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             .appends(TextComponent("joined the broadcast!").color("green"))
         )
 
-        display_name = (
-            TextComponent("[")
-            .color("dark_gray")
-            .append(TextComponent("BROADCAST").color("red"))
-            .append(TextComponent("]").color("dark_gray"))
-            .appends(TextComponent(f"{self.username}").color("aqua"))
-        )
-
-        self.proxy.client.send_packet(
-            0x38,
-            VarInt.pack(0),  # action: add player
-            VarInt.pack(1),  # number of players
-            UUID.pack(uuid.UUID(self.uuid)),
-            String.pack(self.username),
-            properties_data,
-            VarInt.pack(2),  # gamemode: adventure
-            VarInt.pack(0),  # ping
-            Boolean.pack(True),  # has display name
-            Chat.pack(display_name),
-        )
-
-        players_after = self.proxy.gamestate.player_list.copy()
-        player_diff = players_before.keys() - players_after.keys()
-
-        self.proxy.client.send_packet(
-            0x38,
-            VarInt.pack(4),  # remove
-            VarInt.pack(len(player_diff)),
-            *(UUID.pack(uuid.UUID(u)) for u in player_diff),
-        )
-
-        entity_ids: list[int] = []
-        for u in player_diff:
-            try:
-                normalized = str(uuid.UUID(u))
-            except Exception:
-                normalized = u
-
-            eid = player_entity_ids_before.get(normalized)
-            if eid is None:
-                eid = player_entity_ids_before.get(u)
-            if eid is not None:
-                entity_ids.append(eid)
-
-        if entity_ids:
-            data = VarInt.pack(len(entity_ids)) + b"".join(
-                VarInt.pack(eid) for eid in entity_ids
-            )
-            self.proxy.client.send_packet(0x13, data)
-
-        await self.client.drain()
-
         self.client.send_packet(
             0x3F, String.pack("PROXHY|Events"), String.pack("login_success")
         )
@@ -352,7 +282,42 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             + Float.pack(self.flight_speed)
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
+
         await self.client.drain()
+
+        await profile_ready.wait()
+        properties_data = b""
+        if self.skin_properties:
+            properties_data = VarInt.pack(len(self.skin_properties))
+            for prop in self.skin_properties:
+                properties_data += String.pack(prop.get("name", ""))
+                properties_data += String.pack(prop.get("value", ""))
+                has_sig = prop.get("signature") is not None
+                properties_data += Boolean.pack(has_sig)
+                if has_sig:
+                    properties_data += String.pack(prop["signature"])
+        else:
+            properties_data = VarInt.pack(0)
+
+        display_name = (
+            TextComponent("[")
+            .color("dark_gray")
+            .append(TextComponent("BROADCAST").color("red"))
+            .append(TextComponent("]").color("dark_gray"))
+            .appends(TextComponent(f"{self.username}").color("aqua"))
+        )
+        self.client.send_packet(
+            0x38,
+            VarInt.pack(0),  # action: add player
+            VarInt.pack(1),  # number of players
+            UUID.pack(uuid.UUID(self.uuid)),
+            String.pack(self.username),
+            properties_data,
+            VarInt.pack(2),  # gamemode: adventure
+            VarInt.pack(0),  # ping
+            Boolean.pack(True),  # no display name for self
+            Chat.pack(display_name),
+        )
 
     async def _delayed_npc_removal(self) -> None:
         """Remove NPCs from tab list after a delay to allow skin loading."""

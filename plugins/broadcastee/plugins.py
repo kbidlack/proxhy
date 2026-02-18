@@ -34,7 +34,7 @@ class BroadcasteeClosePlugin(BroadcasteePlugin):
         self.server = Server(reader, writer)
 
     async def join(self, username: str, node_id: str):
-        self.state = State.LOGIN
+        self.state = State.PLAY
 
         self.handle_server_task = asyncio.create_task(self.handle_server())
 
@@ -47,9 +47,8 @@ class BroadcasteeClosePlugin(BroadcasteePlugin):
         )
         self.server.send_packet(0x00, String.pack(username))
 
+        self.client.pause(discard=True)
         await self.server.drain()
-
-        self.state = State.PLAY
 
 
 class BroadcasteeSettingsPlugin(BroadcasteePlugin):
@@ -64,6 +63,8 @@ class BroadcasteeSettingsPlugin(BroadcasteePlugin):
 
     @subscribe(r"plugin:PROXHY\|Events")
     async def _event_login_success(self, _match: re.Match, buff: Buffer):
+        self.client.unpause()
+
         if buff.unpack(String) == "login_success":
             for setting in self.settings.broadcast.get_all_settings():
                 value = setting.get()
