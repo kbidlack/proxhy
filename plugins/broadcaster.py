@@ -28,12 +28,10 @@ from protocol.datatypes import (
     UUID,
     Angle,
     Buffer,
-    Byte,
     Chat,
     Int,
     Short,
     Slot,
-    String,
     TextComponent,
     VarInt,
 )
@@ -685,6 +683,14 @@ class BroadcastPlugin(ProxhyPlugin):
     @subscribe("close")
     async def _broadcast_event_close(self, _match, reason):
         if self.logged_in:
+            try:
+                await asyncio.wait_for(
+                    self.disconnect_clients(reason="The broadcast owner disconnected!"),
+                    timeout=0.5,
+                )
+            except asyncio.TimeoutError:
+                pass
+
             if hasattr(self, "broadcast_server_task") and self.broadcast_server_task:
                 # self.broadcast_pyroh_server.close() this doesnt do anything ):
                 # self.broadcast_server_task.cancel()
@@ -695,14 +701,6 @@ class BroadcastPlugin(ProxhyPlugin):
                         )
                     except asyncio.TimeoutError:
                         pass
-
-            try:
-                await asyncio.wait_for(
-                    self.disconnect_clients(reason="The broadcast owner disconnected!"),
-                    timeout=0.5,
-                )
-            except asyncio.TimeoutError:
-                pass
 
             try:
                 if self.compass_client is not None:
