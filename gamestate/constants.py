@@ -35,4 +35,5 @@ MOB_TYPES = {
     100,
     101,
     120,
+    78,  # Armor Stand
 }

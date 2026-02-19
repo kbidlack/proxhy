@@ -20,6 +20,7 @@ from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
+    Angle,
     Boolean,
     Buffer,
     Byte,
@@ -134,8 +135,27 @@ class LoginPlugin(ProxhyPlugin):
                 UnsignedByte.pack(gamemode),  # gamemode
                 String.pack(level_type),  # level type
             )
+
+            asyncio.create_task(self._replay_entities_after_join())
         else:
             self.client.send_packet(0x01, buff.getvalue())
+
+    async def _replay_entities_after_join(self):
+        await asyncio.sleep(0.5)
+        for packet_id, packet_data in (
+            self.gamestate._build_entity_spawns()
+            + self.gamestate._build_npc_player_spawns()
+            + self.gamestate._build_entity_metadata()
+            + self.gamestate._build_entity_equipment()
+        ):
+            self.client.write_packet(packet_id, packet_data)
+        # Head look for NPCs (players not in tab list)
+        for player in self.gamestate.players.values():
+            if player.uuid not in self.gamestate.player_list:
+                head_yaw = player.head_yaw if player.head_yaw else player.rotation.yaw
+                self.client.write_packet(
+                    0x19, VarInt.pack(player.entity_id) + Angle.pack(head_yaw)
+                )
 
     @listen_client(0x00, State.LOGIN, blocking=True, override=True)
     async def packet_login_start(self, buff: Buffer):

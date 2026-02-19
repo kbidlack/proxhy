@@ -1029,12 +1029,23 @@ class BroadcastPlugin(ProxhyPlugin):
 
         player_info = self.gamestate.player_list.get(normalized_uuid)
 
+        try:
+            normalized_uuid_obj = uuid_mod.UUID(self._transformer.player_uuid)
+            client.client.send_packet(
+                0x38,
+                VarInt.pack(4),  # action: remove player
+                VarInt.pack(1),
+                UUID.pack(normalized_uuid_obj),
+            )
+        except ValueError:
+            pass
+
         if player_info:
             data = build_player_list_add_packet(
                 player_uuid=self._transformer.player_uuid,
                 player_name=player_info.name,
                 properties=player_info.properties,
-                gamemode=player_info.gamemode,
+                gamemode=0,  # force survival so the client renders the Spawn Player
                 ping=player_info.ping,
                 display_name=player_info.display_name,
             )

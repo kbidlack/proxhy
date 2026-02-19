@@ -12,6 +12,7 @@ from core.proxy import State
 from gamestate.state import PlayerAbilityFlags
 from protocol.datatypes import (
     UUID,
+    Angle,
     Boolean,
     Buffer,
     Byte,
@@ -159,24 +160,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # ts so complicated bruh
         fake_dim = 1 if current_dim in (0, -1) else 0
 
-        players_before = self.proxy.gamestate.player_list.copy()
-
-        # snapshot entity ids for the players currently known
-        # we capture these BEFORE any operations that might remove players so we
-        # can still reference their entity IDs even if they're removed later
-        player_entity_ids_before: dict[str, int] = {}
-        for puuid in players_before.keys():
-            try:
-                normalized = str(uuid.UUID(puuid))
-            except Exception:
-                normalized = puuid
-
-            player = self.proxy.gamestate.get_player_by_uuid(normalized)
-            if not player:
-                player = self.proxy.gamestate.get_player_by_uuid(puuid)
-            if player:
-                player_entity_ids_before[normalized] = player.entity_id
-                player_entity_ids_before[puuid] = player.entity_id
+        self_player = self.proxy.gamestate.get_player_by_name(self.username)
+        self_entity_id: int | None = self_player.entity_id if self_player else None
+        self_server_uuid: str | None = self_player.uuid if self_player else None
 
         self.client.send_packet(
             0x07,  # respawn
@@ -239,6 +225,23 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
                 # 0x3E = Teams (for NPC nametag prefixes/suffixes)
                 self.client.send_packet(packet_id, packet_data)
 
+        if self_entity_id is not None:
+            self.client.send_packet(
+                0x13,  # Destroy Entities
+                VarInt.pack(1),
+                VarInt.pack(self_entity_id),
+            )
+        if self_server_uuid is not None:
+            try:
+                self.client.send_packet(
+                    0x38,
+                    VarInt.pack(4),  # action: remove player
+                    VarInt.pack(1),
+                    UUID.pack(uuid.UUID(self_server_uuid)),
+                )
+            except ValueError:
+                pass
+
         self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
 
         # send player pos and look again after respawn to set correct pos
@@ -259,7 +262,19 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         asyncio.create_task(self._delayed_npc_removal())
 
         # correct entity positions that may have drifted during the login
-        # await gaps
+        # await gaps, including the owner's spawned entity
+        player_eid = self.proxy._transformer.player_eid
+        if player_eid:
+            self.client.send_packet(
+                0x18,  # Entity Teleport
+                VarInt.pack(player_eid),
+                Int.pack(int(pos.x * 32)),
+                Int.pack(int(pos.y * 32)),
+                Int.pack(int(pos.z * 32)),
+                Angle.pack(rot.yaw),
+                Angle.pack(rot.pitch),
+                Boolean.pack(True),
+            )
         for tp_packet in self.proxy.gamestate.build_entity_teleports():
             self.client.send_packet(*tp_packet)
 
