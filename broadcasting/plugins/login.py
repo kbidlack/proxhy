@@ -100,7 +100,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         await self.client.drain()
 
-    @listen(0x46)
+    @listen(0x46, blocking=True)
     async def _packet_compression_ack(self, _: Buffer):
         self.compression_ready.set()
 

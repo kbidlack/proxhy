@@ -21,6 +21,7 @@ dependencies = [
     "winloop>=0.4.1",
     "numba>=0.63.1",
     "orjson>=3.11.7",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]

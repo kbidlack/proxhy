@@ -588,11 +588,7 @@ class BroadcastPlugin(ProxhyPlugin):
             self.initialize_broadcast_pyroh_server()
         )
 
-        if self.dev_mode:
-            self.client.chat(
-                TextComponent("==> Dev Mode Activated <==").color("green").bold()
-            )  # TODO: move to somewhere more appropriate
-        else:
+        if not self.dev_mode:
             bc_pyroh_server_task.add_done_callback(
                 lambda _: asyncio.create_task(self.initialize_cc())
             )

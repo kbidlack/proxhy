@@ -2,19 +2,21 @@ import asyncio
 import base64
 import random
 import uuid
+from importlib.metadata import version
 from importlib.resources import files
 from secrets import token_bytes
 from typing import Literal, Optional
 from unittest.mock import Mock
 
 import aiohttp
+import httpx
+import hypixel
 import orjson
 
 import auth
-import hypixel
 from auth.errors import AuthException
 from core.cache import Cache
-from core.events import listen_client, listen_server
+from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
@@ -471,3 +473,75 @@ class LoginPlugin(ProxhyPlugin):
                     )
 
         return secret
+
+    @subscribe("login_success")
+    async def _broadcast_event_login_success(self, _match, _data):
+        if self.dev_mode:
+            self.client.chat(
+                TextComponent("==> Dev Mode Activated <==").color("green").bold()
+            )
+
+            return
+
+        asyncio.create_task(self._check_for_update())
+
+    async def _check_for_update(self):
+        async with httpx.AsyncClient() as aclient:
+            current = version("proxhy")
+            latest = (
+                (
+                    await aclient.get(
+                        "https://api.github.com/repos/kbidlack/proxhy/releases/latest"
+                    )
+                )
+                .json()
+                .get("name")
+            )
+
+        base_url = "https://github.com/kbidlack/proxhy/releases/tag/v{}"
+        current_url = base_url.format(current)
+        latest_url = base_url.format(latest)
+
+        if latest and current != latest:
+            self.client.chat(
+                TextComponent("A new version of Proxhy is available!")
+                .appends(TextComponent("(").color("gray"))
+                .append(
+                    TextComponent(current)
+                    .hover_text(
+                        TextComponent(f"Click to view v{current} on GitHub").color(
+                            "yellow"
+                        )
+                    )
+                    .click_event("open_url", current_url)
+                    .color("white")
+                )
+                .append(TextComponent(" → ").color("gray"))
+                .append(
+                    TextComponent(latest)
+                    .hover_text(
+                        TextComponent(f"Click to view v{latest} on GitHub").color(
+                            "yellow"
+                        )
+                    )
+                    .click_event("open_url", latest_url)
+                    .color("green")
+                )
+                .append(TextComponent(")").color("gray"))
+            )
+            self.client.chat(
+                TextComponent("- See the")
+                .color("gray")
+                .appends(
+                    TextComponent("README")
+                    .click_event(
+                        "open_url",
+                        "https://github.com/kbidlack/proxhy?tab=readme-ov-file#upgrading",
+                    )
+                    .hover_text(
+                        TextComponent("Open the README on GitHub").color("yellow")
+                    )
+                    .bold()
+                )
+                .appends("for how to update Proxhy.")
+            )
