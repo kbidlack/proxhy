@@ -174,32 +174,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         packets = self.proxy.gamestate.sync_broadcast_spectator(self.eid)
         self.client.send_packet(*packets[0])  # join game
 
-        # set compression
-        # we are using 'broken' 0x46 packet because why not and because I can
-        # I guess I could use a plugin channel but that's like so much effort
-        # TODO: this needs logic for non proxhy broadcastees, in which compression
-        # should be set with the login packet (0x03)
-        self.client.compression_threshold = 256
-        # cb is set, sb is ack
-        self.client.send_packet(0x46, VarInt.pack(self.client.compression_threshold))
-        await self.compression_ready.wait()
-        self.client.compression = True
-
-        for packet_id, packet_data in packets[1:]:
-            if packet_id not in {
-                0x21,
-                0x26,  # chunks - send after respawn
-                0x0C,
-                0x0E,
-                0x0F,  # entity spawns - deferred to after login_success
-                0x1C,
-                0x04,
-                0x19,  # entity metadata/equipment/head look - deferred
-                0x1D,
-                0x20,  # entity effects/properties - deferred
-            }:
-                self.client.send_packet(packet_id, packet_data)
-
         # respawn back to actual dimension
         self.client.send_packet(
             0x07,
@@ -208,18 +182,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             UnsignedByte.pack(2),  # gamemode: adventure
             String.pack(self.proxy.gamestate.level_type),
         )
-
-        # Resend player list, teams, and chunks after respawn.
-        # Entity spawns are deferred until after login_success so the client
-        # is fully initialized before entities appear.
-        for packet_id, packet_data in packets[1:]:
-            if packet_id in {
-                0x38,  # Player List Item
-                0x3E,  # Teams
-                0x21,  # Chunk Data
-                0x26,  # Map Chunk Bulk
-            }:
-                self.client.send_packet(packet_id, packet_data)
 
         # send player pos and look after respawn to set correct pos
         pos = self.proxy.gamestate.position
@@ -233,6 +195,20 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Float.pack(rot.pitch),
             Byte.pack(0),  # flags: all absolute
         )
+
+        # set compression
+        # we are using 'broken' 0x46 packet because why not and because I can
+        # I guess I could use a plugin channel but that's like so much effort
+        # TODO: this needs logic for non proxhy broadcastees, in which compression
+        # should be set with the login packet (0x03)
+        self.client.compression_threshold = 256
+        # cb is set, sb is ack
+        self.client.send_packet(0x46, VarInt.pack(self.client.compression_threshold))
+        await self.compression_ready.wait()
+        self.client.compression = True
+
+        for packet_id, packet_data in packets[1:]:
+            self.client.send_packet(packet_id, packet_data)
 
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]
@@ -293,6 +269,8 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Boolean.pack(True),  # no display name for self
             Chat.pack(display_name),
         )
+
+        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
 
     async def _delayed_npc_removal(self) -> None:
         """Remove NPCs from tab list after a delay to allow skin loading."""
