@@ -1,66 +1,38 @@
 import asyncio
 
+import numba
 import numpy as np
 
-from core.events import listen_client, listen_server, subscribe
-from core.plugin import Plugin
+from core.events import subscribe
 from protocol.datatypes import (
     Boolean,
-    Buffer,
-    Double,
     Float,
     Int,
 )
-from proxhy.mcmodels import Game, Teams
-from proxhy.settings import ProxhySettings
+from proxhy.plugin import ProxhyPlugin
 
 
-class SpatialPlugin(Plugin):
-    teams: Teams
-    game: Game
-    settings: ProxhySettings
-    received_who: asyncio.Event
-    username: str
-    received_locraw: asyncio.Event
+@numba.njit(cache=True, fastmath=True)
+def _compute_height_warning(
+    y: float, min_height: int, max_height: int
+) -> tuple[bool, int, float]:
+    """Compute height warning data. Returns (should_warn, limit_dist, particle_y)."""
+    near_min = abs(min_height - y) <= 3
+    near_max = abs(max_height - y) <= 5
+    if not (near_min or near_max):
+        return False, 0, 0.0
 
-    def _init_spatial(self):
-        self.position: tuple[float, float, float] | None = None
-        self.check_height_task = asyncio.create_task(self.check_height_loop())
+    dist_to_min = abs(y - min_height)
+    dist_to_max = abs(max_height - y)
+    limit_dist = round(max(min(dist_to_min, dist_to_max), 0))
+    particle_y = max_height if dist_to_max < dist_to_min else min_height
+    return True, limit_dist, float(particle_y)
 
-    @subscribe("close")
-    async def _close_spatial(self, _):
-        self.check_height_task.cancel()
 
-    # =========================
-    #   TRACK PLAYER POSITION
-    # =========================
-    @listen_client(0x04)  # player position (for when look is unchanged)
-    async def sb_read_player_pos(self, buff: Buffer):
-        x = buff.unpack(Double)
-        y = buff.unpack(Double)
-        z = buff.unpack(Double)
-        self.position = (x, y, z)
-
-        # self.client.chat(f"Player Position: {x}, {y}, {z}")
-        self.server.send_packet(0x04, buff.getvalue())
-
-    @listen_client(0x06)  # player look and position
-    async def sb_read_player_pos_look(self, buff: Buffer):
-        x = buff.unpack(Double)
-        y = buff.unpack(Double)
-        z = buff.unpack(Double)
-        self.position = (x, y, z)
-
-        self.server.send_packet(0x06, buff.getvalue())
-
-    @listen_server(0x08)
-    async def cb_read_player_pos_look(self, buff: Buffer):
-        x = buff.unpack(Double)
-        y = buff.unpack(Double)
-        z = buff.unpack(Double)
-        self.position = (x, y, z)
-
-        self.client.send_packet(0x08, buff.getvalue())
+class SpatialPlugin(ProxhyPlugin):
+    @subscribe("login_success")
+    async def _spatial_event_login_success(self, _match, _data):
+        self.create_task(self.check_height_loop())
 
     async def check_height_loop(self):
         """Called once when the proxy is started; loops indefinitely"""
@@ -70,37 +42,35 @@ class SpatialPlugin(Plugin):
                 and self.settings.bedwars.visual.height_limit_warnings.get() == "ON"
                 and self.game.started
             ):
-                await self.height_limit_warnings()
+                self.height_limit_warnings()
 
             await asyncio.sleep(1 / 20)
 
-    async def height_limit_warnings(self):
+    def height_limit_warnings(self):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
-        if self.position is None or self.game.map is None:
+        if self.game.map is None:
             return
-        y = self.position[1]
+        y = self.gamestate.position.y
         max_height: int = self.game.map.max_height or 255
-        min_height: int = self.game.map.max_height or 0
+        min_height: int = self.game.map.min_height or 0
 
-        if abs(min_height - y) <= 3 or abs(max_height - y) <= 5:
-            limit_dist = round(max(min(abs(y - min_height), abs(max_height - y)), 0))
-            color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
-            self.client.set_actionbar_text(
-                f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
+        should_warn, limit_dist, particle_y = _compute_height_warning(
+            y, min_height, max_height
+        )
+        if not should_warn:
+            return
+
+        color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
+        self.client.set_actionbar_text(
+            f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
+        )
+        for _ in range(10):
+            particle_x = self.gamestate.position.x + np.random.normal(0, 0.7) * 3
+            particle_z = self.gamestate.position.z + np.random.normal(0, 0.7) * 3
+            self.display_particle(
+                particle_id=30, pos=(particle_x, particle_y, particle_z)
             )
-            particle_y = (  # whichever height limit the player is closest to
-                max_height
-                if abs(max_height - self.position[1])
-                < abs(min_height - self.position[1])
-                else min_height
-            )
-            for _ in range(10):
-                particle_x = self.position[0] + np.random.normal(0, 0.7) * 3
-                particle_z = self.position[2] + np.random.normal(0, 0.7) * 3
-                self.display_particle(
-                    particle_id=30, pos=(particle_x, particle_y, particle_z)
-                )
 
     def display_particle(
         self,
@@ -117,15 +87,15 @@ class SpatialPlugin(Plugin):
             )
         self.client.send_packet(
             0x2A,  # display particle
-            Int(particle_id),  # particle id
-            Boolean(True),  # long distance?
-            Float(pos[0]),  # xyz particle coords
-            Float(pos[1]),
-            Float(pos[2]),
-            Float(offset[0]),  # xyz particle offset
-            Float(offset[1]),
-            Float(offset[2]),
-            Float(particle_data),
-            Int(count),  # num of particles
+            Int.pack(particle_id),  # particle id
+            Boolean.pack(True),  # long distance?
+            Float.pack(pos[0]),  # xyz particle coords
+            Float.pack(pos[1]),
+            Float.pack(pos[2]),
+            Float.pack(offset[0]),  # xyz particle offset
+            Float.pack(offset[1]),
+            Float.pack(offset[2]),
+            Float.pack(particle_data),
+            Int.pack(count),  # num of particles
             # VarInt.pack(data),  # array of VarInt; most particles have length 0
         )

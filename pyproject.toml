@@ -1,6 +1,6 @@
 [project]
 name = "proxhy"
-version = "2025.12.17"
+version = "2026.02.19"
 description = "A Hypixel proxy with various different features"
 license = "MIT"
 authors = [
@@ -9,14 +9,19 @@ authors = [
 ]
 requires-python = ">=3.14"
 dependencies = [
-    "hypixel.py>=0.4",
     "cryptography>=45.0",
     "keyring>=25.6",
     "pyjwt>=2.10",
     "platformdirs>=4.3",
     "numpy>=2.3.3",
-    "uvloop>=0.22.1",
-    "winloop>=0.4.0"
+    "pyroh",
+    "compass",
+    "hypixel-py>=0.4.2",
+    "uvloop>=0.22.1; platform_system != 'Windows'",
+    "winloop>=0.4.1",
+    "numba>=0.63.1",
+    "orjson>=3.11.7",
+    "httpx>=0.28.1",
 ]
 
 [project.scripts]
@@ -26,8 +31,12 @@ proxhy = "proxhy.main:main"
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools]
-packages = ["proxhy", "core", "plugins", "auth", "protocol"]
+[tool.setuptools.packages.find]
+where = ["."]
 
 [tool.setuptools.package-data]
-"proxhy" = ["assets/*"]
+"assets" = ["*.json", "*.png"]
+
+[tool.uv.sources]
+pyroh = { git = "https://github.com/kbidlack/pyroh" }
+compass = { git = "https://github.com/kbidlack/compass.git", subdirectory = "client" }

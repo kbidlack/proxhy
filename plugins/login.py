@@ -1,22 +1,23 @@
 import asyncio
 import base64
-import json
 import random
 import uuid
+from importlib.metadata import version
 from importlib.resources import files
 from secrets import token_bytes
 from typing import Literal, Optional
 from unittest.mock import Mock
 
 import aiohttp
+import httpx
 import hypixel
+import orjson
 
 import auth
-from auth.errors import AuthException, InvalidCredentials, NotPremium
+from auth.errors import AuthException
 from core.cache import Cache
-from core.events import listen_client, listen_server
+from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
-from core.plugin import Plugin
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
     Boolean,
@@ -27,25 +28,43 @@ from protocol.datatypes import (
     Double,
     Float,
     Int,
+    Short,
+    Slot,
     String,
     TextComponent,
     UnsignedByte,
     UnsignedShort,
     VarInt,
 )
-from proxhy.command import command
-from proxhy.errors import CommandException
+from proxhy.plugin import ProxhyPlugin
 
 
-class LoginPlugin(Plugin):
+class LoginPluginState:
+    logged_in: bool
+    logging_in: bool
+    regenerating_credentials: bool
+    device_code_task: Optional[asyncio.Task]
+    server_list_ping: dict
+    access_token: str
+    username: str
+    uuid: str
+    secret: bytes
+    secret_task: Optional[asyncio.Task]
+    keep_alive_task: Optional[asyncio.Task]
+    transferring_to_server: bool
+
+
+class LoginPlugin(ProxhyPlugin):
     def _init_login(self):
         self.logged_in = False
         self.logging_in = False
         self.regenerating_credentials = False
+        self.device_code_task = None
+        self.transferring_to_server = False
 
         # load favicon
         # https://github.com/barneygale/quarry/blob/master/quarry/net/server.py/#L356-L357
-        favicon_path = files("proxhy").joinpath("assets/favicon.png")
+        favicon_path = files("assets").joinpath("favicon.png")
         with favicon_path.open("rb") as file:
             b64_favicon = (
                 base64.encodebytes(file.read()).decode("ascii").replace("\n", "")
@@ -72,9 +91,17 @@ class LoginPlugin(Plugin):
     async def packet_login_success(self, buff: Buffer):
         self.state = State.PLAY
         self.logged_in = True
+        self.transferring_to_server = False
+
+        # parse and store uuid from login success packet
+        # for localhost/offline mode when uuid isnt set during auth
+        uuid_str = buff.unpack(String)
+        username = buff.unpack(String)
+        if not self.uuid:
+            self.uuid = uuid_str
 
         if not self.logging_in:
-            self.client.send_packet(0x02, buff.read())
+            self.client.send_packet(0x02, String.pack(uuid_str), String.pack(username))
 
         await self.emit("login_success")
 
@@ -88,7 +115,7 @@ class LoginPlugin(Plugin):
             # removes weird bugs when you join
             self.client.send_packet(
                 0x07,
-                Int(-1),  # dimension: nether
+                Int.pack(-1),  # dimension: nether
                 UnsignedByte.pack(0),  # difficulty: peaceful
                 UnsignedByte.pack(3),  # gamemode: spectator
                 String.pack("default"),  # level type
@@ -104,13 +131,47 @@ class LoginPlugin(Plugin):
 
             self.client.send_packet(
                 0x07,
-                Int(dimension),  # dimension
+                Int.pack(dimension),  # dimension
                 UnsignedByte.pack(difficulty),  # difficulty
                 UnsignedByte.pack(gamemode),  # gamemode
                 String.pack(level_type),  # level type
             )
+
         else:
             self.client.send_packet(0x01, buff.getvalue())
+
+    async def _resend_armor_stands(self):
+        await asyncio.sleep(1.0)
+        while self.open and self.client.open:
+            for entity in list(self.gamestate.entities.values()):
+                if entity.entity_type != 78:
+                    continue
+
+                eid = entity.entity_id
+                # destroy first
+                self.client.send_packet(0x13, VarInt.pack(1) + VarInt.pack(eid))
+                packet_id, packet_data = self.gamestate._build_spawn_object(entity)
+                self.client.send_packet(packet_id, packet_data)
+                if entity.metadata:
+                    self.client.send_packet(
+                        0x1C,
+                        VarInt.pack(eid)
+                        + self.gamestate._pack_metadata(entity.metadata),
+                    )
+                equip = entity.equipment
+                for slot_id, item in [
+                    (0, equip.held),
+                    (1, equip.boots),
+                    (2, equip.leggings),
+                    (3, equip.chestplate),
+                    (4, equip.helmet),
+                ]:
+                    if item.item:
+                        self.client.send_packet(
+                            0x04,
+                            VarInt.pack(eid) + Short.pack(slot_id) + Slot.pack(item),
+                        )
+            await asyncio.sleep(5.0)
 
     @listen_client(0x00, State.LOGIN, blocking=True, override=True)
     async def packet_login_start(self, buff: Buffer):
@@ -122,11 +183,28 @@ class LoginPlugin(Plugin):
         if auth.token_needs_refresh(self.username):
             return await self.login(reason="regen")
 
-        reader, writer = await asyncio.open_connection(
-            self.CONNECT_HOST[0], self.CONNECT_HOST[1]
-        )
+        try:
+            reader, writer = await asyncio.open_connection(
+                self.CONNECT_HOST[0], self.CONNECT_HOST[1]
+            )
+        except ConnectionRefusedError:
+            if self.transferring_to_server:
+                packet_id = 0x40  # client is on play state
+                self.transferring_to_server = False
+            else:
+                packet_id = 0x00
+            self.client.send_packet(
+                packet_id,
+                Chat.pack(
+                    TextComponent(
+                        f"Failed to connect to {self.CONNECT_HOST[0]}:{self.CONNECT_HOST[1]}"
+                    ).color("red")
+                ),
+            )
+            return await self.close()
+
         self.server = Server(reader, writer)
-        asyncio.create_task(self.handle_server())
+        self.handle_server_task = asyncio.create_task(self.handle_server())
 
         if self.keep_alive_task:
             self.keep_alive_task.cancel()
@@ -135,10 +213,10 @@ class LoginPlugin(Plugin):
 
         self.server.send_packet(
             0x00,
-            VarInt(47),
-            String(self.CONNECT_HOST[2]),
-            UnsignedShort(self.CONNECT_HOST[3]),
-            VarInt(State.LOGIN.value),
+            VarInt.pack(47),
+            String.pack(self.FAKE_CONNECT_HOST[0]),
+            UnsignedShort.pack(self.FAKE_CONNECT_HOST[1]),
+            VarInt.pack(State.LOGIN.value),
         )
 
         if self.CONNECT_HOST[0] not in {"localhost", "127.0.0.1", "::1"}:
@@ -155,48 +233,101 @@ class LoginPlugin(Plugin):
                         self._session_encrypt(server_id, public_key)
                     )
 
-        self.server.send_packet(0x00, String(self.username))
+        self.server.send_packet(0x00, String.pack(self.username))
 
-    @command("login")
-    async def login_command(self, email, password):
-        if (not self.logging_in) or self.regenerating_credentials:
-            raise CommandException("You can't use that right now!")
-
-        login_msg = TextComponent("Logging in...").color("gold")
-        self.client.chat(login_msg)
-
+    async def _start_device_code_flow(self):
         try:
-            access_token, username, uuid = await auth.login(email, password)
-        except InvalidCredentials:
-            raise CommandException("Login failed; invalid credentials!")
-        except NotPremium:
-            raise CommandException("This account is not premium!")
+            device = await auth.request_device_code()
+
+            self.client.chat(
+                TextComponent("To log in, visit")
+                .color("gold")
+                .appends(
+                    TextComponent(device["verification_uri"])
+                    .color("aqua")
+                    .click_event("open_url", device["verification_uri"])
+                    .hover_text(TextComponent("Open in browser").color("yellow"))
+                )
+                .appends("and enter code")
+                .appends(
+                    TextComponent(device["user_code"])
+                    .color("green")
+                    .bold()
+                    .click_event("suggest_command", device["user_code"])
+                    .hover_text(
+                        TextComponent("Copy")
+                        .color("yellow")
+                        .appends(
+                            TextComponent(device["user_code"]).color("green").bold()
+                        )
+                    )
+                )
+            )
+
+            def on_pending():
+                pass
+
+            try:
+                access_token, username, uuid = await auth.complete_device_code_login(
+                    device["device_code"],
+                    interval=device.get("interval", 5),
+                    expires_in=device.get("expires_in", 900),
+                    on_pending=on_pending,
+                )
+            except auth.AuthException as e:
+                if e.code == "XSTS-2148916233":
+                    self.client.send_packet(
+                        0x40,
+                        Chat.pack(
+                            TextComponent(
+                                "This Microsoft account does not have a linked Minecraft account!"
+                            ).color("red")
+                        ),
+                    )
+                else:
+                    self.client.send_packet(
+                        0x40,
+                        Chat.pack(
+                            TextComponent("An unknown error occurred:")
+                            .color("red")
+                            .appends(TextComponent(str(e)))
+                        ),
+                    )
+                return
+
+            if username != self.username:
+                self.client.send_packet(
+                    0x40,
+                    Chat.pack(
+                        TextComponent("Wrong account! Logged into")
+                        .color("red")
+                        .appends(TextComponent(username).color("aqua"))
+                        .append("; expected")
+                        .appends(TextComponent(self.username).color("aqua"))
+                    ),
+                )
+                return
+
+            self.access_token = access_token
+            self.uuid = uuid
+
+            success_msg = TextComponent(
+                f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
+            ).color("green")
+            self.client.chat(success_msg)
+            self.state = State.LOGIN
+            self.transferring_to_server = True
+
+            await self.packet_login_start(Buffer(String.pack(self.username)))
+
         except AuthException as e:
-            raise CommandException(
-                f"An unknown error occurred while logging in! Try again? {e}"
-            )
-
-        if username != self.username:
-            raise CommandException(
-                f"Wrong account! Logged into {username}; expected {self.username}"
-            )
-
-        self.access_token = access_token
-        self.uuid = uuid
-
-        success_msg = TextComponent(
-            f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
-        ).color("green")
-        self.client.chat(success_msg)
-        self.state = State.LOGIN
-
-        await self.packet_login_start(Buffer(String.pack(self.username)))
+            self.client.chat(TextComponent(f"Authentication failed: {e}").color("red"))
 
     async def login_keep_alive(self):
         while True:
             await asyncio.sleep(10)
             if self.state == State.PLAY and self.client.open and self.logging_in:
-                self.client.send_packet(0x00, VarInt(random.randint(0, 256)))
+                self.client.send_packet(0x00, VarInt.pack(random.randint(0, 256)))
             else:
                 await self.close()
                 break
@@ -225,29 +356,35 @@ class LoginPlugin(Plugin):
             uuid_ = await c._get_uuid(self.username)
 
         self.client.send_packet(
-            0x02, String(str(uuid.UUID(uuid_))), String(self.username)
+            0x02, String.pack(str(uuid.UUID(uuid_))), String.pack(self.username)
         )
 
         self.client.send_packet(
             0x01,
-            Int(0),
-            UnsignedByte(3),
-            Byte(b"\x01"),
-            UnsignedByte(0),
-            UnsignedByte(1),
-            String("default"),
-            Boolean(True),
+            Int.pack(0),
+            UnsignedByte.pack(3),
+            Byte.pack(b"\x01"),
+            UnsignedByte.pack(0),
+            UnsignedByte.pack(1),
+            String.pack("default"),
+            Boolean.pack(True),
         )
 
         self.client.send_packet(
-            0x08, Double(0), Double(0), Double(0), Float(0), Float(0), Byte(b"\x00")
+            0x08,
+            Double.pack(0),
+            Double.pack(0),
+            Double.pack(0),
+            Float.pack(0),
+            Float.pack(0),
+            Byte.pack(b"\x00"),
         )
 
-        self.keep_alive_task = asyncio.create_task(self.login_keep_alive())
+        self.keep_alive_task = self.create_task(self.login_keep_alive())
 
         if reason == "logging_in":
             self.client.chat("You have not logged into Proxhy with this account yet!")
-            self.client.chat("Use /login <email> <password> to log in.")
+            self.device_code_task = self.create_task(self._start_device_code_flow())
         else:
             self.regenerating_credentials = True
             self.client.set_title(
@@ -285,7 +422,9 @@ class LoginPlugin(Plugin):
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self, _):
-        self.client.send_packet(0x00, String(json.dumps(self.server_list_ping)))
+        self.client.send_packet(
+            0x00, String.pack(orjson.dumps(self.server_list_ping).decode())
+        )
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self, buff: Buffer):
@@ -337,8 +476,8 @@ class LoginPlugin(Plugin):
 
         self.server.send_packet(
             0x01,
-            ByteArray(encrypted_secret),
-            ByteArray(encrypted_verify_token),
+            ByteArray.pack(encrypted_secret),
+            ByteArray.pack(encrypted_verify_token),
         )
 
         # enable encryption
@@ -370,3 +509,79 @@ class LoginPlugin(Plugin):
                     )
 
         return secret
+
+    @subscribe("login_success")
+    async def _login_start_armor_stand_task(self, _match, _data):
+        self.create_task(self._resend_armor_stands())
+
+    @subscribe("login_success")
+    async def _broadcast_event_login_success(self, _match, _data):
+        if self.dev_mode:
+            self.client.chat(
+                TextComponent("==> Dev Mode Activated <==").color("green").bold()
+            )
+
+            return
+
+        asyncio.create_task(self._check_for_update())
+
+    async def _check_for_update(self):
+        async with httpx.AsyncClient() as aclient:
+            current = version("proxhy")
+            latest = (
+                (
+                    await aclient.get(
+                        "https://api.github.com/repos/kbidlack/proxhy/releases/latest"
+                    )
+                )
+                .json()
+                .get("name")
+            )
+
+        base_url = "https://github.com/kbidlack/proxhy/releases/tag/v{}"
+        current_url = base_url.format(current)
+        latest_url = base_url.format(latest)
+
+        if latest and current != latest:
+            self.client.chat(
+                TextComponent("A new version of Proxhy is available!")
+                .appends(TextComponent("(").color("gray"))
+                .append(
+                    TextComponent(current)
+                    .hover_text(
+                        TextComponent(f"Click to view v{current} on GitHub").color(
+                            "yellow"
+                        )
+                    )
+                    .click_event("open_url", current_url)
+                    .color("white")
+                )
+                .append(TextComponent(" → ").color("gray"))
+                .append(
+                    TextComponent(latest)
+                    .hover_text(
+                        TextComponent(f"Click to view v{latest} on GitHub").color(
+                            "yellow"
+                        )
+                    )
+                    .click_event("open_url", latest_url)
+                    .color("green")
+                )
+                .append(TextComponent(")").color("gray"))
+            )
+            self.client.chat(
+                TextComponent("- See the")
+                .color("gray")
+                .appends(
+                    TextComponent("README")
+                    .click_event(
+                        "open_url",
+                        "https://github.com/kbidlack/proxhy?tab=readme-ov-file#upgrading",
+                    )
+                    .hover_text(
+                        TextComponent("Open the README on GitHub").color("yellow")
+                    )
+                    .bold()
+                )
+                .appends("for how to update Proxhy.")
+            )

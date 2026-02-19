@@ -1,60 +1,71 @@
-from core.plugin import Plugin
-from protocol.datatypes import TextComponent
-from proxhy.command import command
-from proxhy.mcmodels import Game, Teams
-
-# from core.events import listen_server, subscribe
-# from protocol.datatypes import (
-#     UUID,
-#     Boolean,
-#     Buffer,
-#     Chat,
-#     String,
-#     VarInt,
-# )
+from plugins.commands import command
+from protocol.datatypes import (
+    TextComponent,
+)
+from proxhy.plugin import ProxhyPlugin
 
 
-class DebugPlugin(Plugin):
-    game: Game
-    rq_game: Game
-    teams: Teams
+class DebugPluginState:
+    pass
 
-    # sorta debug commands
+
+class DebugPlugin(ProxhyPlugin):
     @command("game")
-    async def _game(self):
-        game_msg = TextComponent("Game:").color("green")
-        self.client.chat(game_msg)
-        for key in self.game.__annotations__:
+    async def _command_game(self):
+        """Display current game info."""
+        self.client.chat(TextComponent("Game:").color("green"))
+        for key in type(self.game).__annotations__:
             if value := getattr(self.game, key):
-                key_value_msg = (
+                self.client.chat(
                     TextComponent(f"{key.capitalize()}: ")
                     .color("aqua")
                     .append(TextComponent(str(value)).color("yellow"))
                 )
-                self.client.chat(key_value_msg)
 
     @command("rqgame")
-    async def _rqgame(self):
-        rq_game_msg = TextComponent("Requeue Game:").color("green")
-        self.client.chat(rq_game_msg)
+    async def _command_rqgame(self):
+        """Display requeue game info."""
+        self.client.chat(TextComponent("Requeue Game:").color("green"))
         for key in type(self.rq_game).__annotations__:
             if value := getattr(self.rq_game, key):
-                key_value_msg = (
+                self.client.chat(
                     TextComponent(f"{key.capitalize()}: ")
                     .color("aqua")
                     .append(TextComponent(str(value)).color("yellow"))
                 )
-                self.client.chat(key_value_msg)
 
     @command("teams")
-    async def _teams(self):
+    async def _command_teams(self):
+        """[DEBUG] Print out all current teams known to Proxhy."""
         print("\n")
-        for team in self.teams:
-            print(f"Team: {team}")
+        for team_name, team in self.gamestate.teams.items():
+            print(f"{team_name}: {team}")
         print("\n")
 
+    @command("player_list")
+    async def _command_player_list(self):
+        """[DEBUG] List all players known to Proxhy."""
+        print([(p.name, p.uuid) for p in self.gamestate.player_list.values()])
+
+    @command("iphone_ringtone")
+    async def _command_iphone_ringtone(self):
+        """[DEBUG] Play the iPhone ringtone sound."""
+        await self._iphone_ringtone()
+
+    @command("samsung_ringtone")
+    async def _command_samsung_ringtone(self):
+        """[DEBUG] Play the Samsung ringtone sound."""
+        await self._samsung_ringtone()
+
+    @command("pos")
+    async def _command_pos(self):
+        """Get your current position."""
+        self.client.chat(
+            f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
+        )
+
     # @subscribe("chat:server:.*")
-    # async def log_chat_msg(self, buff: Buffer):
+    # async def log_chat_msg(self, _match, buff: Buffer):
     #     buff = Buffer(buff.getvalue())
     #     print(buff.unpack(Chat))
 

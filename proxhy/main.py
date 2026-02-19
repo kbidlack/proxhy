@@ -1,10 +1,15 @@
 import argparse
 import asyncio
+import errno
 import platform
 import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
+import pyroh
+
+import auth
+from core.proxy import Proxy
 from proxhy.proxhy import Proxhy
 
 if platform.system() == "Windows":
@@ -14,7 +19,9 @@ else:
 
 loop_impl.install()
 
-instances: list[Proxhy] = []
+instances: list[Proxy] = []
+
+auth.set_client_id("6dd7ede8-1d77-4fff-a7ea-6e07c09d6163")
 
 
 def parse_args():
@@ -48,7 +55,7 @@ def parse_args():
     parser.add_argument(
         "--dev",
         action="store_true",
-        help="Shorthand to bind proxhy to localhost:41224 to develop on a separate instance",
+        help="Enable developer mode",
     )
     parser.add_argument(
         "-fh",
@@ -73,7 +80,10 @@ if args.local:
     args.remote_port = 25565
 
 if args.dev:
+    args.dev = True
     args.port = 41224
+else:
+    args.dev = False
 
 if not args.fake_host:
     args.fake_host = args.remote_host
@@ -107,27 +117,53 @@ class ProxhyServer:
 
 
 async def handle_client(reader: StreamReader, writer: StreamWriter):
-    instances.append(
-        Proxhy(
-            reader,
-            writer,
-            connect_host=(
-                args.remote_host,
-                args.remote_port,
-                args.fake_host,
-                args.fake_port,
-            ),
-        )
+    proxy = Proxhy(
+        reader,
+        writer,
+        connect_host=(args.remote_host, args.remote_port),
+        autostart=False,
+        fake_connect_host=(args.fake_host, args.fake_port),
+        dev_mode=args.dev,
     )
+    instances.append(proxy)
+
+    while proxy:
+        next_proxy = await proxy.run()
+        if next_proxy:
+            try:
+                idx = instances.index(proxy)
+                instances[idx] = next_proxy
+            except ValueError:
+                instances.append(next_proxy)
+            proxy = next_proxy
+        else:
+            try:
+                instances.remove(proxy)
+            except ValueError:
+                pass
+            proxy = None
 
 
 async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
-    server = await asyncio.start_server(handle_client, host, port)
+    try:
+        server = await asyncio.start_server(handle_client, host, port)
+    except OSError as e:
+        if (e.errno == errno.EADDRINUSE) or (getattr(e, "winerror", None) == 10048):
+            print(
+                f"Error: could not bind to {host}:{port}. "
+                "(Do you already have another instance of Proxhy running?)",
+                sep="\n",
+            )
+            sys.exit(1)
+        raise
+
     server = ProxhyServer(server)
 
     print(
         f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
+    if args.dev:
+        print("==> DEV MODE ACTIVATED <==")
 
     return server
 
@@ -138,19 +174,82 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
     if server.num_cancels > 1:
         print("\nForcing shutdown...", end=" ", flush=True)
-        for instance in instances:
-            await instance.close()
+        close_tasks = [instance.close(force=True) for instance in instances]
+        if close_tasks:
+            try:
+                await asyncio.wait_for(
+                    asyncio.gather(*close_tasks, return_exceptions=True),
+                    timeout=1.0,
+                )
+            except asyncio.TimeoutError:
+                pass  # continue anyway
+
+        pending = [
+            t for t in asyncio.all_tasks(loop) if t is not asyncio.current_task()
+        ]
+        for task in pending:
+            task.cancel()
+
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+
         print("done!")
         loop.stop()
         return
 
     if instances:
-        print("Waiting for all clients to disconnect...", end="", flush=True)
-        for instance in instances:
-            await instance.closed.wait()
-        # only print if not interrupted by forced shutdown
-        if server.num_cancels == 1:
-            print("done!")
+        logged_in_instances = []
+        non_logged_in_instances = []
+        for i, instance in enumerate(instances):
+            if getattr(instance, "logged_in", False):
+                logged_in_instances.append(instance)
+            else:
+                non_logged_in_instances.append(instance)
+
+        # force non logged in instances to close immediately
+        # these are ones probably just created to check server status
+        # TODO: time these out so we don't always have to close them here?
+        # ^ and so that they don't clutter the instances list
+        if non_logged_in_instances:
+            print(
+                f"\nClosing {len(non_logged_in_instances)} non-logged-in connection(s)..."
+            )
+            await asyncio.gather(
+                *(inst.close(force=True) for inst in non_logged_in_instances),
+                return_exceptions=True,
+            )
+
+        if logged_in_instances:
+            print(f"Waiting for {len(logged_in_instances)} client(s) to disconnect...")
+
+            instance_info = []
+            for i, instance in enumerate(logged_in_instances):
+                username = getattr(instance, "username", None) or f"instance_{i}"
+                pending_tasks = [
+                    attr
+                    for attr in dir(instance)
+                    if isinstance(getattr(instance, attr, None), asyncio.Task)
+                    and not getattr(instance, attr).done()
+                ]
+                instance_info.append((instance, username, pending_tasks))
+                print(
+                    f"  - {username} (open={instance.open}, closed={instance.closed.is_set()})"
+                )
+                if pending_tasks:
+                    print(f"    Pending tasks: {pending_tasks}")
+
+            async def wait_for_disconnect(instance, username):
+                await instance.closed.wait()
+                print(f"  - {username} disconnected!")
+
+            print("Waiting...")
+            await asyncio.gather(
+                *(wait_for_disconnect(inst, uname) for inst, uname, _ in instance_info)
+            )
+
+            # only print if not interrupted by forced shutdown
+            if server.num_cancels == 1:
+                print("All clients disconnected!")
     else:
         print("Shutting down...", end=" ", flush=True)
         server.close()
@@ -162,6 +261,8 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
 # Main entry point
 async def _main():
+    pyroh.setup_event_loop()
+
     # Start server first so the signal handler can reference it safely
     server = await start(
         host="localhost",

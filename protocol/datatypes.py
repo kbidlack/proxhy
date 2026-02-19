@@ -1,13 +1,16 @@
-import json
 import re
 import struct
 import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from importlib.resources import files  # noqa: F401
 from io import BytesIO
-from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol
+from typing import TYPE_CHECKING, Any, Literal, Optional, Protocol, overload
+
+import orjson
+
+from assets import load_json_asset
+
+from . import nbt
 
 if TYPE_CHECKING:
 
@@ -24,10 +27,7 @@ class Pos:
     z: int = 0
 
 
-im_path = files("proxhy").joinpath("assets/item_mappings.json")
-
-with im_path.open("r") as file:
-    item_mapping = json.load(file)
+item_mapping = load_json_asset("item_mappings.json")
 
 
 @dataclass
@@ -59,12 +59,32 @@ class Item:
         return cls(**item) if item else None
 
 
-@dataclass
 class SlotData:
-    item: Optional[Item] = None
-    count: int = 1
-    damage: int = 0
-    nbt: bytes = b""
+    __slots__ = ("item", "count", "damage", "nbt")
+
+    @overload
+    def __init__(self, item: None = None) -> None: ...
+    @overload
+    def __init__(
+        self, item: Item, count: int = 1, damage: int = 0, nbt: bytes = b""
+    ) -> None: ...
+
+    def __init__(
+        self,
+        item: Optional[Item] = None,
+        count: int = 1,
+        damage: int = 0,
+        nbt: bytes = b"",
+    ):
+        self.item = item
+        if item is None:
+            self.count = 0
+            self.damage = 0
+            self.nbt = b""
+        else:
+            self.count = count
+            self.damage = damage
+            self.nbt = nbt
 
 
 class Buffer(BytesIO):
@@ -194,7 +214,7 @@ class UnsignedByte(DataType[int, int]):
 class ByteArray(DataType[bytes, bytes]):
     @staticmethod
     def pack(value: bytes) -> bytes:
-        return VarInt(len(value)) + value
+        return VarInt.pack(len(value)) + value
 
     @staticmethod
     def unpack(buff) -> bytes:
@@ -245,7 +265,7 @@ class TextComponent:
             if data:
                 first = data[0] if isinstance(data[0], dict) else {"text": str(data[0])}
                 if len(data) > 1:
-                    first["extra"] = data[1:]  # type: ignore
+                    first["extra"] = data[1:]
                 data = first
             else:
                 data = {}
@@ -258,7 +278,7 @@ class TextComponent:
 
     def __repr__(self) -> str:
         """Return a string representation of the component"""
-        return f"TextComponent({json.dumps(self.data, separators=(',', ':'))})"
+        return f"TextComponent({orjson.dumps(self.data).decode()})"
 
     def _validate_and_normalize(self):
         """Validate component structure and auto-detect content type"""
@@ -412,7 +432,17 @@ class TextComponent:
         self.data["insertion"] = text
         return self
 
-    def click_event(self, action: str, value: str) -> TextComponent:
+    def click_event(
+        self,
+        action: Literal[
+            "open_url",
+            "run_command",
+            "suggest_command",
+            "change_page",
+            # "copy_to_clipboard", # does not seem to work in 1.8
+        ],
+        value: str,
+    ) -> TextComponent:
         """Set click event (open_url, run_command, suggest_command, etc.)"""
         self.data["clickEvent"] = {"action": action, "value": value}
         return self
@@ -480,7 +510,7 @@ class TextComponent:
     # Utility methods
     def copy(self) -> TextComponent:
         """Create a deep copy of this component"""
-        return TextComponent(json.loads(json.dumps(self.data)))
+        return TextComponent(orjson.loads(orjson.dumps(self.data)))
 
     def to_dict(self) -> dict:
         """Get the underlying dictionary representation"""
@@ -488,7 +518,7 @@ class TextComponent:
 
     def to_json(self) -> str:
         """Convert to JSON string"""
-        return json.dumps(self.data, separators=(",", ":"))
+        return orjson.dumps(self.data).decode()
 
     def is_empty(self) -> bool:
         """Check if component has no content"""
@@ -546,7 +576,7 @@ class TextComponent:
                     else {"text": str(component[0])}
                 )
                 if len(component) > 1:
-                    first["extra"] = component[1:]  # type: ignore
+                    first["extra"] = component[1:]
                 return first
             return {}
         else:
@@ -699,6 +729,42 @@ class TextComponent:
             return cls(root.data["extra"][0])
         return root
 
+    _REVERSE_COLORS: dict[str, str] = {v: k for k, v in COLOR_CODES.items()}
+    _REVERSE_FORMATS: dict[str, str] = {
+        v: k for k, v in FORMAT_CODES.items() if v != "reset"
+    }
+
+    def to_legacy(self) -> str:
+        """Convert this TextComponent to a legacy §-formatted string."""
+        parts: list[str] = []
+        self._build_legacy(self.data, parts)
+        return "".join(parts)
+
+    @classmethod
+    def _build_legacy(cls, data: dict | str | list, parts: list[str]) -> None:
+        if isinstance(data, str):
+            parts.append(data)
+            return
+        if isinstance(data, list):
+            for item in data:
+                cls._build_legacy(item, parts)
+            return
+
+        prefix = ""
+        color = data.get("color")
+        if color and color in cls._REVERSE_COLORS:
+            prefix += f"§{cls._REVERSE_COLORS[color]}"
+        for fmt, code in cls._REVERSE_FORMATS.items():
+            if data.get(fmt):
+                prefix += f"§{code}"
+
+        text = data.get("text", "")
+        if text or prefix:
+            parts.append(f"{prefix}{text}")
+
+        for child in data.get("extra", []):
+            cls._build_legacy(child, parts)
+
 
 class Chat(DataType[str, str]):
     """Chat message from the server - enhanced with TextComponent support"""
@@ -707,13 +773,13 @@ class Chat(DataType[str, str]):
     def pack(value: str | TextComponent | dict) -> bytes:
         """Pack a text component or string to bytes"""
         if isinstance(value, TextComponent):
-            return String(value.to_json())
+            return String.pack(value.to_json())
         elif isinstance(value, str):
-            return String(json.dumps({"text": value}))
+            return String.pack(orjson.dumps({"text": value}).decode())
         elif isinstance(value, dict):
-            return String(json.dumps(value))
+            return String.pack(orjson.dumps(value).decode())
         else:
-            return String(json.dumps({"text": str(value)}))
+            return String.pack(orjson.dumps({"text": str(value)}).decode())
 
     @staticmethod
     def pack_msg(value: str | TextComponent | dict) -> bytes:
@@ -724,7 +790,7 @@ class Chat(DataType[str, str]):
     def unpack(buff) -> str:
         """Unpack to plain text string (legacy behavior)"""
         # https://github.com/barneygale/quarry/blob/master/quarry/types/chat.py#L86-L107
-        data = json.loads(buff.unpack(String))
+        data = orjson.loads(buff.unpack(String))
 
         def parse(data):
             text = ""
@@ -749,7 +815,7 @@ class Chat(DataType[str, str]):
     @staticmethod
     def unpack_component(buff) -> TextComponent:
         """Unpack to TextComponent object"""
-        data = json.loads(buff.unpack(String))
+        data = orjson.loads(buff.unpack(String))
         return TextComponent(data)
 
 
@@ -757,7 +823,7 @@ class String(DataType[str | TextComponent, str]):
     @staticmethod
     def pack(value: str | TextComponent) -> bytes:
         bvalue = str(value).encode("utf-8")
-        return VarInt(len(bvalue)) + bvalue
+        return VarInt.pack(len(bvalue)) + bvalue
 
     @staticmethod
     def unpack(buff) -> str:
@@ -846,7 +912,7 @@ class Float(DataType[float, float]):
 class Angle(DataType[float, float]):
     @staticmethod
     def pack(value: float) -> bytes:
-        return UnsignedByte(int(256 * ((value % 360) / 360)))
+        return UnsignedByte.pack(int(256 * ((value % 360) / 360)))
         # return struct.pack(">B", int(value * 256 / 360) & 0xFF)
 
     @staticmethod
@@ -885,7 +951,46 @@ class Slot(DataType[SlotData, SlotData]):
         count = buff.unpack(Byte)
         damage = buff.unpack(Short)
 
-        rest_of_data = buff.read()
-        nbt = b"" if not rest_of_data[0] else rest_of_data
+        nbt_data = Slot._read_nbt(buff)
 
-        return SlotData(Item.from_id(item_id), count, damage, nbt)
+        return SlotData(Item.from_id(item_id), count, damage, nbt_data)
+
+    @staticmethod
+    def _read_nbt(buff: Buffer) -> bytes:
+        """Read NBT data from buffer and return the raw bytes"""
+        start_pos = buff.tell()
+
+        # Peek at tag type
+        tag_type_byte = buff.read(1)
+        if not tag_type_byte or tag_type_byte[0] == 0:
+            # TAG_End or empty - no NBT data
+            return b""
+
+        # Reset to start and read the full NBT structure using the nbt library
+        buff.seek(start_pos)
+
+        # Read enough bytes to parse the NBT - we'll use the NBTReader to determine the size
+        # First, get all remaining bytes from current position
+        remaining_data = buff.read()
+        buff.seek(start_pos)
+
+        if not remaining_data:
+            return b""
+
+        try:
+            # Use NBTReader to parse and determine exact size
+            reader = nbt.NBTReader(remaining_data)
+            reader.read_root()  # This will parse the NBT structure
+
+            # The reader's internal BytesIO position tells us how many bytes were consumed
+            bytes_consumed = reader.data.tell()
+
+            # Now read exactly that many bytes from the original buffer
+            nbt_data = buff.read(bytes_consumed)
+            return nbt_data
+
+        except (nbt.NBTError, Exception):
+            # If parsing fails, assume no NBT data
+            buff.seek(start_pos)
+            buff.read(1)  # Consume the tag type byte we already read
+            return b""
