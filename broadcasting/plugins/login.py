@@ -7,12 +7,12 @@ import pyroh
 
 from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import listen_client as listen
+from core.events import subscribe
 from core.net import Server
 from core.proxy import State
 from gamestate.state import PlayerAbilityFlags
 from protocol.datatypes import (
     UUID,
-    Angle,
     Boolean,
     Buffer,
     Byte,
@@ -20,6 +20,8 @@ from protocol.datatypes import (
     Double,
     Float,
     Int,
+    Short,
+    Slot,
     String,
     TextComponent,
     UnsignedByte,
@@ -160,10 +162,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         # ts so complicated bruh
         fake_dim = 1 if current_dim in (0, -1) else 0
 
-        self_player = self.proxy.gamestate.get_player_by_name(self.username)
-        self_entity_id: int | None = self_player.entity_id if self_player else None
-        self_server_uuid: str | None = self_player.uuid if self_player else None
-
         self.client.send_packet(
             0x07,  # respawn
             Int.pack(fake_dim),
@@ -188,7 +186,18 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.client.compression = True
 
         for packet_id, packet_data in packets[1:]:
-            if packet_id not in {0x21, 0x26}:  # send chunks later
+            if packet_id not in {
+                0x21,
+                0x26,  # chunks - send after respawn
+                0x0C,
+                0x0E,
+                0x0F,  # entity spawns - deferred to after login_success
+                0x1C,
+                0x04,
+                0x19,  # entity metadata/equipment/head look - deferred
+                0x1D,
+                0x20,  # entity effects/properties - deferred
+            }:
                 self.client.send_packet(packet_id, packet_data)
 
         # respawn back to actual dimension
@@ -200,52 +209,19 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             String.pack(self.proxy.gamestate.level_type),
         )
 
-        # Resend player list, entity spawns, metadata, and equipment after respawn
-        # also send chunks now bc we don't want to send b4 respawn
+        # Resend player list, teams, and chunks after respawn.
+        # Entity spawns are deferred until after login_success so the client
+        # is fully initialized before entities appear.
         for packet_id, packet_data in packets[1:]:
             if packet_id in {
-                0x38,
-                0x0C,
-                0x0E,
-                0x0F,
-                0x1C,
-                0x04,
-                0x19,
-                0x3E,
-                0x21,
-                0x26,
+                0x38,  # Player List Item
+                0x3E,  # Teams
+                0x21,  # Chunk Data
+                0x26,  # Map Chunk Bulk
             }:
-                # 0x38 = Player List Item
-                # 0x0C = Spawn Player
-                # 0x0E = Spawn Object
-                # 0x0F = Spawn Mob
-                # 0x1C = Entity Metadata
-                # 0x19 = Entity Head Look
-                # 0x04 = Entity Equipment
-                # 0x3E = Teams (for NPC nametag prefixes/suffixes)
                 self.client.send_packet(packet_id, packet_data)
 
-        if self_entity_id is not None:
-            self.client.send_packet(
-                0x13,  # Destroy Entities
-                VarInt.pack(1),
-                VarInt.pack(self_entity_id),
-            )
-        if self_server_uuid is not None:
-            try:
-                self.client.send_packet(
-                    0x38,
-                    VarInt.pack(4),  # action: remove player
-                    VarInt.pack(1),
-                    UUID.pack(uuid.UUID(self_server_uuid)),
-                )
-            except ValueError:
-                pass
-
-        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
-
-        # send player pos and look again after respawn to set correct pos
-        # ig respawn can reset player's position
+        # send player pos and look after respawn to set correct pos
         pos = self.proxy.gamestate.position
         rot = self.proxy.gamestate.rotation
         self.client.send_packet(
@@ -257,26 +233,6 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
             Float.pack(rot.pitch),
             Byte.pack(0),  # flags: all absolute
         )
-
-        # Schedule delayed NPC removal from tab list to allow skin loading
-        asyncio.create_task(self._delayed_npc_removal())
-
-        # correct entity positions that may have drifted during the login
-        # await gaps, including the owner's spawned entity
-        player_eid = self.proxy._transformer.player_eid
-        if player_eid:
-            self.client.send_packet(
-                0x18,  # Entity Teleport
-                VarInt.pack(player_eid),
-                Int.pack(int(pos.x * 32)),
-                Int.pack(int(pos.y * 32)),
-                Int.pack(int(pos.z * 32)),
-                Angle.pack(rot.yaw),
-                Angle.pack(rot.pitch),
-                Boolean.pack(True),
-            )
-        for tp_packet in self.proxy.gamestate.build_entity_teleports():
-            self.client.send_packet(*tp_packet)
 
         # now add to clients list - sync is complete, safe to send packets
         self.proxy.clients.append(self)  # type: ignore[arg-type]
@@ -342,3 +298,42 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         """Remove NPCs from tab list after a delay to allow skin loading."""
         await asyncio.sleep(1.5)
         self.client.send_packet(*self.proxy.gamestate._build_npc_removal_packet())
+
+    @subscribe("login_success")
+    async def _broadcast_peer_start_armor_stand_task(self, _match, _data):
+        self.create_task(self._resend_armor_stands_peer())
+
+    async def _resend_armor_stands_peer(self):
+        await asyncio.sleep(1.0)
+        while self.open and self.client.open:
+            for entity in list(self.proxy.gamestate.entities.values()):
+                if entity.entity_type != 78:
+                    continue
+
+                eid = entity.entity_id
+                # destroy first
+                self.client.send_packet(0x13, VarInt.pack(1) + VarInt.pack(eid))
+                packet_id, packet_data = self.proxy.gamestate._build_spawn_object(
+                    entity
+                )
+                self.client.send_packet(packet_id, packet_data)
+                if entity.metadata:
+                    self.client.send_packet(
+                        0x1C,
+                        VarInt.pack(eid)
+                        + self.proxy.gamestate._pack_metadata(entity.metadata),
+                    )
+                equip = entity.equipment
+                for slot_id, item in [
+                    (0, equip.held),
+                    (1, equip.boots),
+                    (2, equip.leggings),
+                    (3, equip.chestplate),
+                    (4, equip.helmet),
+                ]:
+                    if item.item:
+                        self.client.send_packet(
+                            0x04,
+                            VarInt.pack(eid) + Short.pack(slot_id) + Slot.pack(item),
+                        )
+            await asyncio.sleep(5.0)

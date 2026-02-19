@@ -1,16 +1,8 @@
 from plugins.commands import command
-from protocol.datatypes import TextComponent
+from protocol.datatypes import (
+    TextComponent,
+)
 from proxhy.plugin import ProxhyPlugin
-
-# from core.events import listen_server, subscribe
-# from protocol.datatypes import (
-#     UUID,
-#     Boolean,
-#     Buffer,
-#     Chat,
-#     String,
-#     VarInt,
-# )
 
 
 class DebugPluginState:

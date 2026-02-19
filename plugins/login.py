@@ -20,7 +20,6 @@ from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
 from protocol.datatypes import (
-    Angle,
     Boolean,
     Buffer,
     Byte,
@@ -29,6 +28,8 @@ from protocol.datatypes import (
     Double,
     Float,
     Int,
+    Short,
+    Slot,
     String,
     TextComponent,
     UnsignedByte,
@@ -136,26 +137,41 @@ class LoginPlugin(ProxhyPlugin):
                 String.pack(level_type),  # level type
             )
 
-            asyncio.create_task(self._replay_entities_after_join())
         else:
             self.client.send_packet(0x01, buff.getvalue())
 
-    async def _replay_entities_after_join(self):
-        await asyncio.sleep(0.5)
-        for packet_id, packet_data in (
-            self.gamestate._build_entity_spawns()
-            + self.gamestate._build_npc_player_spawns()
-            + self.gamestate._build_entity_metadata()
-            + self.gamestate._build_entity_equipment()
-        ):
-            self.client.write_packet(packet_id, packet_data)
-        # Head look for NPCs (players not in tab list)
-        for player in self.gamestate.players.values():
-            if player.uuid not in self.gamestate.player_list:
-                head_yaw = player.head_yaw if player.head_yaw else player.rotation.yaw
-                self.client.write_packet(
-                    0x19, VarInt.pack(player.entity_id) + Angle.pack(head_yaw)
-                )
+    async def _resend_armor_stands(self):
+        await asyncio.sleep(1.0)
+        while self.open and self.client.open:
+            for entity in list(self.gamestate.entities.values()):
+                if entity.entity_type != 78:
+                    continue
+
+                eid = entity.entity_id
+                # destroy first
+                self.client.send_packet(0x13, VarInt.pack(1) + VarInt.pack(eid))
+                packet_id, packet_data = self.gamestate._build_spawn_object(entity)
+                self.client.send_packet(packet_id, packet_data)
+                if entity.metadata:
+                    self.client.send_packet(
+                        0x1C,
+                        VarInt.pack(eid)
+                        + self.gamestate._pack_metadata(entity.metadata),
+                    )
+                equip = entity.equipment
+                for slot_id, item in [
+                    (0, equip.held),
+                    (1, equip.boots),
+                    (2, equip.leggings),
+                    (3, equip.chestplate),
+                    (4, equip.helmet),
+                ]:
+                    if item.item:
+                        self.client.send_packet(
+                            0x04,
+                            VarInt.pack(eid) + Short.pack(slot_id) + Slot.pack(item),
+                        )
+            await asyncio.sleep(5.0)
 
     @listen_client(0x00, State.LOGIN, blocking=True, override=True)
     async def packet_login_start(self, buff: Buffer):
@@ -493,6 +509,10 @@ class LoginPlugin(ProxhyPlugin):
                     )
 
         return secret
+
+    @subscribe("login_success")
+    async def _login_start_armor_stand_task(self, _match, _data):
+        self.create_task(self._resend_armor_stands())
 
     @subscribe("login_success")
     async def _broadcast_event_login_success(self, _match, _data):
