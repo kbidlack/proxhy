@@ -1,6 +1,6 @@
 [project]
 name = "proxhy"
-version = "2026.02.19"
+version = "2026.02.20"
 description = "A Hypixel proxy with various different features"
 license = "MIT"
 authors = [
