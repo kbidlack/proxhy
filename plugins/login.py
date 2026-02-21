@@ -36,6 +36,7 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
+from proxhy import utils
 from proxhy.plugin import ProxhyPlugin
 
 
@@ -527,7 +528,7 @@ class LoginPlugin(ProxhyPlugin):
 
     async def _check_for_update(self):
         async with httpx.AsyncClient() as aclient:
-            current = version("proxhy")
+            current = utils.zero_pad_calver(version("proxhy"))
             latest = (
                 (
                     await aclient.get(

@@ -4,6 +4,7 @@ import inspect
 import operator
 import uuid as _uuid
 from collections import namedtuple
+from datetime import datetime
 from typing import Optional
 
 from hypixel import (
@@ -194,3 +195,9 @@ def uuid_version(value: str) -> Optional[int]:
 def current_ln() -> Optional[int]:
     f_back_f_lineno = operator.attrgetter("f_back.f_lineno")
     return f_back_f_lineno(inspect.currentframe())  # lmfao
+
+
+def zero_pad_calver(ver: str):
+    """Pad a Proxhy version (CalVer) with 0s; e.g. 2026.2.19 -> 2026.02.19)"""
+    dv = datetime.strptime(ver, "%Y.%m.%d")
+    return dv.strftime("%Y.%m.%d")
