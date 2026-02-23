@@ -1,6 +1,6 @@
 [project]
 name = "proxhy"
-version = "2026.02.20"
+version = "2026.02.23"
 description = "A Hypixel proxy with various different features"
 license = "MIT"
 authors = [
@@ -38,5 +38,5 @@ where = ["."]
 "assets" = ["*.json", "*.png"]
 
 [tool.uv.sources]
-pyroh = { git = "https://github.com/kbidlack/pyroh" }
-compass = { git = "https://github.com/kbidlack/compass.git", subdirectory = "client" }
+pyroh = { git = "https://github.com/kbidlack/pyroh", rev = "cd6609060a1bd74636118191c9bb80a963d01cb9"}
+compass = { git = "https://github.com/kbidlack/compass.git", rev = "3a151d42530be3755a91178e127abc44bc9b4cf5", subdirectory = "client" }
