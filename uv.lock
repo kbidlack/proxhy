@@ -140,7 +140,7 @@ wheels = [
 [[package]]
 name = "compass"
 version = "0.1.0"
-source = { git = "https://github.com/kbidlack/compass.git?subdirectory=client#b85181eb9e0b7603ae35b4f61789835972f27fa4" }
+source = { git = "https://github.com/kbidlack/compass.git?subdirectory=client&rev=3a151d42530be3755a91178e127abc44bc9b4cf5#3a151d42530be3755a91178e127abc44bc9b4cf5" }
 dependencies = [
     { name = "httpx" },
     { name = "pyroh" },
@@ -553,7 +553,7 @@ wheels = [
 
 [[package]]
 name = "proxhy"
-version = "2026.2.20"
+version = "2026.2.23"
 source = { editable = "." }
 dependencies = [
     { name = "compass" },
@@ -573,7 +573,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "compass", git = "https://github.com/kbidlack/compass.git?subdirectory=client" },
+    { name = "compass", git = "https://github.com/kbidlack/compass.git?subdirectory=client&rev=3a151d42530be3755a91178e127abc44bc9b4cf5" },
     { name = "cryptography", specifier = ">=45.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypixel-py", specifier = ">=0.4.2" },
@@ -583,7 +583,7 @@ requires-dist = [
     { name = "orjson", specifier = ">=3.11.7" },
     { name = "platformdirs", specifier = ">=4.3" },
     { name = "pyjwt", specifier = ">=2.10" },
-    { name = "pyroh", git = "https://github.com/kbidlack/pyroh" },
+    { name = "pyroh", git = "https://github.com/kbidlack/pyroh?rev=cd6609060a1bd74636118191c9bb80a963d01cb9" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
     { name = "winloop", specifier = ">=0.4.1" },
 ]
@@ -609,7 +609,7 @@ wheels = [
 [[package]]
 name = "pyroh"
 version = "0.1.0"
-source = { git = "https://github.com/kbidlack/pyroh#cd6609060a1bd74636118191c9bb80a963d01cb9" }
+source = { git = "https://github.com/kbidlack/pyroh?rev=cd6609060a1bd74636118191c9bb80a963d01cb9#cd6609060a1bd74636118191c9bb80a963d01cb9" }
 dependencies = [
     { name = "iroh" },
 ]
