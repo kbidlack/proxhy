@@ -1,8 +1,11 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import uuid
 from typing import Literal, Optional
 
-from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import subscribe
 from gamestate.state import PlayerAbilityFlags
 from plugins.commands import CommandException, command
@@ -17,15 +20,14 @@ from protocol.datatypes import (
 from proxhy.argtypes import ServerPlayer
 
 
-class BroadcastPeerBasePluginState:
+
+class BroadcastPeerBasePlugin:
+    # base functionality
+
     flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING]
     flying: Literal[0, PlayerAbilityFlags.FLYING]
 
-
-class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
-    # base functionality
-
-    def _init_broadcast_peer(self):
+    def _init_broadcast_peer(self: BroadcastPeerPlugin):
         self.uuid = ""
         self.spec_eid: Optional[int] = None
         self.flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING] = (
@@ -34,7 +36,9 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         self.flying: Literal[0, PlayerAbilityFlags.FLYING] = PlayerAbilityFlags.FLYING
 
     @subscribe("close")
-    async def _broadcast_peer_base_event_close(self, _match, _data):
+    async def _broadcast_peer_base_event_close(
+        self: BroadcastPeerPlugin, _match, _data
+    ):
         # remove this client
         if self in self.proxy.clients:
             self.proxy.clients.remove(self)  # ty: ignore[invalid-argument-type]
@@ -69,7 +73,7 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
 
     @command("tp", "teleport", usage=["<player>", "<x> <y> <z>"])
     async def _command_tp(
-        self,
+        self: BroadcastPeerPlugin,
         target_or_x: ServerPlayer | float,
         y: float | None = None,
         z: float | None = None,
@@ -134,14 +138,14 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         )
 
     @command("pos")
-    async def _command_pos(self):
+    async def _command_pos(self: BroadcastPeerPlugin):
         """Get your current position."""
         self.client.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 
     @command("fly")
-    async def _command_fly(self):
+    async def _command_fly(self: BroadcastPeerPlugin):
         """Enable or disable flight."""
         if self.flight == PlayerAbilityFlags.ALLOW_FLYING:
             self.flight = 0
@@ -161,14 +165,14 @@ class BroadcastPeerBasePlugin(BroadcastPeerPlugin):
         )
 
     @command("locraw")
-    async def _command_locraw(self):
+    async def _command_locraw(self: BroadcastPeerPlugin):
         """[INTERNAL] block /locraw"""
         # just do nothing
         # not really sure what we should be doing otherwise
         pass
 
     @command("tip")
-    async def _command_tip(self, *args):
+    async def _command_tip(self: BroadcastPeerPlugin, *args):
         """[INTERNAL] block /tip"""
         # see above
         pass

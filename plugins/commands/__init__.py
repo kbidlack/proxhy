@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import re
 from typing import Any, Callable, Coroutine, Union
@@ -5,7 +9,7 @@ from typing import Any, Callable, Coroutine, Union
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
 from proxhy.argtypes import HelpPath
-from proxhy.plugin import ProxhyPlugin
+
 
 from ._commands import (
     Command,
@@ -33,13 +37,7 @@ _OTHER_COMMANDS: set[str] = {
 }
 
 
-class CommandsPluginState:
-    command_registry: CommandRegistry
-    suggestions: asyncio.Queue[list[str]]
-    run_proxhy_command: Callable[[str], Coroutine[Any, Any, None]]
-
-
-class CommandsPlugin(ProxhyPlugin):
+class CommandsPlugin:
     """
     Plugin that handles command registration, execution, and tab completion.
 
@@ -47,7 +45,11 @@ class CommandsPlugin(ProxhyPlugin):
     to have different command configurations.
     """
 
-    def _init_0_commands(self):  # 0 so it runs first (alphabetically)
+    command_registry: CommandRegistry
+    suggestions: asyncio.Queue[list[str]]
+    run_proxhy_command: Callable[[str], Coroutine[Any, Any, None]]
+
+    def _init_0_commands(self: ProxhyPlugin):  # 0 so it runs first (alphabetically)
         self.command_registry = CommandRegistry()
         self.suggestions: asyncio.Queue[list[str]] = asyncio.Queue()
 
@@ -62,7 +64,7 @@ class CommandsPlugin(ProxhyPlugin):
                 pass
 
     @command("help")
-    async def _command_help(self, *path: HelpPath):
+    async def _command_help(self: ProxhyPlugin, *path: HelpPath):
         """Show available commands or get help for a specific command."""
         if path:
             if path[0].value.lower() == "other":
@@ -199,7 +201,7 @@ class CommandsPlugin(ProxhyPlugin):
 
         return msg
 
-    def register_command(self, cmd: Command) -> None:
+    def register_command(self: ProxhyPlugin, cmd: Command) -> None:
         """
         Register a command with this proxy instance.
 
@@ -208,7 +210,7 @@ class CommandsPlugin(ProxhyPlugin):
         """
         self.command_registry.register(cmd)
 
-    def register_command_group(self, group: CommandGroup) -> None:
+    def register_command_group(self: ProxhyPlugin, group: CommandGroup) -> None:
         """
         Register a command group with this proxy instance.
 
@@ -218,10 +220,12 @@ class CommandsPlugin(ProxhyPlugin):
         self.command_registry.register(group)
 
     @subscribe("chat:client:/.*")
-    async def _commands_event_chat_client_command(self, _match, buff: Buffer):
+    async def _commands_event_chat_client_command(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         await self._run_command(buff.unpack(String))
 
-    async def _run_command(self, message: str):
+    async def _run_command(self: ProxhyPlugin, message: str):
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 
@@ -270,10 +274,10 @@ class CommandsPlugin(ProxhyPlugin):
             self.server.send_packet(0x01, String.pack(message))
 
     @listen_client(0x14)
-    async def packet_tab_complete(self, buff: Buffer):
+    async def packet_tab_complete(self: ProxhyPlugin, buff: Buffer):
         await self._tab_complete(buff.unpack(String))
 
-    async def _tab_complete(self, text: str):
+    async def _tab_complete(self: ProxhyPlugin, text: str):
         precommand = None
         forward = True
         suggestions: list[str] = []
@@ -331,7 +335,7 @@ class CommandsPlugin(ProxhyPlugin):
             )
 
     @listen_server(0x3A)
-    async def packet_server_tab_complete(self, buff: Buffer):
+    async def packet_server_tab_complete(self: ProxhyPlugin, buff: Buffer):
         n_suggestions = buff.unpack(VarInt)
         suggestions: list[str] = []
         for _ in range(n_suggestions):
@@ -361,5 +365,4 @@ __all__ = (
     "command",
     # .
     "CommandsPlugin",
-    "CommandsPluginState",
 )

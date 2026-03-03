@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import uuid
 from unittest.mock import Mock
@@ -5,7 +9,6 @@ from unittest.mock import Mock
 import orjson
 import pyroh
 
-from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import listen_client as listen
 from core.events import subscribe
 from core.net import Server
@@ -31,14 +34,13 @@ from protocol.datatypes import (
 from proxhy.utils import APIClient, offline_uuid, uuid_version
 
 
-class BroadcastPeerLoginPluginState:
+
+class BroadcastPeerLoginPlugin:
     writer: pyroh.StreamWriter
     username: str
     compression_ready: asyncio.Event
 
-
-class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
-    def _init_login(self):
+    def _init_login(self: BroadcastPeerPlugin):
         self.server = Server(reader=Mock(), writer=Mock())
         self.compression_ready = asyncio.Event()
 
@@ -52,7 +54,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         }
 
     @listen(0x00, State.HANDSHAKING, blocking=True, override=True)
-    async def packet_handshake(self, buff: Buffer):
+    async def packet_handshake(self: BroadcastPeerPlugin, buff: Buffer):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
             return
 
@@ -64,7 +66,7 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         self.state = State(next_state)
 
     @listen(0x00, State.STATUS, blocking=True)
-    async def packet_status_request(self, _):
+    async def packet_status_request(self: BroadcastPeerPlugin, _):
         self.server_list_ping["players"]["online"] = len(
             [c for c in self.proxy.clients if hasattr(c, "username")]
         )
@@ -78,7 +80,9 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         )
 
     @listen(0x13)
-    async def packet_serverbound_player_abilities(self, buff: Buffer):
+    async def packet_serverbound_player_abilities(
+        self: BroadcastPeerPlugin, buff: Buffer
+    ):
         flags = PlayerAbilityFlags(buff.unpack(Byte))
 
         # if server/player is flying, include flying in outgoing packet
@@ -104,11 +108,11 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
         await self.client.drain()
 
     @listen(0x46, blocking=True)
-    async def _packet_compression_ack(self, _: Buffer):
+    async def _packet_compression_ack(self: BroadcastPeerPlugin, _: Buffer):
         self.compression_ready.set()
 
     @listen(0x00, State.LOGIN)
-    async def packet_login_start(self, buff: Buffer):
+    async def packet_login_start(self: BroadcastPeerPlugin, buff: Buffer):
         self.state = State.PLAY
         self.username = buff.unpack(String)
 
@@ -272,16 +276,18 @@ class BroadcastPeerLoginPlugin(BroadcastPeerPlugin):
 
         self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
 
-    async def _delayed_npc_removal(self) -> None:
+    async def _delayed_npc_removal(self: BroadcastPeerPlugin) -> None:
         """Remove NPCs from tab list after a delay to allow skin loading."""
         await asyncio.sleep(1.5)
         self.client.send_packet(*self.proxy.gamestate._build_npc_removal_packet())
 
     @subscribe("login_success")
-    async def _broadcast_peer_start_armor_stand_task(self, _match, _data):
+    async def _broadcast_peer_start_armor_stand_task(
+        self: BroadcastPeerPlugin, _match, _data
+    ):
         self.create_task(self._resend_armor_stands_peer())
 
-    async def _resend_armor_stands_peer(self):
+    async def _resend_armor_stands_peer(self: BroadcastPeerPlugin):
         await asyncio.sleep(1.0)
         while self.open and self.client.open:
             for entity in list(self.proxy.gamestate.entities.values()):

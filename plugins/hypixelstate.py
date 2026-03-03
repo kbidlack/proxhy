@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 from typing import Callable, Optional
 
@@ -5,11 +9,11 @@ import orjson
 
 from core.events import listen_client, listen_server, subscribe
 from protocol.datatypes import Buffer, ByteArray, Chat, Int, String
-from proxhy.plugin import ProxhyPlugin
 from proxhypixel.models import Game
 
 
-class HypixelStatePluginState:
+
+class HypixelStatePlugin:
     client_type: str
     game: Game
     rq_game: Game
@@ -19,9 +23,7 @@ class HypixelStatePluginState:
     get_health: Callable[[str], Optional[int | float]]
     real_players: Callable[[], set[str]]
 
-
-class HypixelStatePlugin(ProxhyPlugin):
-    def _init_hypixelstate(self):
+    def _init_hypixelstate(self: ProxhyPlugin):
         self.client_type = ""
 
         self.game = Game()
@@ -34,14 +36,14 @@ class HypixelStatePlugin(ProxhyPlugin):
         self.received_who.set()
 
     @listen_server(0x01, blocking=True)
-    async def packet_join_game(self, buff: Buffer):
+    async def packet_join_game(self: ProxhyPlugin, buff: Buffer):
         self.entity_id = buff.unpack(Int)
         self.received_locraw.clear()
 
         if not self.client_type == "lunar":
             self.server.send_packet(0x01, String.pack("/locraw"))
 
-    def _update_game(self, game: dict):
+    def _update_game(self: ProxhyPlugin, game: dict):
         self.game.update(game)
         if game.get("mode"):
             return self.rq_game.update(game)
@@ -49,7 +51,9 @@ class HypixelStatePlugin(ProxhyPlugin):
             return
 
     @subscribe(r"chat:server:\{.*\}$")
-    async def _hypixelstate_event_chat_server_locraw(self, _match, buff: Buffer):
+    async def _hypixelstate_event_chat_server_locraw(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         message = buff.unpack(Chat)
 
         if not self.received_locraw.is_set():
@@ -67,7 +71,7 @@ class HypixelStatePlugin(ProxhyPlugin):
             self._update_game(orjson.loads(message))
 
     @listen_client(0x17)
-    async def packet_plugin_channel(self, buff: Buffer):
+    async def packet_plugin_channel(self: ProxhyPlugin, buff: Buffer):
         self.server.send_packet(0x17, buff.getvalue())
 
         channel = buff.unpack(String)
@@ -78,7 +82,7 @@ class HypixelStatePlugin(ProxhyPlugin):
             elif b"vanilla" in data:
                 self.client_type = "vanilla"
 
-    def get_health(self, player_name: str) -> Optional[float]:
+    def get_health(self: ProxhyPlugin, player_name: str) -> Optional[float]:
         health = None
 
         for name, score in (self.gamestate.scores.get("health") or {}).items():
@@ -93,5 +97,5 @@ class HypixelStatePlugin(ProxhyPlugin):
 
         return None
 
-    def real_players(self) -> set[str]:
+    def real_players(self: ProxhyPlugin) -> set[str]:
         return self.gamestate.real_players()

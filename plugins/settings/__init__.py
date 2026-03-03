@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import math
 from textwrap import fill
 from typing import Any
@@ -11,29 +15,27 @@ from protocol.datatypes import (
 )
 from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import SettingPath, SettingValue
-from proxhy.plugin import ProxhyPlugin
 from proxhy.settings import ProxhySettings
+
 
 from ._settings import Setting, SettingGroup, SettingsStorage, create_setting
 
 
-class SettingsPluginState:
+class SettingsPlugin:
     settings: ProxhySettings
 
-
-class SettingsPlugin(ProxhyPlugin):
-    def _init_settings(self):
+    def _init_settings(self: ProxhyPlugin):
         self.settings = ProxhySettings()
 
     @command("s")
-    async def _command_settings(self):
+    async def _command_settings(self: ProxhyPlugin):
         """Open the settings GUI."""
         self.settings_window = SettingsMenu(self)
         self.settings_window.open()
 
     @command("setting", "set")
     async def _command_setting(
-        self,
+        self: ProxhyPlugin,
         setting: SettingPath,
         value: SettingValue,
     ):
@@ -85,7 +87,7 @@ class SettingsMenu(Window):
         self.subsetting_path = subsetting_path
         self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
             subsetting_path
-        )
+        )  # ty: ignore[invalid-assignment]
 
         self.DISABLED_STATES = {"off", "none", "disabled"}
         self.menu_slots: dict[int, str] = {}
@@ -339,7 +341,6 @@ __all__ = (
     "SettingsStorage",
     "create_setting",
     # .
-    "SettingsPluginState",
     "SettingsPlugin",
     "SettingsMenu",
 )

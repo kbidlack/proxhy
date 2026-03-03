@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import random
 import re
@@ -37,14 +41,14 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
-from proxhy.plugin import ProxhyPlugin
+
 
 from .broadcastee.proxy import broadcastee_plugin_list
 
 BROKER_URL = "http://163.192.4.69:3000"
 
 
-class BroadcastPluginState:
+class BroadcastPlugin:
     BC_DATA_PATH: Path
     clients: list[BroadcastPeerProxy]
     broadcast_invites: dict[str, ConnectionRequest]
@@ -55,9 +59,7 @@ class BroadcastPluginState:
     broadcast_chat_toggled: bool
     _transformer: PlayerTransformer
 
-
-class BroadcastPlugin(ProxhyPlugin):
-    def _init_broadcasting(self):
+    def _init_broadcasting(self: ProxhyPlugin):
         self.BC_DATA_PATH = Path(user_config_dir("proxhy")) / "broadcast.db"
 
         with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
@@ -84,11 +86,11 @@ class BroadcastPlugin(ProxhyPlugin):
         self._setup_broadcast_commands()
         self._setup_compass_commands()
 
-    def _setup_compass_commands(self):
+    def _setup_compass_commands(self: ProxhyPlugin):
         compass = CommandGroup("compass", help="Compass client commands.")
 
         @compass.command("init")
-        async def _command_compass_init(self: BroadcastPlugin):
+        async def _command_compass_init(self: ProxhyPlugin):
             """Initialize the compass client."""
             if self.compass_client is not None:
                 raise CommandException(
@@ -101,7 +103,7 @@ class BroadcastPlugin(ProxhyPlugin):
             )
 
         @compass.command("status")
-        async def _command_compass_status(self: BroadcastPlugin):
+        async def _command_compass_status(self: ProxhyPlugin):
             """Get the compass client status."""
             self.client.chat(TextComponent("Compass Client Status:").color("gold"))
             initialized = self.compass_client is not None
@@ -130,18 +132,18 @@ class BroadcastPlugin(ProxhyPlugin):
 
         self.command_registry.register(compass)
 
-    def _setup_broadcast_commands(self):
+    def _setup_broadcast_commands(self: ProxhyPlugin):
         bc = CommandGroup("broadcast", "bc", help="Broadcast commands.")
 
         @bc.command("chat")
-        async def _command_broadcast_chat(self, *message: str):
+        async def _command_broadcast_chat(self: ProxhyPlugin, *message: str):
             """Send a message to the broadcast chat."""
             if not message:
                 raise CommandException("Please provide a message to broadcast!")
             self.bc_chat(self.username, " ".join(message))
 
         @bc.command("list")
-        async def _command_broadcast_list(self):
+        async def _command_broadcast_list(self: ProxhyPlugin):
             """List all players in the broadcast."""
             if not self.clients:
                 return TextComponent("No players are currently connected.").color(
@@ -156,7 +158,7 @@ class BroadcastPlugin(ProxhyPlugin):
             return msg
 
         @bc.command("joinid")
-        async def _command_broadcast_joinid(self: BroadcastPlugin, node_id: str):
+        async def _command_broadcast_joinid(self: ProxhyPlugin, node_id: str):
             """Join a broadcast by Iroh node ID."""
             self.client.chat(
                 TextComponent("Joining")
@@ -171,7 +173,7 @@ class BroadcastPlugin(ProxhyPlugin):
             await self._join_broadcast_by_node_id(node_id)
 
         @bc.command("join")
-        async def _command_broadcast_join(self, request_id: str):
+        async def _command_broadcast_join(self: ProxhyPlugin, request_id: str):
             """Join a broadcast invite."""
             if self.joining_broadcast:
                 raise CommandException(
@@ -204,7 +206,7 @@ class BroadcastPlugin(ProxhyPlugin):
             await self._join_broadcast_with_streams(reader, writer)
 
         @bc.command("accept")
-        async def _command_broadcast_accept(self, request_id: str):
+        async def _command_broadcast_accept(self: ProxhyPlugin, request_id: str):
             """Accept a broadcast request."""
             if self.compass_client is None:
                 raise CommandException(
@@ -238,7 +240,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @bc.command("slime")
         async def _command_broadcast_slime(
-            self: BroadcastPlugin, player: BroadcastPlayer
+            self: ProxhyPlugin, player: BroadcastPlayer
         ):
             """Slime a player out of the broadcast."""
             client = player.client
@@ -254,7 +256,7 @@ class BroadcastPlugin(ProxhyPlugin):
             client.client.close()
 
         async def _send_peer_request(
-            self: BroadcastPlugin,
+            self: ProxhyPlugin,
             player: MojangPlayer,
             reason: str,
             command: str,
@@ -342,7 +344,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 self.broadcast_requests.discard(name)
 
         @bc.command("invite")
-        async def _command_broadcast_invite(self, player: MojangPlayer):
+        async def _command_broadcast_invite(self: ProxhyPlugin, player: MojangPlayer):
             result = await _send_peer_request(
                 self,
                 player,
@@ -362,7 +364,9 @@ class BroadcastPlugin(ProxhyPlugin):
             asyncio.create_task(self.on_broadcast_peer(reader, writer))
 
         @bc.command("request")
-        async def _command_broadcast_request(self, player: MojangPlayer):
+        async def _command_broadcast_request(
+            self: ProxhyPlugin, player: MojangPlayer
+        ):
             result = await _send_peer_request(
                 self,
                 player,
@@ -392,7 +396,7 @@ class BroadcastPlugin(ProxhyPlugin):
             await self._join_broadcast_with_streams(reader, writer)
 
         @bc.command("server")
-        async def _command_broadcast_server(self: BroadcastPlugin):
+        async def _command_broadcast_server(self: ProxhyPlugin):
             try:
                 # TODO: add more info?
                 return (
@@ -420,7 +424,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @trust.command("add")
         async def _command_broadcast_trust_add(
-            self: BroadcastPlugin, player: MojangPlayer
+            self: ProxhyPlugin, player: MojangPlayer
         ):
             """Add a trusted player."""
             with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
@@ -441,7 +445,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         @trust.command("remove")
         async def _command_broadcast_untrust(
-            self: BroadcastPlugin, player: MojangPlayer
+            self: ProxhyPlugin, player: MojangPlayer
         ):
             """Remove a trusted player."""
             with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
@@ -461,7 +465,7 @@ class BroadcastPlugin(ProxhyPlugin):
             )
 
         @trust.command("list")
-        async def _command_broadcast_trust_list(self: BroadcastPlugin):
+        async def _command_broadcast_trust_list(self: ProxhyPlugin):
             """List all trusted players."""
             with shelve.open(self.BC_DATA_PATH) as db:
                 players = db["trusted"].values()
@@ -482,7 +486,7 @@ class BroadcastPlugin(ProxhyPlugin):
                     msg.append(TextComponent(name).color("aqua"))
                 return msg
 
-    async def _join_broadcast_by_node_id(self, node_id: str):
+    async def _join_broadcast_by_node_id(self: ProxhyPlugin, node_id: str):
         if self.joining_broadcast:
             raise CommandException(
                 TextComponent("You are already joining a broadcast!").color("red")
@@ -523,7 +527,7 @@ class BroadcastPlugin(ProxhyPlugin):
             raise
 
     async def _join_broadcast_with_streams(
-        self,
+        self: ProxhyPlugin,
         reader: pyroh.StreamReader,
         writer: pyroh.StreamWriter,
     ):
@@ -547,7 +551,7 @@ class BroadcastPlugin(ProxhyPlugin):
             raise
 
     async def _setup_broadcastee_proxy(
-        self,
+        self: ProxhyPlugin,
         reader: pyroh.StreamReader,
         writer: pyroh.StreamWriter,
         identifier: str,
@@ -583,7 +587,7 @@ class BroadcastPlugin(ProxhyPlugin):
         await new_proxy.join(self.username, identifier)
 
     @subscribe("login_success")
-    async def _broadcast_event_login_success(self, _match, _data):
+    async def _broadcast_event_login_success(self: ProxhyPlugin, _match, _data):
         bc_pyroh_server_task = asyncio.create_task(
             self.initialize_broadcast_pyroh_server()
         )
@@ -595,7 +599,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         self._transformer.init_from_gamestate(self.uuid)
 
-    async def initialize_broadcast_pyroh_server(self):
+    async def initialize_broadcast_pyroh_server(self: ProxhyPlugin):
         self.broadcast_pyroh_server = await pyroh.serve(
             self.on_broadcast_peer, alpn=b"proxhy.broadcast/1"
         )
@@ -608,7 +612,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 TextComponent("✓ Broadcast server initialized!").color("green")
             )
 
-    async def initialize_cc(self):
+    async def initialize_cc(self: ProxhyPlugin):
         self.access_token, self.username, self.uuid = await auth.load_auth_info(
             self.username
         )
@@ -627,7 +631,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self.client.chat(TextComponent("✓ Compass client initialized!").color("green"))
 
     @listen_server(0x07, blocking=True)
-    async def _packet_respawn(self, buff: Buffer):
+    async def _packet_respawn(self: ProxhyPlugin, buff: Buffer):
         for client in self.clients:
             if not client.watching:
                 client._reset_spec()
@@ -647,7 +651,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self._respawn_debounce_task = asyncio.create_task(spawn_bats_debounced())
 
     async def on_broadcast_peer(
-        self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
+        self: ProxhyPlugin, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
     ):
         client = BroadcastPeerProxy(
             reader, writer, ("localhost", 41222), autostart=False
@@ -681,7 +685,7 @@ class BroadcastPlugin(ProxhyPlugin):
                 await client.close()
 
     @subscribe("close")
-    async def _broadcast_event_close(self, _match, reason):
+    async def _broadcast_event_close(self: ProxhyPlugin, _match, reason):
         if self.logged_in:
             try:
                 await asyncio.wait_for(
@@ -716,7 +720,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
             self._transformer.reset()
 
-    async def _expire_broadcast_request(self, request_id: str):
+    async def _expire_broadcast_request(self: ProxhyPlugin, request_id: str):
         if request_id in self.broadcast_invites:
             request = self.broadcast_invites.pop(request_id)
             self.client.chat(
@@ -754,7 +758,7 @@ class BroadcastPlugin(ProxhyPlugin):
             .append(TextComponent("]").color("dark_gray"))
         )
 
-    async def on_request(self, request: ConnectionRequest):
+    async def on_request(self: ProxhyPlugin, request: ConnectionRequest):
         request_id = request.from_player
         self.broadcast_invites[request_id] = request
 
@@ -837,14 +841,16 @@ class BroadcastPlugin(ProxhyPlugin):
                 .append(TextComponent("]").color("dark_gray"))
             )
 
-    async def disconnect_clients(self, reason: str = "The broadcast was stopped!"):
+    async def disconnect_clients(
+        self: ProxhyPlugin, reason: str = "The broadcast was stopped!"
+    ):
         for client in self.clients:
             client.client.send_packet(
                 0x40,
                 Chat.pack(TextComponent(reason).color("red")),
             )
 
-    def bc_chat(self, username: str, msg: str):
+    def bc_chat(self: ProxhyPlugin, username: str, msg: str):
         self.client.chat(
             TextComponent("[")
             .color("dark_gray")
@@ -854,13 +860,13 @@ class BroadcastPlugin(ProxhyPlugin):
             .appends(TextComponent(msg).color("white"))
         )
 
-    def _announce_to_all(self, packet_id: int, data: bytes):
+    def _announce_to_all(self: ProxhyPlugin, packet_id: int, data: bytes):
         """Send a packet to all spectator clients."""
         for client in self.clients:
             if client.state == State.PLAY:
                 client.client.send_packet(packet_id, data)
 
-    def _announce_player_entity(self, packet_id: int, data: bytes):
+    def _announce_player_entity(self: ProxhyPlugin, packet_id: int, data: bytes):
         """Send a packet about the player entity to spectators who have it spawned."""
         for client in self.clients:
             if (
@@ -869,7 +875,7 @@ class BroadcastPlugin(ProxhyPlugin):
             ):
                 client.client.send_packet(packet_id, data)
 
-    def _filter_chat_message(self, buff: Buffer):
+    def _filter_chat_message(self: ProxhyPlugin, buff: Buffer):
         msg = buff.unpack(Chat)
         system_msgs = {
             "You already tipped everyone that has boosters active, "
@@ -886,7 +892,7 @@ class BroadcastPlugin(ProxhyPlugin):
     @subscribe("cb_gamestate_update")
     # needs to be async for subscribe -- TODO: allow sync subscribers?
     async def _broadcast_event_cb_gamestate_update(
-        self, _match, data: tuple[int, *tuple[bytes, ...]]
+        self: ProxhyPlugin, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         packet_id, *packet_data = data
         buff = Buffer(b"".join(packet_data))
@@ -914,7 +920,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
     @subscribe("sb_gamestate_update")
     async def _broadcast_event_sb_gamestate_update(
-        self, _match, data: tuple[int, *tuple[bytes, ...]]
+        self: ProxhyPlugin, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         packet_id, *packet_data = data
         if self.clients:
@@ -922,13 +928,13 @@ class BroadcastPlugin(ProxhyPlugin):
                 packet_id, b"".join(packet_data)
             )
 
-    def _spawn_players_after_position(self):
+    def _spawn_players_after_position(self: ProxhyPlugin):
         """Callback to spawn player for clients after position update."""
         for client in self.clients:
             if client.state == State.PLAY:
                 self._spawn_player_for_client(client)
 
-    def _spawn_player_for_client(self, client: BroadcastPeerProxy):
+    def _spawn_player_for_client(self: ProxhyPlugin, client: BroadcastPeerProxy):
         """Spawn the player entity for a specific spectator client."""
         if client.eid in self._transformer.player_spawned_for:
             return
@@ -1019,7 +1025,7 @@ class BroadcastPlugin(ProxhyPlugin):
 
         self._transformer.mark_spawned(client.eid)
 
-    def _ensure_player_in_tab_list(self, client: BroadcastPeerProxy):
+    def _ensure_player_in_tab_list(self: ProxhyPlugin, client: BroadcastPeerProxy):
         """Ensure the player being watched is in the spectator's tab list."""
         # Normalize UUID to hyphenated format to match gamestate storage
         try:
@@ -1058,7 +1064,7 @@ class BroadcastPlugin(ProxhyPlugin):
         client.client.send_packet(0x38, data)
 
     @listen_server(0x45)
-    async def packet_title(self, buff: Buffer):
+    async def packet_title(self: ProxhyPlugin, buff: Buffer):
         action = buff.unpack(VarInt)
         if action in {0, 1}:  # set title, set subtitle
             for client in self.clients:
@@ -1068,7 +1074,7 @@ class BroadcastPlugin(ProxhyPlugin):
         self.client.send_packet(0x45, buff.getvalue())
 
     @command("chat", "ch")
-    async def _command_chat(self, channel: str):
+    async def _command_chat(self: ProxhyPlugin, channel: str):
         if channel in {"b", "bc", "broadcast"}:
             self.broadcast_chat_toggled = not self.broadcast_chat_toggled
             self.client.chat(
@@ -1084,7 +1090,9 @@ class BroadcastPlugin(ProxhyPlugin):
             self.server.chat(f"/chat {channel}")
 
     @subscribe("chat:client:.*")
-    async def _event_chat_client_any(self, _match: re.Match, buff: Buffer):
+    async def _event_chat_client_any(
+        self: ProxhyPlugin, _match: re.Match, buff: Buffer
+    ):
         msg = buff.unpack(String)
         if msg.startswith("/"):
             return  # let commands plugin handle it

@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import math
 import random
@@ -8,7 +12,6 @@ import numba
 import numpy as np
 from numpy.typing import NDArray
 
-from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import listen_client as listen
 from core.events import subscribe
 from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
@@ -253,13 +256,11 @@ def _interp_spherical(
     return (cur_x, cur_y, cur_z, stuck + 1)
 
 
-class BroadcastPeerSpectatePluginState:
+class BroadcastPeerSpectatePlugin:
     flight_speed: int | float
     _send_abilities: Callable
 
-
-class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
-    def _init_broadcast_peer_spectate(self):
+    def _init_broadcast_peer_spectate(self: BroadcastPeerPlugin):
         self.watching = False
         self._cam: Vec3d | None = None  # camera offset from player
         self._cam_stuck = 0
@@ -267,13 +268,13 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         self._last_pos: Vec3d | None = None
 
     @listen(0x0B)
-    async def packet_entity_action(self, buff: Buffer):
+    async def packet_entity_action(self: BroadcastPeerPlugin, buff: Buffer):
         if buff.unpack(VarInt) != self.eid:
             return
         if buff.unpack(VarInt) == 0 and self.spec_eid is not None:
             self._reset_spec()
 
-    async def _update_spec_task(self):
+    async def _update_spec_task(self: BroadcastPeerPlugin):
         while self.open:
             if self.spec_eid is None:
                 await asyncio.sleep(0.05)
@@ -311,12 +312,14 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             await asyncio.sleep(0.05)
 
     @subscribe("login_success")
-    async def _broadcast_peer_base_event_login_success(self, _match, _data):
+    async def _broadcast_peer_base_event_login_success(
+        self: BroadcastPeerPlugin, _match, _data
+    ):
         self.create_task(self._update_spec_task())
         self.create_task(self._update_watch())
         self.create_task(self._check_position())
 
-    def _get_camera(self) -> tuple[Vec3d, Rotation]:
+    def _get_camera(self: BroadcastPeerPlugin) -> tuple[Vec3d, Rotation]:
         """Calculate camera position and rotation for watch mode."""
         pos = self.proxy.gamestate.position
         rot = self.proxy.gamestate.rotation
@@ -410,7 +413,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
 
         return cam_pos, Rotation(*self._rot)
 
-    def _spawn_bat(self):
+    def _spawn_bat(self: BroadcastPeerPlugin):
         self.bat_eid = random.getrandbits(31)
         self.watch_pos, self.watch_rot = self._get_camera()
         self.client.send_packet(
@@ -433,7 +436,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             + UnsignedByte.pack(0x7F),
         )
 
-    async def _update_watch(self):
+    async def _update_watch(self: BroadcastPeerPlugin):
         self._spawn_bat()
         while self.open:
             old = self.watch_pos
@@ -474,7 +477,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             )
             await asyncio.sleep(0.1)
 
-    async def _check_position(self):
+    async def _check_position(self: BroadcastPeerPlugin):
         while self.open:
             pos = self.gamestate.position
             if pos.y < -100:
@@ -498,11 +501,13 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             else:
                 await asyncio.sleep(1)
 
-    def _set_gamemode(self, gm: int):
+    def _set_gamemode(self: BroadcastPeerPlugin, gm: int):
         self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
 
     @subscribe("setting:broadcast:titles")
-    async def _setting_broadcast_titles(self, _match, data: list[Literal["ON", "OFF"]]):
+    async def _setting_broadcast_titles(
+        self: BroadcastPeerPlugin, _match, data: list[Literal["ON", "OFF"]]
+    ):
         _, new_state = data
         if new_state == "OFF":
             self.client.send_packet(0x45, VarInt.pack(4))  # reset
@@ -512,10 +517,10 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
                 self.client.send_packet(id, packet_data)
 
     @subscribe("setting:broadcast.fly_speed")
-    async def _setting_broadcast_fly_speed(self, _match, _data):
+    async def _setting_broadcast_fly_speed(self: BroadcastPeerPlugin, _match, _data):
         self._send_abilities()
 
-    def _send_abilities(self):
+    def _send_abilities(self: BroadcastPeerPlugin):
         _fly_speed_mapping = {"0.5x": 0.025, "1x": 0.05, "2x": 0.1}
         self.flight_speed = _fly_speed_mapping[self.settings.fly_speed.get()]
 
@@ -527,10 +532,10 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             + Float.pack(self.proxy.gamestate.field_of_view_modifier),
         )
 
-    def _set_slot(self, slot: int, item: SlotData):
+    def _set_slot(self: BroadcastPeerPlugin, slot: int, item: SlotData):
         self.client.send_packet(0x2F, Byte.pack(0), Short.pack(slot), Slot.pack(item))
 
-    def _reset_spec(self):
+    def _reset_spec(self: BroadcastPeerPlugin):
         self.watching, self._cam, self._cam_stuck, self._rot, self._last_pos = (
             False,
             None,
@@ -551,7 +556,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         self._set_slot(36, SlotData())
 
     @listen(0x02)
-    async def _packet_use_entity(self, buff: Buffer):
+    async def _packet_use_entity(self: BroadcastPeerPlugin, buff: Buffer):
         target, action = buff.unpack(VarInt), buff.unpack(VarInt)
         entity = self.gamestate.get_entity(target)
         if action == 0:
@@ -565,7 +570,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             else:
                 return self._spectate(target)
 
-    def _find_eid(self, target: ServerPlayer):
+    def _find_eid(self: BroadcastPeerPlugin, target: ServerPlayer):
         if target.name.casefold() == self.proxy.username.casefold():
             return self.proxy._transformer.player_eid
         if target.uuid is None or not (
@@ -575,7 +580,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
         return player.entity_id
 
     @command("spectate", "spec")
-    async def _command_spectate(self, target: ServerPlayer):
+    async def _command_spectate(self: BroadcastPeerPlugin, target: ServerPlayer):
         """Spectate a player."""
         if target.name.casefold() == self.username.casefold():
             if self.spec_eid is None:
@@ -583,7 +588,7 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
             return self._reset_spec()
         self._spectate(self._find_eid(target))
 
-    def _spectate(self, eid: int):
+    def _spectate(self: BroadcastPeerPlugin, eid: int):
         self.spec_eid = eid
         self._set_gamemode(3)
         self.client.send_packet(0x43, VarInt.pack(eid))
@@ -597,10 +602,10 @@ class BroadcastPeerSpectatePlugin(BroadcastPeerPlugin):
 
 
 class PlayerSpectateWindow(Window):
-    proxy: BroadcastPeerSpectatePlugin
+    proxy: BroadcastPeerPlugin
     entity: Player
 
-    def __init__(self, proxy: BroadcastPeerSpectatePlugin, entity: Player):
+    def __init__(self, proxy: BroadcastPeerPlugin, entity: Player):
         self.proxy = proxy
         self.entity = entity
 

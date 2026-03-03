@@ -1,17 +1,18 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
+
 from plugins.commands import command
 from protocol.datatypes import (
     TextComponent,
 )
-from proxhy.plugin import ProxhyPlugin
 
 
-class DebugPluginState:
-    pass
 
-
-class DebugPlugin(ProxhyPlugin):
+class DebugPlugin:
     @command("game")
-    async def _command_game(self):
+    async def _command_game(self: ProxhyPlugin):
         """Display current game info."""
         self.client.chat(TextComponent("Game:").color("green"))
         for key in type(self.game).__annotations__:
@@ -23,7 +24,7 @@ class DebugPlugin(ProxhyPlugin):
                 )
 
     @command("rqgame")
-    async def _command_rqgame(self):
+    async def _command_rqgame(self: ProxhyPlugin):
         """Display requeue game info."""
         self.client.chat(TextComponent("Requeue Game:").color("green"))
         for key in type(self.rq_game).__annotations__:
@@ -35,7 +36,7 @@ class DebugPlugin(ProxhyPlugin):
                 )
 
     @command("teams")
-    async def _command_teams(self):
+    async def _command_teams(self: ProxhyPlugin):
         """[DEBUG] Print out all current teams known to Proxhy."""
         print("\n")
         for team_name, team in self.gamestate.teams.items():
@@ -43,22 +44,22 @@ class DebugPlugin(ProxhyPlugin):
         print("\n")
 
     @command("player_list")
-    async def _command_player_list(self):
+    async def _command_player_list(self: ProxhyPlugin):
         """[DEBUG] List all players known to Proxhy."""
         print([(p.name, p.uuid) for p in self.gamestate.player_list.values()])
 
     @command("iphone_ringtone")
-    async def _command_iphone_ringtone(self):
+    async def _command_iphone_ringtone(self: ProxhyPlugin):
         """[DEBUG] Play the iPhone ringtone sound."""
         await self._iphone_ringtone()
 
     @command("samsung_ringtone")
-    async def _command_samsung_ringtone(self):
+    async def _command_samsung_ringtone(self: ProxhyPlugin):
         """[DEBUG] Play the Samsung ringtone sound."""
         await self._samsung_ringtone()
 
     @command("pos")
-    async def _command_pos(self):
+    async def _command_pos(self: ProxhyPlugin):
         """Get your current position."""
         self.client.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"

@@ -1,17 +1,19 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 from typing import Callable, Coroutine
 
 from protocol.datatypes import Float, Int, String, UnsignedByte
-from proxhy.plugin import ProxhyPlugin
 
 
-class SoundPluginState:
+
+class SoundPlugin:
     note_to_pitch: Callable[[int], int]
     _samsung_ringtone: Callable[[], Coroutine[None, None, None]]
     _iphone_ringtone: Callable[[], Coroutine[None, None, None]]
 
-
-class SoundPlugin(ProxhyPlugin):
     def note_to_pitch(self, note: int) -> int:
         """
         Convert Minecraft note-block semitone index to 1.8.9 pitch byte.
@@ -20,7 +22,9 @@ class SoundPlugin(ProxhyPlugin):
         pitch = round(63 * (2 ** ((note - 12) / 12)))
         return max(0, min(255, pitch))
 
-    def _play_sound(self, sound: str, volume: float = 1.0, pitch: int = 63):
+    def _play_sound(
+        self: ProxhyPlugin, sound: str, volume: float = 1.0, pitch: int = 63
+    ):
         """Play a sound effect at the player's position.
 
         Args:
@@ -39,7 +43,7 @@ class SoundPlugin(ProxhyPlugin):
             UnsignedByte.pack(pitch),
         )
 
-    async def _samsung_ringtone(self):
+    async def _samsung_ringtone(self: ProxhyPlugin):
         eighth = 0.2
         quarter = 0.4
         notes = [
@@ -54,7 +58,7 @@ class SoundPlugin(ProxhyPlugin):
                 self._play_sound("note.pling", pitch=self.note_to_pitch(note))
             await asyncio.sleep(duration)
 
-    async def _iphone_ringtone(self):
+    async def _iphone_ringtone(self: ProxhyPlugin):
         sixteenth = 0.2
 
         notes = [

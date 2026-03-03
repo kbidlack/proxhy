@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import re
 import typing
@@ -8,33 +10,35 @@ import pyroh
 from core.events import listen_client, listen_server, subscribe
 from core.net import Server, State
 from core.plugin import Plugin
-from plugins.broadcastee.plugin import BroadcasteePlugin
-from plugins.commands import CommandsPlugin, command
-from protocol.datatypes import Buffer, Short, String, VarInt
 
 if TYPE_CHECKING:
-    from proxhy.settings import ProxhySettings
+    from plugins.broadcastee.plugin import BroadcasteePlugin
+from plugins.commands import CommandsPlugin, command
+from protocol.datatypes import Buffer, Short, String, VarInt
+from proxhy.settings import ProxhySettings
 
 
-class BroadcasteeClosePlugin(BroadcasteePlugin):
+class BroadcasteeClosePlugin(Plugin):
     @subscribe("close")
-    async def _broadcastee_event_close(self, _match, _data):
+    async def _broadcastee_event_close(self: BroadcasteePlugin, _match, _data):
         typing.cast(pyroh.StreamWriter, self.server.writer)
         self.server.writer.write_eof()
         await self.server.writer.drain()
 
     @listen_server(0x46, blocking=True)
-    async def _packet_set_compression(self, buff: Buffer):
+    async def _packet_set_compression(self: BroadcasteePlugin, buff: Buffer):
         self.server.send_packet(0x46)
         self.server.compression_threshold = buff.unpack(VarInt)
         self.server.compression = True
 
     async def create_server(
-        self, reader: pyroh.StreamReader, writer: pyroh.StreamWriter
+        self: BroadcasteePlugin,
+        reader: pyroh.StreamReader,
+        writer: pyroh.StreamWriter,
     ):
         self.server = Server(reader, writer)
 
-    async def join(self, username: str, node_id: str):
+    async def join(self: BroadcasteePlugin, username: str, node_id: str):
         self.state = State.PLAY
 
         self.handle_server_task = asyncio.create_task(self.handle_server())
@@ -51,18 +55,20 @@ class BroadcasteeClosePlugin(BroadcasteePlugin):
         await self.server.drain()
 
 
-class BroadcasteeSettingsPlugin(BroadcasteePlugin):
+class BroadcasteeSettingsPlugin(Plugin):
     settings: ProxhySettings
 
     @listen_server(0x3F)
-    async def packet_client_plugin_message(self, buff: Buffer):
+    async def packet_client_plugin_message(self: BroadcasteePlugin, buff: Buffer):
         channel = buff.unpack(String)  # e.g. PROXHY|Events for proxhy events channel
         data = Buffer(buff.read())
 
         await self.emit(f"plugin:{channel}", data)
 
     @subscribe(r"plugin:PROXHY\|Events")
-    async def _event_login_success(self, _match: re.Match, buff: Buffer):
+    async def _event_login_success(
+        self: BroadcasteePlugin, _match: re.Match, buff: Buffer
+    ):
         if buff.unpack(String) == "login_success":
             for setting in self.settings.broadcast.get_all_settings():
                 value = setting.get()
@@ -75,7 +81,9 @@ class BroadcasteeSettingsPlugin(BroadcasteePlugin):
                 )
 
     @subscribe(r"setting:broadcast\..*")
-    async def _setting_broadcast_any(self, match: re.Match[str], data: list[str]):
+    async def _setting_broadcast_any(
+        self: BroadcasteePlugin, match: re.Match[str], data: list[str]
+    ):
         setting = match.string.split(":")[1]
 
         old_value, new_value = data
@@ -88,15 +96,15 @@ class BroadcasteeSettingsPlugin(BroadcasteePlugin):
         )
 
 
-class BroadcasteeCommandsPlugin(CommandsPlugin, Plugin):
+class BroadcasteeCommandsPlugin(CommandsPlugin):
     @command("help")
-    async def _command_help(self, *args: str):
+    async def _command_help(self: BroadcasteePlugin, *args: str):
         self.server.chat(f"/help {' '.join(args)}")
 
     @listen_client(0x14)
-    async def packet_tab_complete(self, buff: Buffer):
+    async def packet_tab_complete(self: BroadcasteePlugin, buff: Buffer):
         self.server.send_packet(0x14, buff.getvalue())
 
     @listen_server(0x3A)
-    async def packet_server_tab_complete(self, buff: Buffer):
+    async def packet_server_tab_complete(self: BroadcasteePlugin, buff: Buffer):
         self.client.send_packet(0x3A, buff.getvalue())

@@ -15,27 +15,10 @@ from plugins.spatial import SpatialPlugin
 from plugins.statcheck import StatCheckPlugin
 from plugins.statcheck.command import StatcheckCommandPlugin
 from plugins.window import WindowPlugin
-
-plugins: tuple[type, ...] = (
-    AutoboopPlugin,
-    BroadcastPlugin,
-    ChatPlugin,
-    CommandsPlugin,
-    DebugPlugin,
-    GameStatePlugin,
-    HypixelStatePlugin,
-    LoginPlugin,
-    MiscPlugin,
-    SettingsPlugin,
-    SpatialPlugin,
-    StatCheckPlugin,
-    StatcheckCommandPlugin,
-    SoundPlugin,
-    WindowPlugin,
-)
+from proxhy.plugin import ProxhyPlugin
 
 
-class _Proxhy(Proxy):
+class _Proxhy(ProxhyPlugin):
     def __init__(
         # proxy params
         self,
@@ -58,4 +41,9 @@ class _Proxhy(Proxy):
         self.dev_mode = dev_mode
 
 
-Proxhy = type("Proxhy", (*plugins, _Proxhy), {})
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    Proxhy = _Proxhy
+else:
+    Proxhy = _Proxhy

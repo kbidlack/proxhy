@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import datetime
 import os
@@ -13,7 +17,7 @@ from plugins.commands import CommandException, Lazy, command
 from protocol.datatypes import TextComponent
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
-from proxhy.plugin import ProxhyPlugin
+
 from proxhy.utils import APIClient
 from proxhypixel.formatting import (
     format_bedwars_dict,
@@ -27,15 +31,13 @@ from proxhypixel.mappings import (
 )
 
 
-class StatcheckCommandPluginState:
+class StatcheckCommandPlugin:
+    SUPPORTED_GAMEMODES = {"bedwars"}
+
     log_path: Path
     log_stats: Callable[[str], Coroutine[Any, Any, None]]
 
-
-class StatcheckCommandPlugin(ProxhyPlugin):
-    SUPPORTED_GAMEMODES = {"bedwars"}
-
-    def _check_gamemode(self, gamemode: Gamemode):
+    def _check_gamemode(self: ProxhyPlugin, gamemode: Gamemode):
         if gamemode.mode_str not in self.SUPPORTED_GAMEMODES:
             raise CommandException(
                 TextComponent(gamemode.display_name)
@@ -45,7 +47,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
     @command("sc", "statcheck")
     async def _command_statcheck(
-        self,
+        self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
@@ -57,7 +59,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
     @command("scw", "scweekly")
     async def _command_scweekly(
-        self,
+        self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
         mode: Gamemode = Gamemode("bedwars"),
         window: float = 7.0,
@@ -70,7 +72,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
     @command("scfull")
     async def _command_scfull(
-        self,
+        self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
         mode: Gamemode = Gamemode("bedwars"),
         *stats: Statistic,
@@ -83,19 +85,19 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         )
 
     @subscribe("login_success")
-    async def _statcheck_event_login_success(self, _match, _data):
+    async def _statcheck_event_login_success(self: ProxhyPlugin, _match, _data):
         asyncio.create_task(self._login_success_helper())
 
-    async def _login_success_helper(self):
+    async def _login_success_helper(self: ProxhyPlugin):
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
         asyncio.create_task(self.migrate_log_stats())
         asyncio.create_task(self.log_stats("login"))
 
     @subscribe("close")
-    async def _statcheck_event_close(self, _match, _data):
+    async def _statcheck_event_close(self: ProxhyPlugin, _match, _data):
         asyncio.create_task(self._close_statcheck_helper())
 
-    async def _close_statcheck_helper(self):
+    async def _close_statcheck_helper(self: ProxhyPlugin):
         try:
             if self.hypixel_client:
                 try:
@@ -109,7 +111,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         except AttributeError:
             pass  # TODO: log
 
-    async def log_stats(self, event: str) -> None:
+    async def log_stats(self: ProxhyPlugin, event: str) -> None:
         if self.dev_mode:
             return
 
@@ -159,7 +161,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     def _is_uuid(value: str) -> bool:
         return bool(re.fullmatch(r"[0-9a-f]{32}", value, re.IGNORECASE))
 
-    async def migrate_log_stats(self) -> None:
+    async def migrate_log_stats(self: ProxhyPlugin) -> None:
         """Migrate stat log entries that use player names to use UUIDs instead."""
         if not os.path.exists(self.log_path):
             return
@@ -275,7 +277,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
         return round(fkdr, 2), round(wlr, 2)
 
-    def _format_date_with_ordinal(self, dt: datetime.datetime) -> str:
+    def _format_date_with_ordinal(self: ProxhyPlugin, dt: datetime.datetime) -> str:
         """Format a datetime as 'Month Dayth, Year (H:MM AM/PM)'.
 
         Args:
@@ -368,7 +370,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         return self._calculate_ratios(diff_fk, diff_fd, diff_wins, diff_losses)
 
     async def _sc_internal(
-        self,
+        self: ProxhyPlugin,
         player: Optional[HypixelPlayer] = None,
         window: float = -1.0,
         mode: Gamemode = Gamemode("bedwars"),
@@ -399,7 +401,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             )
 
     async def _sc_bedwars(
-        self,
+        self: ProxhyPlugin,
         player: hypixel.Player,
         current_stats: dict,
         window: Optional[float],

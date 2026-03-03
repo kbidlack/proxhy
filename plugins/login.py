@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import base64
 import random
@@ -37,10 +41,10 @@ from protocol.datatypes import (
     VarInt,
 )
 from proxhy import utils
-from proxhy.plugin import ProxhyPlugin
 
 
-class LoginPluginState:
+
+class LoginPlugin:
     logged_in: bool
     logging_in: bool
     regenerating_credentials: bool
@@ -54,9 +58,7 @@ class LoginPluginState:
     keep_alive_task: Optional[asyncio.Task]
     transferring_to_server: bool
 
-
-class LoginPlugin(ProxhyPlugin):
-    def _init_login(self):
+    def _init_login(self: ProxhyPlugin):
         self.logged_in = False
         self.logging_in = False
         self.regenerating_credentials = False
@@ -89,7 +91,7 @@ class LoginPlugin(ProxhyPlugin):
         self.keep_alive_task = None
 
     @listen_server(0x02, State.LOGIN, blocking=True, override=True)
-    async def packet_login_success(self, buff: Buffer):
+    async def packet_login_success(self: ProxhyPlugin, buff: Buffer):
         self.state = State.PLAY
         self.logged_in = True
         self.transferring_to_server = False
@@ -107,7 +109,7 @@ class LoginPlugin(ProxhyPlugin):
         await self.emit("login_success")
 
     @listen_server(0x01, blocking=True)
-    async def packet_join_game(self, buff: Buffer):
+    async def packet_join_game(self: ProxhyPlugin, buff: Buffer):
         self.client.unpause()
 
         if self.logging_in:
@@ -141,7 +143,7 @@ class LoginPlugin(ProxhyPlugin):
         else:
             self.client.send_packet(0x01, buff.getvalue())
 
-    async def _resend_armor_stands(self):
+    async def _resend_armor_stands(self: ProxhyPlugin):
         await asyncio.sleep(1.0)
         while self.open and self.client.open:
             for entity in list(self.gamestate.entities.values()):
@@ -175,7 +177,7 @@ class LoginPlugin(ProxhyPlugin):
             await asyncio.sleep(5.0)
 
     @listen_client(0x00, State.LOGIN, blocking=True, override=True)
-    async def packet_login_start(self, buff: Buffer):
+    async def packet_login_start(self: ProxhyPlugin, buff: Buffer):
         self.username = buff.unpack(String)
 
         if not auth.user_exists(self.username):
@@ -236,7 +238,7 @@ class LoginPlugin(ProxhyPlugin):
 
         self.server.send_packet(0x00, String.pack(self.username))
 
-    async def _start_device_code_flow(self):
+    async def _start_device_code_flow(self: ProxhyPlugin):
         try:
             device = await auth.request_device_code()
 
@@ -324,7 +326,7 @@ class LoginPlugin(ProxhyPlugin):
         except AuthException as e:
             self.client.chat(TextComponent(f"Authentication failed: {e}").color("red"))
 
-    async def login_keep_alive(self):
+    async def login_keep_alive(self: ProxhyPlugin):
         while True:
             await asyncio.sleep(10)
             if self.state == State.PLAY and self.client.open and self.logging_in:
@@ -334,7 +336,7 @@ class LoginPlugin(ProxhyPlugin):
                 break
 
     @listen_client(0x00, State.HANDSHAKING, blocking=True, override=True)
-    async def packet_handshake(self, buff: Buffer):
+    async def packet_handshake(self: ProxhyPlugin, buff: Buffer):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
             return
 
@@ -345,7 +347,9 @@ class LoginPlugin(ProxhyPlugin):
 
         self.state = State(next_state)
 
-    async def login(self, reason: Literal["logging_in", "regen"] = "logging_in"):
+    async def login(
+        self: ProxhyPlugin, reason: Literal["logging_in", "regen"] = "logging_in"
+    ):
         # immediately send login start to enter login server
         self.state = State.PLAY
         self.logging_in = True
@@ -422,26 +426,26 @@ class LoginPlugin(ProxhyPlugin):
             await self.packet_login_start(Buffer(String.pack(self.username)))
 
     @listen_client(0x00, State.STATUS, blocking=True)
-    async def packet_status_request(self, _):
+    async def packet_status_request(self: ProxhyPlugin, _):
         self.client.send_packet(
             0x00, String.pack(orjson.dumps(self.server_list_ping).decode())
         )
 
     @listen_client(0x01, State.STATUS, blocking=True)
-    async def packet_ping_request(self, buff: Buffer):
+    async def packet_ping_request(self: ProxhyPlugin, buff: Buffer):
         self.client.send_packet(0x01, buff.getvalue())
         # close connection
         await self.close()
 
     @listen_server(0x03, State.LOGIN, blocking=True)
-    async def packet_set_compression(self, buff: Buffer):
+    async def packet_set_compression(self: ProxhyPlugin, buff: Buffer):
         self.server.compression_threshold = buff.unpack(VarInt)
         self.server.compression = (
             False if self.server.compression_threshold == -1 else True
         )
 
     @listen_server(0x01, State.LOGIN, blocking=True)
-    async def packet_encryption_request(self, buff: Buffer):
+    async def packet_encryption_request(self: ProxhyPlugin, buff: Buffer):
         server_id = buff.unpack(String).encode("utf-8")
         public_key = buff.unpack(ByteArray)
 
@@ -484,7 +488,9 @@ class LoginPlugin(ProxhyPlugin):
         # enable encryption
         self.server.key = self.secret
 
-    async def _session_encrypt(self, server_id: bytes, public_key: bytes) -> bytes:
+    async def _session_encrypt(
+        self: ProxhyPlugin, server_id: bytes, public_key: bytes
+    ) -> bytes:
         # generate shared secret
         secret = token_bytes(16)
 
@@ -512,11 +518,11 @@ class LoginPlugin(ProxhyPlugin):
         return secret
 
     @subscribe("login_success")
-    async def _login_start_armor_stand_task(self, _match, _data):
+    async def _login_start_armor_stand_task(self: ProxhyPlugin, _match, _data):
         self.create_task(self._resend_armor_stands())
 
     @subscribe("login_success")
-    async def _broadcast_event_login_success(self, _match, _data):
+    async def _broadcast_event_login_success(self: ProxhyPlugin, _match, _data):
         if self.dev_mode:
             self.client.chat(
                 TextComponent("==> Dev Mode Activated <==").color("green").bold()
@@ -526,7 +532,7 @@ class LoginPlugin(ProxhyPlugin):
 
         asyncio.create_task(self._check_for_update())
 
-    async def _check_for_update(self):
+    async def _check_for_update(self: ProxhyPlugin):
         async with httpx.AsyncClient() as aclient:
             current = utils.zero_pad_calver(version("proxhy"))
             latest = (

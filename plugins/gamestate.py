@@ -1,10 +1,14 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import time
 from typing import Hashable
 
 from core.events import listen_client, subscribe
 from gamestate.state import Entity, GameState
 from protocol.datatypes import Buffer, VarInt
-from proxhy.plugin import ProxhyPlugin
+
 
 
 class ExpiringSet[T: Hashable]:
@@ -34,23 +38,20 @@ class ExpiringSet[T: Hashable]:
         return iter(self._data)
 
 
-class GameStatePluginState:
+class GameStatePlugin:
     gamestate: GameState
     in_combat_with: ExpiringSet[int]  # set[eid]
-    ein_combat_with: list[Entity]
 
-
-class GameStatePlugin(ProxhyPlugin):
-    def _init_0_gamestate(self):  # since other plugins require we put 0
+    def _init_0_gamestate(self: ProxhyPlugin):  # since other plugins require we put 0
         self.gamestate = GameState()
         self.in_combat_with = ExpiringSet(ttl=5)
         self.create_task(self._update_clientbound())
 
     @subscribe("login_success")
-    async def _gamestate_event_login_success(self, _match, _data):
+    async def _gamestate_event_login_success(self: ProxhyPlugin, _match, _data):
         self.create_task(self._update_serverbound())
 
-    async def _update_clientbound(self):
+    async def _update_clientbound(self: ProxhyPlugin):
         while self.open:
             id, *data = await self.client.pqueue.get()
             self.gamestate.update(id, b"".join(data))
@@ -58,14 +59,14 @@ class GameStatePlugin(ProxhyPlugin):
                 "cb_gamestate_update", (id, *data)
             )  # TODO: avoid unpacking? by passing tuple[bytes] everywhere
 
-    async def _update_serverbound(self):
+    async def _update_serverbound(self: ProxhyPlugin):
         while self.open:
             id, *data = await self.server.pqueue.get()
             self.gamestate.update_serverbound(id, b"".join(data))
             await self.emit("sb_gamestate_update", (id, *data))
 
     @listen_client(0x02, blocking=True)
-    async def _packet_use_entity(self, buff: Buffer):
+    async def _packet_use_entity(self: ProxhyPlugin, buff: Buffer):
         self.server.send_packet(0x02, buff.getvalue())
 
         target = buff.unpack(VarInt)
@@ -74,7 +75,6 @@ class GameStatePlugin(ProxhyPlugin):
             self.in_combat_with.add(target)
 
     @property
-    def ein_combat_with(self) -> list[Entity]:
+    def ein_combat_with(self: ProxhyPlugin) -> list[Entity]:
         entities = [self.gamestate.get_entity(e) for e in self.in_combat_with.values()]
-
         return [e for e in entities if e is not None]

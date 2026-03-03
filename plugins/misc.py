@@ -1,26 +1,27 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
+
 from plugins.commands import CommandException, command
 from protocol.datatypes import Item, SlotData, String, TextComponent
 from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import Gamemode, Submode
-from proxhy.plugin import ProxhyPlugin
+
 
 from .window import Window, get_trigger
 
 
-class MiscPluginState:
-    pass
-
-
-class MiscPlugin(ProxhyPlugin):
+class MiscPlugin:
     @command("rq")
-    async def _command_requeue(self):
+    async def _command_requeue(self: ProxhyPlugin):
         """Requeue the last played game."""
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
         self.server.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
 
     @command("play")
-    async def _command_play(self, mode: Gamemode, *submodes: Submode):
+    async def _command_play(self: ProxhyPlugin, mode: Gamemode, *submodes: Submode):
         """Convenient aliases for Hypixel's /play command. Ex. /play bedwars solo"""
         if not submodes:
             if Submode.SUBMODES.get(mode.mode_str):
@@ -33,19 +34,19 @@ class MiscPlugin(ProxhyPlugin):
             self.server.chat(f"/play {submodes[-1].play_id}")
 
     @command("pos")
-    async def _command_pos(self):
+    async def _command_pos(self: ProxhyPlugin):
         """Get your current position."""
         self.client.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 
     @command("garlicbread")  # Mmm, garlic bread.
-    async def _command_garlicbread(self):  # Mmm, garlic bread.
+    async def _command_garlicbread(self: ProxhyPlugin):  # Mmm, garlic bread.
         """Mmm, garlic bread."""  # Mmm, garlic bread.
         return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
     @command("fribidiskigma")
-    async def _command_fribidiskigma(self):
+    async def _command_fribidiskigma(self: ProxhyPlugin):
         """Example window usage demo."""
 
         async def grass_callback(

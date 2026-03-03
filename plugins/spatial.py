@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 
 import numba
@@ -9,7 +13,7 @@ from protocol.datatypes import (
     Float,
     Int,
 )
-from proxhy.plugin import ProxhyPlugin
+
 
 
 @numba.njit(cache=True, fastmath=True)
@@ -29,12 +33,12 @@ def _compute_height_warning(
     return True, limit_dist, float(particle_y)
 
 
-class SpatialPlugin(ProxhyPlugin):
+class SpatialPlugin:
     @subscribe("login_success")
-    async def _spatial_event_login_success(self, _match, _data):
+    async def _spatial_event_login_success(self: ProxhyPlugin, _match, _data):
         self.create_task(self.check_height_loop())
 
-    async def check_height_loop(self):
+    async def check_height_loop(self: ProxhyPlugin):
         """Called once when the proxy is started; loops indefinitely"""
         while True:
             if (
@@ -46,7 +50,7 @@ class SpatialPlugin(ProxhyPlugin):
 
             await asyncio.sleep(1 / 20)
 
-    def height_limit_warnings(self):
+    def height_limit_warnings(self: ProxhyPlugin):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
         if self.game.map is None:
@@ -73,7 +77,7 @@ class SpatialPlugin(ProxhyPlugin):
             )
 
     def display_particle(
-        self,
+        self: ProxhyPlugin,
         particle_id: int,
         pos: tuple[float, float, float],
         offset: tuple[float, float, float] = (0.0, 0.0, 0.0),

@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import re
 import shelve
 from pathlib import Path
@@ -8,25 +12,23 @@ from core.events import subscribe
 from plugins.commands import CommandException, CommandGroup, Lazy
 from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import AutoboopPlayer, HypixelPlayer
-from proxhy.plugin import ProxhyPlugin
 from proxhypixel.formatting import get_rankname
 
 
-class AutoboopPluginState:
+
+class AutoboopPlugin:
     AB_DATA_PATH: Path
     autoboop_group: CommandGroup
 
-
-class AutoboopPlugin(ProxhyPlugin):
-    def _init_misc(self):
+    def _init_misc(self: ProxhyPlugin):
         self.AB_DATA_PATH = Path(user_config_dir("proxhy")) / "autoboop.db"
         self.autoboop_group = CommandGroup("autoboop", "ab", help="Autoboop commands.")
 
         self._setup_autoboop_commands()
 
-    def _setup_autoboop_commands(self):
+    def _setup_autoboop_commands(self: ProxhyPlugin):
         @self.autoboop_group.command("list", "ls")
-        async def _autoboop_list(self):
+        async def _autoboop_list(self: ProxhyPlugin):
             """List all players in autoboop."""
             with shelve.open(self.AB_DATA_PATH) as db:
                 user_players = db.get(self.username, {})
@@ -43,7 +45,7 @@ class AutoboopPlugin(ProxhyPlugin):
                 return msg
 
         @self.autoboop_group.command("add")
-        async def _autoboop_add(self, player: HypixelPlayer):
+        async def _autoboop_add(self: ProxhyPlugin, player: HypixelPlayer):
             """Add a player to autoboop."""
             rankname = get_rankname(player._player)
             key = player.name.lower()
@@ -67,7 +69,7 @@ class AutoboopPlugin(ProxhyPlugin):
             )
 
         @self.autoboop_group.command("remove", "rm")
-        async def _autoboop_remove(self, _player: Lazy[AutoboopPlayer]):
+        async def _autoboop_remove(self: ProxhyPlugin, _player: Lazy[AutoboopPlayer]):
             """Remove a player from autoboop"""
             key = _player.value.lower()
 
@@ -92,7 +94,9 @@ class AutoboopPlugin(ProxhyPlugin):
         self.command_registry.register(self.autoboop_group)
 
     @subscribe(r"chat:server:(Guild|Friend) > ([A-Za-z0-9_]+) joined.$")
-    async def _autoboop_event_chat_server_guild_join(self, _match, buff: Buffer):
+    async def _autoboop_event_chat_server_guild_join(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         player = re.match(
             r"^(Guild|Friend) > ([A-Za-z0-9_]+) joined\.$", buff.unpack(Chat)
         )

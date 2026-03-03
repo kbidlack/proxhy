@@ -1,7 +1,10 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 import re
 from typing import Optional
 
-from broadcasting.plugin import BroadcastPeerPlugin
 from core.events import subscribe
 from plugins.commands import Command, CommandException, CommandGroup, CommandsPlugin
 from protocol.datatypes import (
@@ -12,8 +15,9 @@ from protocol.datatypes import (
 )
 
 
-class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
-    async def _run_command(self, message: str):
+
+class BroadcastPeerCommandsPlugin(CommandsPlugin):
+    async def _run_command(self: BroadcastPeerPlugin, message: str):
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 
@@ -66,7 +70,7 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                 .click_event("suggest_command", message)
             )
 
-    async def _tab_complete(self, text: str):
+    async def _tab_complete(self: BroadcastPeerPlugin, text: str):
         precommand = None
         suggestions: list[str] = []
 
@@ -118,7 +122,9 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
         )
 
     @subscribe("chat:client:.*")
-    async def _broadcast_peer_base_event_chat_client_any(self, _match, buff: Buffer):
+    async def _broadcast_peer_base_event_chat_client_any(
+        self: BroadcastPeerPlugin, _match, buff: Buffer
+    ):
         msg = buff.unpack(String)
         if msg.startswith("/"):
             return  # command plugin

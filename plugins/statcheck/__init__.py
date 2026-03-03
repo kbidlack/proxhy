@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import re
 import uuid
@@ -32,7 +36,8 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.plugin import ProxhyPlugin
+
+
 from proxhypixel.formatting import (
     SUPPORTED_MODES,
     format_player_dict,
@@ -179,7 +184,7 @@ def minecraft_uuid_v2():
     return uuid.UUID(int=u)
 
 
-class StatCheckPluginState:
+class StatCheckPlugin:
     players_with_stats: dict[str, PlayerWithStats]
     nick_team_colors: dict[str, str]
     players_without_stats: set[str]
@@ -200,9 +205,7 @@ class StatCheckPluginState:
     hypixel_api_key: str
     _build_player_display_name: Callable[[str, dict | Nick], str]
 
-
-class StatCheckPlugin(ProxhyPlugin):
-    def _init_statcheck(self):
+    def _init_statcheck(self: ProxhyPlugin):
         self.players_with_stats: dict[str, PlayerWithStats] = {}
         self.nick_team_colors: dict[str, str] = {}  # Nicked player team colors
         self.players_without_stats: set[str] = set()  # players from /who
@@ -232,7 +235,7 @@ class StatCheckPlugin(ProxhyPlugin):
         self.update_stats_complete = asyncio.Event()
 
     @property
-    def all_players(self) -> set[str]:
+    def all_players(self: ProxhyPlugin) -> set[str]:
         all_players = self.real_players()
 
         if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
@@ -250,12 +253,12 @@ class StatCheckPlugin(ProxhyPlugin):
         return keyring.get_password("proxhy", "hypixel_api_key")
 
     @hypixel_api_key.setter
-    def hypixel_api_key(self, key):
+    def hypixel_api_key(self: ProxhyPlugin, key: str):
         self._hypixel_api_key = key
 
         keyring.set_password("proxhy", "hypixel_api_key", key)
 
-    async def validate_api_key(self, force: bool = False) -> bool:
+    async def validate_api_key(self: ProxhyPlugin, force: bool = False) -> bool:
         """Validate the Hypixel API key by making a test request.
 
         Caches the result for API_KEY_CACHE_TTL seconds unless force=True.
@@ -288,7 +291,7 @@ class StatCheckPlugin(ProxhyPlugin):
     # Helper methods for common operations
 
     def _send_tablist_update(
-        self, player_uuid: str, display_name: str, listed: bool = True
+        self: ProxhyPlugin, player_uuid: str, display_name: str, listed: bool = True
     ) -> None:
         """Send a packet to update a player's display name in the tab list."""
         self.client.send_packet(
@@ -300,7 +303,7 @@ class StatCheckPlugin(ProxhyPlugin):
             Chat.pack(display_name),
         )
 
-    def _send_bulk_tablist_update(self, updates: list[tuple[str, str]]) -> None:
+    def _send_bulk_tablist_update(self: ProxhyPlugin, updates: list[tuple[str, str]]):
         """Send a packet to update multiple players' display names in the tab list.
 
         Args:
@@ -321,7 +324,9 @@ class StatCheckPlugin(ProxhyPlugin):
             ),
         )
 
-    def _build_player_display_name(self, player_name: str, fdict: dict | Nick) -> str:
+    def _build_player_display_name(
+        self: ProxhyPlugin, player_name: str, fdict: dict | Nick
+    ) -> str:
         try:
             color = self.get_team_color(player_name)
         except ValueError:
@@ -358,7 +363,7 @@ class StatCheckPlugin(ProxhyPlugin):
             prefix = ""
         return (prefix + " " + display_name).strip()
 
-    def _get_dead_display_name(self, player_name: str) -> str:
+    def _get_dead_display_name(self: ProxhyPlugin, player_name: str) -> str:
         """Get the grayed-out display name for a dead player.
 
         Args:
@@ -383,14 +388,14 @@ class StatCheckPlugin(ProxhyPlugin):
         else:
             return color + player_name
 
-    def _update_dead_players_in_tablist(self) -> None:
+    def _update_dead_players_in_tablist(self: ProxhyPlugin):
         """Update all final dead players in the tab list with grayed-out display names."""
         for name, u in self.final_dead.items():
             display_name = self._get_dead_display_name(name)
             self._send_tablist_update(u, display_name)
 
     @listen_server(0x01, blocking=True)
-    async def packet_join_game(self, _):
+    async def packet_join_game(self: ProxhyPlugin, _):
         for player, _uuid in (self.dead | self.final_dead).items():
             self.client.send_packet(
                 0x38,
@@ -415,7 +420,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.show_stats")
     async def _statcheck_event_setting_bedwars_tablist_show_stats(
-        self, _match, data: list
+        self: ProxhyPlugin, _match, data: list
     ):
         # data = [old_state, new_state]
         if data == ["OFF", "ON"]:
@@ -429,7 +434,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.is_mode_specific")
     async def _statcheck_event_setting_bedwars_tablist_is_mode_specific(
-        self, _match, data: list
+        self: ProxhyPlugin, _match, data: list
     ) -> None:
         """Callback when is_mode_specific setting changes - rebuild display names."""
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
@@ -450,7 +455,7 @@ class StatCheckPlugin(ProxhyPlugin):
             self.keep_player_stats_updated()
             self._update_dead_players_in_tablist()
 
-    async def _reset_stats(self) -> None:
+    async def _reset_stats(self: ProxhyPlugin) -> None:
         """Reset all player display names to default (no stats shown)."""
         updates = [
             (
@@ -464,7 +469,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.show_rankname")
     async def _statcheck_event_setting_bedwars_tablist_show_rankname(
-        self, _match, data: list
+        self: ProxhyPlugin, _match, data: list
     ) -> None:
         """Callback when show_rankname setting changes - rebuild display names."""
         for player, player_data in self.players_with_stats.items():
@@ -483,7 +488,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("setting:bedwars.tablist.show_eliminated_players")
     async def _statcheck_event_setting_bedwars_tablist_show_eliminated_players(
-        self, _match, data: list
+        self: ProxhyPlugin, _match, data: list
     ) -> None:
         # remove self from final_dead
         final_dead_no_self = self.final_dead.copy()
@@ -512,13 +517,13 @@ class StatCheckPlugin(ProxhyPlugin):
 
     @subscribe("cb_gamestate_update")
     async def _statcheck_event_cb_gamestate_update_teams(
-        self, _match, data: tuple[int, *tuple[bytes, ...]]
+        self: ProxhyPlugin, _match, data: tuple[int, *tuple[bytes, ...]]
     ):
         if data[0] == 0x3E:
             self.keep_player_stats_updated()
 
     @listen_server(0x38, blocking=True)
-    async def packet_player_list_item(self, buff: Buffer):
+    async def packet_player_list_item(self: ProxhyPlugin, buff: Buffer):
         action = buff.unpack(VarInt)
         num_players = buff.unpack(VarInt)
 
@@ -557,7 +562,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
         self.client.send_packet(0x38, buff.getvalue())
 
-    async def _get_player(self, player: str) -> dict[str, Player]:
+    async def _get_player(self: ProxhyPlugin, player: str) -> dict[str, Player]:
         """Get a player from cache or fetch from API."""
         return {
             player: self._cached_players.get(player)
@@ -565,7 +570,7 @@ class StatCheckPlugin(ProxhyPlugin):
         }
 
     @lru_cache()
-    def get_team_color(self, player_name: str) -> TeamColor:
+    def get_team_color(self: ProxhyPlugin, player_name: str) -> TeamColor:
         """
         Return comprehensive team color information for a player.
 
@@ -581,7 +586,10 @@ class StatCheckPlugin(ProxhyPlugin):
 
         # Special handling for current user - check sidebar for "YOU"
         if player_name == self.username:
-            team_name, color_code = self._get_own_team_info()
+            result = self._get_own_team_info()
+            if result is None:
+                raise ValueError("Could not determine own team info")
+            team_name, color_code = result
         # Check for nicked player cached color
         elif player_name in self.nick_team_colors:
             team_name, color_code = self._get_nicked_player_team_info(player_name)
@@ -602,7 +610,7 @@ class StatCheckPlugin(ProxhyPlugin):
             name=team_name.title(),
         )
 
-    def _get_own_team_info(self) -> tuple[str, str]:
+    def _get_own_team_info(self: ProxhyPlugin) -> tuple[str, str] | None:
         """Get team name and color code for the current user."""
         try:
             # First try normal team detection
@@ -639,7 +647,9 @@ class StatCheckPlugin(ProxhyPlugin):
                     f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
                 )
 
-    def _get_nicked_player_team_info(self, player_name: str) -> tuple[str, str]:
+    def _get_nicked_player_team_info(
+        self: ProxhyPlugin, player_name: str
+    ) -> tuple[str, str]:
         """Get team name and color code for a nicked player."""
         m = COLOR_CODE.search(self.nick_team_colors[player_name])
         color_code = m.group(1) if m else ""
@@ -647,7 +657,9 @@ class StatCheckPlugin(ProxhyPlugin):
         team_name = COLOR_CODE_TO_NAME.get(color_code, "Unknown")
         return team_name, color_code
 
-    def _get_regular_player_team_info(self, player_name: str) -> tuple[str, str]:
+    def _get_regular_player_team_info(
+        self: ProxhyPlugin, player_name: str
+    ) -> tuple[str, str]:
         """Get team name and color code for a regular player."""
         team = self.get_team(player_name)
         if not team:
@@ -661,7 +673,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
         return team_name, color_code
 
-    async def _update_stats(self):
+    async def _update_stats(self: ProxhyPlugin):
         """
         Update stats in tab list.
         Calls stat highlights function once all players from /who have stats
@@ -816,7 +828,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
         self.update_stats_complete.set()  # emit an event to say we've finished statchecks
 
-    async def highlight_adjacent_teams(self) -> None:
+    async def highlight_adjacent_teams(self: ProxhyPlugin) -> None:
         """Waits until stats are updated; displays a title card with stats of adjacent team(s)."""
 
         await self.update_stats_complete.wait()
@@ -949,7 +961,7 @@ class StatCheckPlugin(ProxhyPlugin):
         # )
         self.adjacent_teams_highlighted = True
 
-    def get_adjacent_teams(self) -> tuple[str, str]:
+    def get_adjacent_teams(self: ProxhyPlugin) -> tuple[str, str]:
         """Get the (side_rush, alt_rush) teams for the current player.
 
         Returns:
@@ -966,7 +978,7 @@ class StatCheckPlugin(ProxhyPlugin):
 
         return (side_rush, alt_rush)
 
-    def get_players_on_team(self, color: str) -> list[str]:
+    def get_players_on_team(self: ProxhyPlugin, color: str) -> list[str]:
         """Get a de-duplicated list of player names on the given team color.
 
         Args:
@@ -984,7 +996,7 @@ class StatCheckPlugin(ProxhyPlugin):
                 players.update(team.members)
         return list(players)
 
-    async def stat_highlights(self):
+    async def stat_highlights(self: ProxhyPlugin) -> None:
         """Display top 3 enemy players and nicked players."""
         if not self.players_with_stats:
             return  # no stats
@@ -1085,7 +1097,7 @@ class StatCheckPlugin(ProxhyPlugin):
             .append("\n")
         )
 
-    def get_team(self, user: str) -> Optional[Team]:
+    def get_team(self: ProxhyPlugin, user: str) -> Optional[Team]:
         """
         Get user's team. Returns team name or None if not found.
         Specifically, only looks for user's team in Bedwars games
@@ -1102,7 +1114,7 @@ class StatCheckPlugin(ProxhyPlugin):
             None,
         )
 
-    def keep_player_stats_updated(self) -> None:
+    def keep_player_stats_updated(self: ProxhyPlugin) -> None:
         """Update all living players' display names in the tab list.
 
         This ensures player stats stay updated even when Hypixel resets the tab list.
@@ -1120,7 +1132,9 @@ class StatCheckPlugin(ProxhyPlugin):
         self._send_bulk_tablist_update(living_players)
 
     @subscribe(r"chat:server:.* has joined .*!")  # listens, does not replace
-    async def _statcheck_event_chat_server_player_joined(self, _match, buff: Buffer):
+    async def _statcheck_event_chat_server_player_joined(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         self.client.send_packet(0x02, buff.getvalue())
         if self.settings.bedwars.api_key_reminder.get() == "ON":
             message = buff.unpack(Chat)
@@ -1150,7 +1164,9 @@ class StatCheckPlugin(ProxhyPlugin):
                     )
 
     @subscribe("chat:server:ONLINE: .*")
-    async def _statcheck_event_chat_server_who(self, _match, buff: Buffer):
+    async def _statcheck_event_chat_server_who(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         message = buff.unpack(Chat)
 
         if not self.received_who.is_set():
@@ -1164,14 +1180,16 @@ class StatCheckPlugin(ProxhyPlugin):
         )
         return await self._update_stats()
 
-    def get_player_to_uuid_mapping(self) -> dict[str, str]:
+    def get_player_to_uuid_mapping(self: ProxhyPlugin) -> dict[str, str]:
         """Get a mapping of player names to UUIDs."""
         return {v: k for k, v in self.players.items()}
 
     @subscribe(
         "chat:server:(You will respawn in 10 seconds!|Your bed was destroyed so you are a spectator!)"
     )
-    async def _statcheck_event_chat_server_bedwars_rejoin(self, _match, buff: Buffer):
+    async def _statcheck_event_chat_server_bedwars_rejoin(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         self.client.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
@@ -1192,11 +1210,13 @@ class StatCheckPlugin(ProxhyPlugin):
                 self._get_dead_display_name(self.username),
             )
 
-    def in_bedwars_game(self):
+    def in_bedwars_game(self: ProxhyPlugin):
         return self.game.gametype == "bedwars" and self.game.mode
 
     @subscribe(f"chat:server:({'|'.join(GAME_START_MESSAGES)})")
-    async def _statcheck_event_chat_server_game_start(self, _match, buff: Buffer):
+    async def _statcheck_event_chat_server_game_start(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         if self.game.gametype != "bedwars" or self.stats_highlighted:
             return self.client.send_packet(0x02, buff.getvalue())
 
@@ -1227,7 +1247,7 @@ class StatCheckPlugin(ProxhyPlugin):
             self.client.send_packet(0x02, buff.getvalue())
 
     @command("key", "apikey")
-    async def _command_key(self, key: str):
+    async def _command_key(self: ProxhyPlugin, key: str):
         """Set your Hypixel API key."""
         try:
             new_client = hypixel.Client(key)
@@ -1257,7 +1277,7 @@ class StatCheckPlugin(ProxhyPlugin):
             ):
                 await self.stat_highlights()
 
-    def match_kill_message(self, message: str) -> Optional[re.Match]:
+    def match_kill_message(self: ProxhyPlugin, message: str) -> Optional[re.Match]:
         """Match a kill message against known patterns.
 
         Returns:
@@ -1269,7 +1289,9 @@ class StatCheckPlugin(ProxhyPlugin):
                 return match  # Only 3 groups: victim, killer, final_kill
         return None
 
-    async def respawn_timer(self, player: str, reconnect: bool = False) -> None:
+    async def respawn_timer(
+        self: ProxhyPlugin, player: str, reconnect: bool = False
+    ) -> None:
         """Display a countdown timer in the tab list for respawning players."""
         if not self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
             return
@@ -1325,7 +1347,9 @@ class StatCheckPlugin(ProxhyPlugin):
         )
 
     @subscribe(r"chat:server:(.+?) reconnected\.$")
-    async def _statcheck_event_chat_server_player_recon(self, _match, buff: Buffer):
+    async def _statcheck_event_chat_server_player_recon(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         self.client.send_packet(0x02, buff.getvalue())
 
         await self.received_locraw.wait()  # so that we can run the next check
@@ -1346,7 +1370,9 @@ class StatCheckPlugin(ProxhyPlugin):
         asyncio.create_task(self.respawn_timer(player, reconnect=True))
 
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
-    async def _statcheck_event_chat_server_kill_msg(self, _match, buff: Buffer):
+    async def _statcheck_event_chat_server_kill_msg(
+        self: ProxhyPlugin, _match, buff: Buffer
+    ):
         if not self.in_bedwars_game():
             return self.client.send_packet(0x02, buff.getvalue())
 

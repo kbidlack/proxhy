@@ -1,3 +1,7 @@
+from __future__ import annotations
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import inspect
 from types import NoneType, NotImplementedType
@@ -14,21 +18,19 @@ from protocol.datatypes import (
     SlotData,
     UnsignedByte,
 )
-from proxhy.plugin import ProxhyPlugin
+
 
 from ._window import Window, get_trigger
 
 
-class WindowPluginState:
+class WindowPlugin:
     windows: dict[int, "Window"]
 
-
-class WindowPlugin(ProxhyPlugin):
-    def _init_window(self):
+    def _init_window(self: ProxhyPlugin):
         self.windows: dict[int, Window] = {}
 
     @listen_client(0x0D)
-    async def packet_close_window(self, buff: Buffer):
+    async def packet_close_window(self: ProxhyPlugin, buff: Buffer):
         window_id = buff.unpack(UnsignedByte)
         if window_id in self.windows:
             self.windows[window_id].close()
@@ -36,7 +38,7 @@ class WindowPlugin(ProxhyPlugin):
             self.server.send_packet(0x0D, buff.getvalue())
 
     @listen_client(0x0E)
-    async def packet_click_window(self, buff: Buffer):
+    async def packet_click_window(self: ProxhyPlugin, buff: Buffer):
         window_id = buff.unpack(UnsignedByte)
         slot = buff.unpack(Short)
         button = buff.unpack(Byte)
