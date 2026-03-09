@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
+from petty.protocol.datatypes import Item
 from platformdirs import user_config_dir
 
 from plugins.settings._settings import (  # import directly to avoid circular imports
@@ -9,7 +10,6 @@ from plugins.settings._settings import (  # import directly to avoid circular im
     SettingsStorage,
     create_setting,
 )
-from protocol.datatypes import Item
 
 config_dir = Path(user_config_dir("proxhy", ensure_exists=True))
 config_dir.mkdir(parents=True, exist_ok=True)

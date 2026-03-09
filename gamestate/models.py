@@ -3,8 +3,7 @@ from typing import Any
 
 from numba import float64, int64
 from numba.experimental import jitclass
-
-from protocol.datatypes import (
+from petty.protocol.datatypes import (
     SlotData,
 )
 

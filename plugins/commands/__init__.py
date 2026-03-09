@@ -1,15 +1,11 @@
-from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import re
-from typing import Any, Callable, Coroutine, Union
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Union
 
-from core.events import listen_client, listen_server, subscribe
-from protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
+from petty.events import listen_client, listen_server, subscribe
+from petty.protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
+
 from proxhy.argtypes import HelpPath
-
 
 from ._commands import (
     Command,
@@ -21,6 +17,9 @@ from ._commands import (
     Lazy,
     command,
 )
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 _OTHER_COMMANDS: set[str] = {
     "compass",

@@ -1,15 +1,13 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import uuid
 from typing import Literal, Optional
 
-from core.events import subscribe
-from gamestate.state import PlayerAbilityFlags
-from plugins.commands import CommandException, command
-from protocol.datatypes import (
+from petty.events import subscribe
+from petty.protocol.datatypes import (
     UUID,
     Byte,
     Double,
@@ -17,8 +15,10 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.argtypes import ServerPlayer
 
+from gamestate.state import PlayerAbilityFlags
+from plugins.commands import CommandException, command
+from proxhy.argtypes import ServerPlayer
 
 
 class BroadcastPeerBasePlugin:
@@ -41,7 +41,7 @@ class BroadcastPeerBasePlugin:
     ):
         # remove this client
         if self in self.proxy.clients:
-            self.proxy.clients.remove(self)  # ty: ignore[invalid-argument-type]
+            self.proxy.clients.remove(self)
 
         try:
             self.writer.close()

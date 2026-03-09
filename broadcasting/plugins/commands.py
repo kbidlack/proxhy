@@ -1,19 +1,24 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin
 import re
 from typing import Optional
 
-from core.events import subscribe
-from plugins.commands import Command, CommandException, CommandGroup, CommandsPlugin
-from protocol.datatypes import (
+from petty.events import subscribe
+from petty.protocol.datatypes import (
     Buffer,
     String,
     TextComponent,
     VarInt,
 )
 
+from plugins.commands import (
+    Command,
+    CommandException,
+    CommandGroup,
+    CommandsPlugin,
+)
 
 
 class BroadcastPeerCommandsPlugin(CommandsPlugin):

@@ -1,19 +1,18 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import re
 import shelve
 from pathlib import Path
 
+from petty.events import subscribe
+from petty.protocol.datatypes import Buffer, Chat, TextComponent
 from platformdirs import user_config_dir
 
-from core.events import subscribe
 from plugins.commands import CommandException, CommandGroup, Lazy
-from protocol.datatypes import Buffer, Chat, TextComponent
 from proxhy.argtypes import AutoboopPlayer, HypixelPlayer
 from proxhypixel.formatting import get_rankname
-
 
 
 class AutoboopPlugin:

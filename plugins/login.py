@@ -1,7 +1,3 @@
-from __future__ import annotations
-from typing import TYPE_CHECKING
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import base64
 import random
@@ -9,21 +5,20 @@ import uuid
 from importlib.metadata import version
 from importlib.resources import files
 from secrets import token_bytes
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 from unittest.mock import Mock
 
 import aiohttp
 import httpx
 import hypixel
 import orjson
-
-import auth
-from auth.errors import AuthException
-from core.cache import Cache
-from core.events import listen_client, listen_server, subscribe
-from core.net import Server, State
-from protocol.crypt import generate_verification_hash, pkcs1_v15_padded_rsa_encrypt
-from protocol.datatypes import (
+from petty.events import listen_client, listen_server, subscribe
+from petty.net import ServerStream, State
+from petty.protocol.crypt import (
+    generate_verification_hash,
+    pkcs1_v15_padded_rsa_encrypt,
+)
+from petty.protocol.datatypes import (
     Boolean,
     Buffer,
     Byte,
@@ -40,8 +35,14 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
-from proxhy import utils
 
+import auth
+from auth.errors import AuthException
+from proxhy import utils
+from proxhy.utils import Cache
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 class LoginPlugin:
@@ -90,7 +91,7 @@ class LoginPlugin:
         self.secret_task: Optional[asyncio.Task] = None
         self.keep_alive_task = None
 
-    @listen_server(0x02, State.LOGIN, blocking=True, override=True)
+    @listen_server(0x02, State.LOGIN, blocking=True)
     async def packet_login_success(self: ProxhyPlugin, buff: Buffer):
         self.state = State.PLAY
         self.logged_in = True
@@ -176,7 +177,7 @@ class LoginPlugin:
                         )
             await asyncio.sleep(5.0)
 
-    @listen_client(0x00, State.LOGIN, blocking=True, override=True)
+    @listen_client(0x00, State.LOGIN, blocking=True)
     async def packet_login_start(self: ProxhyPlugin, buff: Buffer):
         self.username = buff.unpack(String)
 
@@ -206,7 +207,7 @@ class LoginPlugin:
             )
             return await self.close()
 
-        self.server = Server(reader, writer)
+        self.server = ServerStream(reader, writer)
         self.handle_server_task = asyncio.create_task(self.handle_server())
 
         if self.keep_alive_task:
@@ -335,7 +336,7 @@ class LoginPlugin:
                 await self.close()
                 break
 
-    @listen_client(0x00, State.HANDSHAKING, blocking=True, override=True)
+    @listen_client(0x00, State.HANDSHAKING, blocking=True)
     async def packet_handshake(self: ProxhyPlugin, buff: Buffer):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
             return

@@ -1,24 +1,21 @@
-from __future__ import annotations
-
 import asyncio
 import re
 import typing
 from typing import TYPE_CHECKING
 
 import pyroh
-
-from core.events import listen_client, listen_server, subscribe
-from core.net import Server, State
-from core.plugin import Plugin
+from petty.events import listen_client, listen_server, subscribe
+from petty.net import ServerStream, State
 
 if TYPE_CHECKING:
     from plugins.broadcastee.plugin import BroadcasteePlugin
+from petty.protocol.datatypes import Buffer, Short, String, VarInt
+
 from plugins.commands import CommandsPlugin, command
-from protocol.datatypes import Buffer, Short, String, VarInt
 from proxhy.settings import ProxhySettings
 
 
-class BroadcasteeClosePlugin(Plugin):
+class BroadcasteeClosePlugin:
     @subscribe("close")
     async def _broadcastee_event_close(self: BroadcasteePlugin, _match, _data):
         typing.cast(pyroh.StreamWriter, self.server.writer)
@@ -36,7 +33,7 @@ class BroadcasteeClosePlugin(Plugin):
         reader: pyroh.StreamReader,
         writer: pyroh.StreamWriter,
     ):
-        self.server = Server(reader, writer)
+        self.server = ServerStream(reader, writer)
 
     async def join(self: BroadcasteePlugin, username: str, node_id: str):
         self.state = State.PLAY
@@ -55,7 +52,7 @@ class BroadcasteeClosePlugin(Plugin):
         await self.server.drain()
 
 
-class BroadcasteeSettingsPlugin(Plugin):
+class BroadcasteeSettingsPlugin:
     settings: ProxhySettings
 
     @listen_server(0x3F)

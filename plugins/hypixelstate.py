@@ -1,16 +1,15 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
 from typing import Callable, Optional
 
 import orjson
+from petty.events import listen_client, listen_server, subscribe
+from petty.protocol.datatypes import Buffer, ByteArray, Chat, Int, String
 
-from core.events import listen_client, listen_server, subscribe
-from protocol.datatypes import Buffer, ByteArray, Chat, Int, String
 from proxhypixel.models import Game
-
 
 
 class HypixelStatePlugin:

@@ -1,5 +1,5 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
@@ -11,14 +11,10 @@ import hypixel
 import numba
 import numpy as np
 from numpy.typing import NDArray
-
-from core.events import listen_client as listen
-from core.events import subscribe
-from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
-from plugins.commands import CommandException, command
-from plugins.window import Window
-from protocol import nbt
-from protocol.datatypes import (
+from petty import nbt
+from petty.events import listen_client as listen
+from petty.events import subscribe
+from petty.protocol.datatypes import (
     Angle,
     Boolean,
     Buffer,
@@ -34,6 +30,10 @@ from protocol.datatypes import (
     UnsignedByte,
     VarInt,
 )
+
+from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
+from plugins.commands import CommandException, command
+from plugins.window import Window
 from proxhy.argtypes import ServerPlayer
 from proxhy.utils import uuid_version
 from proxhypixel.formatting import (
@@ -559,6 +559,14 @@ class BroadcastPeerSpectatePlugin:
     async def _packet_use_entity(self: BroadcastPeerPlugin, buff: Buffer):
         target, action = buff.unpack(VarInt), buff.unpack(VarInt)
         entity = self.gamestate.get_entity(target)
+
+        if entity is None:
+            self.client.chat(
+                TextComponent(
+                    f"That entity does not exist! (how did you do that?!) [{target=}, {action=}]"
+                ).color("red")
+            )
+
         if action == 0:
             if isinstance(entity, Player):
                 if uuid_version(entity.uuid) == 2:  # is npc

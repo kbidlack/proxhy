@@ -1,22 +1,22 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import math
 from textwrap import fill
 from typing import Any
 
-from plugins.commands import command
-from plugins.window import Window
-from protocol.datatypes import (
+from petty.nbt import dumps, from_dict
+from petty.protocol.datatypes import (
     Item,
     SlotData,
     TextComponent,
 )
-from protocol.nbt import dumps, from_dict
+
+from plugins.commands import command
+from plugins.window import Window
 from proxhy.argtypes import SettingPath, SettingValue
 from proxhy.settings import ProxhySettings
-
 
 from ._settings import Setting, SettingGroup, SettingsStorage, create_setting
 
@@ -87,7 +87,7 @@ class SettingsMenu(Window):
         self.subsetting_path = subsetting_path
         self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
             subsetting_path
-        )  # ty: ignore[invalid-assignment]
+        )  # type: ignore
 
         self.DISABLED_STATES = {"off", "none", "disabled"}
         self.menu_slots: dict[int, str] = {}

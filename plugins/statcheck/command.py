@@ -1,5 +1,5 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
@@ -11,13 +11,12 @@ from typing import Any, Callable, Coroutine, Optional
 
 import hypixel
 import orjson
+from petty.events import subscribe
+from petty.protocol.datatypes import TextComponent
 
-from core.events import subscribe
 from plugins.commands import CommandException, Lazy, command
-from protocol.datatypes import TextComponent
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
-
 from proxhy.utils import APIClient
 from proxhypixel.formatting import (
     format_bedwars_dict,

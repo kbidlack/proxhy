@@ -1,12 +1,11 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
 from typing import Callable, Coroutine
 
-from protocol.datatypes import Float, Int, String, UnsignedByte
-
+from petty.protocol.datatypes import Float, Int, String, UnsignedByte
 
 
 class SoundPlugin:

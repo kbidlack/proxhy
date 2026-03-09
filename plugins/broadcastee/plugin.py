@@ -1,4 +1,5 @@
-from core.plugin import Plugin
+from petty.endpoints import Proxy
+
 from plugins.broadcastee.plugins import (
     BroadcasteeClosePlugin,
     BroadcasteeCommandsPlugin,
@@ -18,6 +19,6 @@ class BroadcasteePlugin(
     GameStatePlugin,
     SettingsPlugin,
     WindowPlugin,
-    Plugin,
+    Proxy,
 ):
     pass

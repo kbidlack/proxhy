@@ -1,19 +1,18 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin
 from pathlib import Path
 
-from platformdirs import user_config_dir
-
-from broadcasting.settings import BroadcastSettings
-from core.events import listen_client, subscribe
-from plugins.settings import Setting, SettingsPlugin, SettingsStorage
-from protocol.datatypes import (
+from petty.events import listen_client, subscribe
+from petty.protocol.datatypes import (
     Buffer,
     String,
 )
+from platformdirs import user_config_dir
 
+from broadcasting.settings import BroadcastSettings
+from plugins.settings import Setting, SettingsPlugin, SettingsStorage
 
 
 class BroadcastPeerSettingsPlugin(SettingsPlugin):

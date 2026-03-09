@@ -1,10 +1,11 @@
 from typing import TYPE_CHECKING, Any
 
+from petty.protocol.datatypes import TextComponent
+
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,
 )
-from protocol.datatypes import TextComponent
 
 from ._argtypes import _resolve_in_proxy_chain
 

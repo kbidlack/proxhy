@@ -1,13 +1,11 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
-from plugins.commands import command
-from protocol.datatypes import (
-    TextComponent,
-)
+from petty.protocol.datatypes import TextComponent
 
+from plugins.commands import command
 
 
 class DebugPlugin:

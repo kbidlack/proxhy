@@ -12,7 +12,8 @@ from typing import (
     overload,
 )
 
-from protocol.datatypes import (
+from petty.net import ClientStream
+from petty.protocol.datatypes import (
     Byte,
     Chat,
     Int,
@@ -23,12 +24,9 @@ from protocol.datatypes import (
     UnsignedByte,
 )
 
-if TYPE_CHECKING:
-    from core.net import Client
-
 
 class _HasClientAndWindows(Protocol):
-    client: Client
+    client: ClientStream
     windows: dict[int, "Window"]
 
 

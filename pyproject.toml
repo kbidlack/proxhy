@@ -2,26 +2,24 @@
 name = "proxhy"
 version = "2026.02.23"
 description = "A Hypixel proxy with various different features"
-license = "MIT"
-authors = [
-    {name = "Kavi Bidlack"},
-    {name = "Manu Jhawar"}
-]
 requires-python = ">=3.14"
+license = "MIT"
+authors = [{ name = "Kavi Bidlack" }, { name = "Manu Jhawar" }]
 dependencies = [
-    "cryptography>=45.0",
-    "keyring>=25.6",
-    "pyjwt>=2.10",
-    "platformdirs>=4.3",
-    "numpy>=2.3.3",
-    "pyroh",
-    "compass",
-    "hypixel-py>=0.4.2",
-    "uvloop>=0.22.1; platform_system != 'Windows'",
-    "winloop>=0.4.1",
-    "numba>=0.63.1",
-    "orjson>=3.11.7",
-    "httpx>=0.28.1",
+  "compass",
+  "cryptography>=45.0",
+  "httpx>=0.28.1",
+  "hypixel-py>=0.4.2",
+  "keyring>=25.6",
+  "numba>=0.63.1",
+  "numpy>=2.3.3",
+  "orjson>=3.11.7",
+  "petty",
+  "platformdirs>=4.3",
+  "pyjwt>=2.10",
+  "pyroh",
+  "uvloop>=0.22.1; platform_system != 'Windows'",
+  "winloop>=0.4.1"
 ]
 
 [project.scripts]
@@ -38,5 +36,6 @@ where = ["."]
 "assets" = ["*.json", "*.png"]
 
 [tool.uv.sources]
-pyroh = { git = "https://github.com/kbidlack/pyroh", rev = "cd6609060a1bd74636118191c9bb80a963d01cb9"}
+pyroh = { git = "https://github.com/kbidlack/pyroh", rev = "cd6609060a1bd74636118191c9bb80a963d01cb9" }
 compass = { git = "https://github.com/kbidlack/compass.git", rev = "3a151d42530be3755a91178e127abc44bc9b4cf5", subdirectory = "client" }
+petty = { git = "https://github.com/kbidlack/petty.git", rev = "f1cddd3ccec75bfd5971299736158f5132e2b495" }

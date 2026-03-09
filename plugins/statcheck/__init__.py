@@ -1,5 +1,5 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
@@ -21,13 +21,8 @@ from hypixel import (
     RateLimitError,
     TimeoutError,
 )
-from platformdirs import user_cache_dir
-
-from assets import load_json_asset
-from core.events import listen_server, subscribe
-from gamestate.state import Team
-from plugins.commands import CommandException, command
-from protocol.datatypes import (
+from petty.events import listen_server, subscribe
+from petty.protocol.datatypes import (
     UUID,
     Boolean,
     Buffer,
@@ -36,8 +31,11 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
+from platformdirs import user_cache_dir
 
-
+from assets import load_json_asset
+from gamestate.state import Team
+from plugins.commands import CommandException, command
 from proxhypixel.formatting import (
     SUPPORTED_MODES,
     format_player_dict,
@@ -239,9 +237,9 @@ class StatCheckPlugin:
         all_players = self.real_players()
 
         if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
-            all_players |= self.dead.keys()
-        if self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
             all_players |= self.final_dead.keys()
+        if self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
+            all_players |= self.dead.keys()
 
         return all_players
 
@@ -517,9 +515,10 @@ class StatCheckPlugin:
 
     @subscribe("cb_gamestate_update")
     async def _statcheck_event_cb_gamestate_update_teams(
-        self: ProxhyPlugin, _match, data: tuple[int, *tuple[bytes, ...]]
+        self: ProxhyPlugin, _match, data: tuple[int, bytes]
     ):
-        if data[0] == 0x3E:
+        packet_id = data[0]
+        if packet_id == 0x3E:
             self.keep_player_stats_updated()
 
     @listen_server(0x38, blocking=True)
@@ -739,10 +738,11 @@ class StatCheckPlugin:
                     InvalidApiKey,
                     RateLimitError,
                     TimeoutError,
+                    KeyRequired,
                     asyncio.TimeoutError,
                     ApiError,
                 ) as player:
-                    err_message = {
+                    err_message: dict[type, TextComponent] = {
                         InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
                         KeyRequired: TextComponent("No API Key provided!").color("red"),
                         RateLimitError: TextComponent("Rate limit!").color("red"),

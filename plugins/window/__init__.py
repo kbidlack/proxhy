@@ -1,5 +1,5 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
@@ -9,8 +9,8 @@ from typing import (
     Callable,
 )
 
-from core.events import listen_client
-from protocol.datatypes import (
+from petty.events import listen_client
+from petty.protocol.datatypes import (
     Buffer,
     Byte,
     Short,
@@ -18,7 +18,6 @@ from protocol.datatypes import (
     SlotData,
     UnsignedByte,
 )
-
 
 from ._window import Window, get_trigger
 

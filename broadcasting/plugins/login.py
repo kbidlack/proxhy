@@ -1,20 +1,18 @@
-from __future__ import annotations
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
+
 if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import uuid
+from typing import TypedDict
 from unittest.mock import Mock
 
 import orjson
 import pyroh
-
-from core.events import listen_client as listen
-from core.events import subscribe
-from core.net import Server
-from core.proxy import State
-from gamestate.state import PlayerAbilityFlags
-from protocol.datatypes import (
+from petty.events import listen_client as listen
+from petty.events import subscribe
+from petty.net import ServerStream, State
+from petty.protocol.datatypes import (
     UUID,
     Boolean,
     Buffer,
@@ -31,29 +29,43 @@ from protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
+
+from gamestate.state import PlayerAbilityFlags
 from proxhy.utils import APIClient, offline_uuid, uuid_version
 
+
+# mostly so the type checker shuts up but whatever
+class VersionDict(TypedDict):
+    name: str
+    protocol: int
+
+
+class ServerListPing(TypedDict):
+    version: VersionDict
+    players: dict[Literal["max", "online"], int]
+    description: dict[Literal["text"], str]
 
 
 class BroadcastPeerLoginPlugin:
     writer: pyroh.StreamWriter
     username: str
     compression_ready: asyncio.Event
+    server_list_ping: ServerListPing
 
     def _init_login(self: BroadcastPeerPlugin):
-        self.server = Server(reader=Mock(), writer=Mock())
+        self.server = ServerStream(reader=Mock(), writer=Mock())
         self.compression_ready = asyncio.Event()
 
         self.server_list_ping = {
             "version": {"name": "1.8.9", "protocol": 47},
             "players": {
-                "max": 10,
+                "max": 10,  # arbitrary
                 "online": 0,
             },
             "description": {"text": f"Join the broadcast on {self.CONNECT_HOST[0]}!"},
         }
 
-    @listen(0x00, State.HANDSHAKING, blocking=True, override=True)
+    @listen(0x00, State.HANDSHAKING, blocking=True)
     async def packet_handshake(self: BroadcastPeerPlugin, buff: Buffer):
         if len(buff.getvalue()) <= 2:  # https://wiki.vg/Server_List_Ping#Status_Request
             return
@@ -215,7 +227,7 @@ class BroadcastPeerLoginPlugin:
             self.client.send_packet(packet_id, packet_data)
 
         # now add to clients list - sync is complete, safe to send packets
-        self.proxy.clients.append(self)  # type: ignore[arg-type]
+        self.proxy.clients.append(self)
 
         self.proxy.client.chat(
             TextComponent(self.username)
@@ -274,7 +286,7 @@ class BroadcastPeerLoginPlugin:
             Chat.pack(display_name),
         )
 
-        self.proxy._spawn_player_for_client(self)  # type: ignore[arg-type]
+        self.proxy._spawn_player_for_client(self)
 
     async def _delayed_npc_removal(self: BroadcastPeerPlugin) -> None:
         """Remove NPCs from tab list after a delay to allow skin loading."""

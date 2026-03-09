@@ -1,11 +1,10 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
-from core.events import listen_client, listen_server
-from protocol.datatypes import Buffer, Chat, String
-
+from petty.events import listen_client, listen_server
+from petty.protocol.datatypes import Buffer, Chat, String
 
 
 class ChatPlugin:

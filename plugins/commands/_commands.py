@@ -1,3 +1,4 @@
+import annotationlib
 import inspect
 import types
 from abc import ABC, abstractmethod
@@ -14,7 +15,8 @@ from typing import (
     get_type_hints,
 )
 
-from protocol.datatypes import TextComponent
+from petty.protocol.datatypes import TextComponent
+
 from proxhy.errors import ProxhyException
 
 
@@ -438,14 +440,34 @@ class Command:
         self.usage = usage
         self.parent: CommandGroup | None = None
 
-        # Get type hints for proper annotation resolution
+        # Get type hints for proper annotation resolution.
+        # Commands defined in files with `from __future__ import annotations` AND
+        # `self: ProxhyPlugin` (only available under TYPE_CHECKING) will cause
+        # get_type_hints to raise a NameError because Python 3.14's __annotate__
+        # runs in the function's own globals before any localns can be injected.
+        # We use annotationlib.Format.FORWARDREF which evaluates what it can and
+        # leaves unresolvable names as ForwardRef objects rather than crashing.
+        # We then drop any ForwardRef values (which will only ever be `self`).
+        hints: dict[str, Any] = {}
         try:
-            hints = get_type_hints(function)
+            raw = annotationlib.get_annotations(
+                function, format=annotationlib.Format.FORWARDREF
+            )
+            hints = {
+                k: v
+                for k, v in raw.items()
+                if not isinstance(v, annotationlib.ForwardRef)
+            }
         except Exception:
-            hints = {}
+            try:
+                hints = get_type_hints(function)
+            except Exception:
+                hints = {}
 
-        # Parse parameters (skip 'self')
-        sig = inspect.signature(function)
+        # Parse parameters (skip 'self') using STRING format so Python 3.14 does
+        # not try to eagerly evaluate annotations (which would also fail for
+        # TYPE_CHECKING-only names like ProxhyPlugin).
+        sig = inspect.signature(function, annotation_format=annotationlib.Format.STRING)
         params = list(sig.parameters.values())[1:]  # Skip self
         self.parameters = [Parameter(p, hints.get(p.name)) for p in params]
         self.required_parameters = [p for p in self.parameters if p.required]

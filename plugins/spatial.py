@@ -1,19 +1,17 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
 
 import numba
 import numpy as np
-
-from core.events import subscribe
-from protocol.datatypes import (
+from petty.events import subscribe
+from petty.protocol.datatypes import (
     Boolean,
     Float,
     Int,
 )
-
 
 
 @numba.njit(cache=True, fastmath=True)

@@ -1,13 +1,13 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
-from plugins.commands import CommandException, command
-from protocol.datatypes import Item, SlotData, String, TextComponent
-from protocol.nbt import dumps, from_dict
-from proxhy.argtypes import Gamemode, Submode
+from petty.nbt import dumps, from_dict
+from petty.protocol.datatypes import Item, SlotData, String, TextComponent
 
+from plugins.commands import CommandException, command
+from proxhy.argtypes import Gamemode, Submode
 
 from .window import Window, get_trigger
 

@@ -1,5 +1,5 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import asyncio
@@ -14,21 +14,10 @@ from typing import Optional
 import httpx
 import pyroh
 from compass import ConnectionRequest, MinecraftPeerClient
-from platformdirs import user_config_dir
-
-import auth
-from broadcasting.proxy import BroadcastPeerProxy
-from broadcasting.transform import (
-    PlayerTransformer,
-    build_player_list_add_packet,
-    build_spawn_player_packet,
-)
-from core.events import listen_server, subscribe
-from core.net import State
-from core.proxy import Proxy
-from gamestate.state import Vec3d
-from plugins.commands import CommandException, CommandGroup, command
-from protocol.datatypes import (
+from petty.endpoints import Proxy
+from petty.events import listen_server, subscribe
+from petty.net import State
+from petty.protocol.datatypes import (
     UUID,
     Angle,
     Buffer,
@@ -40,8 +29,19 @@ from protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from proxhy.argtypes import BroadcastPlayer, MojangPlayer
+from platformdirs import user_config_dir
 
+import auth
+from broadcasting.plugin import BroadcastPeerPlugin
+from broadcasting.proxy import BroadcastPeerProxy
+from broadcasting.transform import (
+    PlayerTransformer,
+    build_player_list_add_packet,
+    build_spawn_player_packet,
+)
+from gamestate.state import Vec3d
+from plugins.commands import CommandException, CommandGroup, command
+from proxhy.argtypes import BroadcastPlayer, MojangPlayer
 
 from .broadcastee.proxy import broadcastee_plugin_list
 
@@ -50,7 +50,7 @@ BROKER_URL = "http://163.192.4.69:3000"
 
 class BroadcastPlugin:
     BC_DATA_PATH: Path
-    clients: list[BroadcastPeerProxy]
+    clients: list[BroadcastPeerPlugin]
     broadcast_invites: dict[str, ConnectionRequest]
     broadcast_requests: set[str]
     compass_client: MinecraftPeerClient | None
@@ -239,9 +239,7 @@ class BroadcastPlugin:
             asyncio.create_task(self.on_broadcast_peer(reader, writer))
 
         @bc.command("slime")
-        async def _command_broadcast_slime(
-            self: ProxhyPlugin, player: BroadcastPlayer
-        ):
+        async def _command_broadcast_slime(self: ProxhyPlugin, player: BroadcastPlayer):
             """Slime a player out of the broadcast."""
             client = player.client
 
@@ -364,9 +362,7 @@ class BroadcastPlugin:
             asyncio.create_task(self.on_broadcast_peer(reader, writer))
 
         @bc.command("request")
-        async def _command_broadcast_request(
-            self: ProxhyPlugin, player: MojangPlayer
-        ):
+        async def _command_broadcast_request(self: ProxhyPlugin, player: MojangPlayer):
             result = await _send_peer_request(
                 self,
                 player,
@@ -444,9 +440,7 @@ class BroadcastPlugin:
             )
 
         @trust.command("remove")
-        async def _command_broadcast_untrust(
-            self: ProxhyPlugin, player: MojangPlayer
-        ):
+        async def _command_broadcast_untrust(self: ProxhyPlugin, player: MojangPlayer):
             """Remove a trusted player."""
             with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
                 if player.uuid not in db["trusted"]:
@@ -851,7 +845,7 @@ class BroadcastPlugin:
             )
 
     def bc_chat(self: ProxhyPlugin, username: str, msg: str):
-        self.client.chat(
+        formatted_msg = (
             TextComponent("[")
             .color("dark_gray")
             .append(TextComponent("BROADCAST").color("red"))
@@ -859,6 +853,9 @@ class BroadcastPlugin:
             .appends(TextComponent(f"{username}:").color("aqua"))
             .appends(TextComponent(msg).color("white"))
         )
+        for client in self.clients:
+            client.client.chat(formatted_msg)
+        self.client.chat(formatted_msg)
 
     def _announce_to_all(self: ProxhyPlugin, packet_id: int, data: bytes):
         """Send a packet to all spectator clients."""
@@ -890,12 +887,12 @@ class BroadcastPlugin:
                 client.client.send_packet(0x02, buff.getvalue())
 
     @subscribe("cb_gamestate_update")
-    # needs to be async for subscribe -- TODO: allow sync subscribers?
     async def _broadcast_event_cb_gamestate_update(
-        self: ProxhyPlugin, _match, data: tuple[int, *tuple[bytes, ...]]
+        self: ProxhyPlugin, _, data: tuple[int, bytes]
     ):
-        packet_id, *packet_data = data
-        buff = Buffer(b"".join(packet_data))
+        packet_id, packet_data = data
+
+        buff = Buffer(packet_data)
         """Forward a clientbound packet to spectators with appropriate transformations."""
         if not self.clients:
             return
@@ -915,18 +912,16 @@ class BroadcastPlugin:
         else:
             # Use transformer for other packets
             self._transformer.forward_clientbound_packet(
-                packet_id, tuple(packet_data), self._spawn_players_after_position
+                packet_id, (packet_data,), self._spawn_players_after_position
             )
 
     @subscribe("sb_gamestate_update")
     async def _broadcast_event_sb_gamestate_update(
-        self: ProxhyPlugin, _match, data: tuple[int, *tuple[bytes, ...]]
+        self: ProxhyPlugin, _, data: tuple[int, bytes]
     ):
-        packet_id, *packet_data = data
+        packet_id, packet_data = data
         if self.clients:
-            self._transformer.handle_serverbound_packet(
-                packet_id, b"".join(packet_data)
-            )
+            self._transformer.handle_serverbound_packet(packet_id, packet_data)
 
     def _spawn_players_after_position(self: ProxhyPlugin):
         """Callback to spawn player for clients after position update."""
@@ -934,7 +929,7 @@ class BroadcastPlugin:
             if client.state == State.PLAY:
                 self._spawn_player_for_client(client)
 
-    def _spawn_player_for_client(self: ProxhyPlugin, client: BroadcastPeerProxy):
+    def _spawn_player_for_client(self: ProxhyPlugin, client: BroadcastPeerPlugin):
         """Spawn the player entity for a specific spectator client."""
         if client.eid in self._transformer.player_spawned_for:
             return
@@ -1025,7 +1020,7 @@ class BroadcastPlugin:
 
         self._transformer.mark_spawned(client.eid)
 
-    def _ensure_player_in_tab_list(self: ProxhyPlugin, client: BroadcastPeerProxy):
+    def _ensure_player_in_tab_list(self: ProxhyPlugin, client: BroadcastPeerPlugin):
         """Ensure the player being watched is in the spectator's tab list."""
         # Normalize UUID to hyphenated format to match gamestate storage
         try:

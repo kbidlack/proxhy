@@ -4,12 +4,12 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import hypixel
+from petty.protocol.datatypes import TextComponent
 
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,
 )
-from protocol.datatypes import TextComponent
 from proxhy.utils import APIClient, PlayerInfo
 
 from ._argtypes import _resolve_in_proxy_chain

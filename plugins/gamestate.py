@@ -1,14 +1,16 @@
-from __future__ import annotations
 from typing import TYPE_CHECKING
+
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 import time
 from typing import Hashable
 
-from core.events import listen_client, subscribe
-from gamestate.state import Entity, GameState
-from protocol.datatypes import Buffer, VarInt
+from petty.events import listen_client, subscribe
 
+# from petty.events import listen_server
+from petty.protocol.datatypes import Buffer, VarInt
+
+from gamestate.state import Entity, GameState
 
 
 class ExpiringSet[T: Hashable]:
@@ -45,25 +47,32 @@ class GameStatePlugin:
     def _init_0_gamestate(self: ProxhyPlugin):  # since other plugins require we put 0
         self.gamestate = GameState()
         self.in_combat_with = ExpiringSet(ttl=5)
-        self.create_task(self._update_clientbound())
+
+        _original_send_packet = self.client.send_packet
+
+        def _hooked_cb_send_packet(packet_id: int, *data: bytes) -> None:
+            self._handle_clientbound_packet(packet_id, Buffer(b"".join(data)))
+            _original_send_packet(packet_id, *data)
+
+        self.client.send_packet = _hooked_cb_send_packet  # type: ignore
 
     @subscribe("login_success")
-    async def _gamestate_event_login_success(self: ProxhyPlugin, _match, _data):
-        self.create_task(self._update_serverbound())
+    async def _gamestate_event_login_success(self: ProxhyPlugin, _, _data):
+        _original_send_packet = self.server.send_packet
 
-    async def _update_clientbound(self: ProxhyPlugin):
-        while self.open:
-            id, *data = await self.client.pqueue.get()
-            self.gamestate.update(id, b"".join(data))
-            await self.emit(
-                "cb_gamestate_update", (id, *data)
-            )  # TODO: avoid unpacking? by passing tuple[bytes] everywhere
+        def _hooked_sb_send_packet(packet_id: int, *data: bytes) -> None:
+            self._handle_serverbound_packet(packet_id, Buffer(b"".join(data)))
+            _original_send_packet(packet_id, *data)
 
-    async def _update_serverbound(self: ProxhyPlugin):
-        while self.open:
-            id, *data = await self.server.pqueue.get()
-            self.gamestate.update_serverbound(id, b"".join(data))
-            await self.emit("sb_gamestate_update", (id, *data))
+        self.server.send_packet = _hooked_sb_send_packet  # type: ignore
+
+    def _handle_clientbound_packet(self: ProxhyPlugin, packet_id: int, buff: Buffer):
+        self.gamestate.update_clientbound(packet_id, buff.getvalue())
+        self.create_task(self.emit("cb_gamestate_update", (packet_id, buff.getvalue())))
+
+    def _handle_serverbound_packet(self: ProxhyPlugin, packet_id: int, buff: Buffer):
+        self.gamestate.update_serverbound(packet_id, buff.getvalue())
+        self.create_task(self.emit("sb_gamestate_update", (packet_id, buff.getvalue())))
 
     @listen_client(0x02, blocking=True)
     async def _packet_use_entity(self: ProxhyPlugin, buff: Buffer):
@@ -78,3 +87,38 @@ class GameStatePlugin:
     def ein_combat_with(self: ProxhyPlugin) -> list[Entity]:
         entities = [self.gamestate.get_entity(e) for e in self.in_combat_with.values()]
         return [e for e in entities if e is not None]
+
+
+# # construct cb listeners
+# for packet_id in range(0x49 + 1):
+
+#     def _make_cb_handler(packet_id: int):
+#         async def _handler(self: ProxhyPlugin, buff: Buffer):
+#             self._handle_clientbound_packet(packet_id, buff)
+
+#         return _handler
+
+#     setattr(
+#         GameStatePlugin,
+#         f"_handle_cb_{packet_id}",
+#         listen_server(packet_id, blocking=True, consume=False)(
+#             _make_cb_handler(packet_id)
+#         ),
+#     )
+
+# # construct sb listeners
+# for packet_id in range(0x19 + 1):
+
+#     def _make_sb_handler(packet_id: int):
+#         async def _handler(self: ProxhyPlugin, buff: Buffer):
+#             self._handle_serverbound_packet(packet_id, buff)
+
+#         return _handler
+
+#     setattr(
+#         GameStatePlugin,
+#         f"_handle_sb_{packet_id}",
+#         listen_client(packet_id, blocking=True, consume=False)(
+#             _make_sb_handler(packet_id)
+#         ),
+#     )

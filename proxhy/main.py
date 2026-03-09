@@ -6,10 +6,9 @@ import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 
-import pyroh
+from petty.endpoints import Proxy
 
 import auth
-from core.proxy import Proxy
 from proxhy.proxhy import Proxhy
 
 if platform.system() == "Windows":
@@ -261,8 +260,6 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
 # Main entry point
 async def _main():
-    pyroh.setup_event_loop()
-
     # Start server first so the signal handler can reference it safely
     server = await start(
         host="localhost",
