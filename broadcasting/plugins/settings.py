@@ -1,8 +1,5 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from broadcasting.plugin import BroadcastPeerPlugin
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from petty.events import listen_client, subscribe
 from petty.protocol.datatypes import (
@@ -13,6 +10,9 @@ from platformdirs import user_config_dir
 
 from broadcasting.settings import BroadcastSettings
 from plugins.settings import Setting, SettingsPlugin, SettingsStorage
+
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 
 
 class BroadcastPeerSettingsPlugin(SettingsPlugin):

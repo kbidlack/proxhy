@@ -105,26 +105,28 @@ class LoginPlugin:
             self.uuid = uuid_str
 
         if not self.logging_in:
-            self.client.send_packet(0x02, String.pack(uuid_str), String.pack(username))
+            self.downstream.send_packet(
+                0x02, String.pack(uuid_str), String.pack(username)
+            )
 
         await self.emit("login_success")
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self: ProxhyPlugin, buff: Buffer):
-        self.client.unpause()
+        self.downstream.unpause()
 
         if self.logging_in:
             self.logging_in = False
 
             # removes weird bugs when you join
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x07,
                 Int.pack(-1),  # dimension: nether
                 UnsignedByte.pack(0),  # difficulty: peaceful
                 UnsignedByte.pack(3),  # gamemode: spectator
                 String.pack("default"),  # level type
             )
-            self.client.send_packet(0x01, buff.getvalue())
+            self.downstream.send_packet(0x01, buff.getvalue())
 
             _ = buff.unpack(Int)  # entity id
             gamemode = buff.unpack(UnsignedByte)
@@ -133,7 +135,7 @@ class LoginPlugin:
             _ = buff.unpack(UnsignedByte)  # max players
             level_type = buff.unpack(String)
 
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x07,
                 Int.pack(dimension),  # dimension
                 UnsignedByte.pack(difficulty),  # difficulty
@@ -142,22 +144,22 @@ class LoginPlugin:
             )
 
         else:
-            self.client.send_packet(0x01, buff.getvalue())
+            self.downstream.send_packet(0x01, buff.getvalue())
 
     async def _resend_armor_stands(self: ProxhyPlugin):
         await asyncio.sleep(1.0)
-        while self.open and self.client.open:
+        while self.open and self.downstream.open:
             for entity in list(self.gamestate.entities.values()):
                 if entity.entity_type != 78:
                     continue
 
                 eid = entity.entity_id
                 # destroy first
-                self.client.send_packet(0x13, VarInt.pack(1) + VarInt.pack(eid))
+                self.downstream.send_packet(0x13, VarInt.pack(1) + VarInt.pack(eid))
                 packet_id, packet_data = self.gamestate._build_spawn_object(entity)
-                self.client.send_packet(packet_id, packet_data)
+                self.downstream.send_packet(packet_id, packet_data)
                 if entity.metadata:
-                    self.client.send_packet(
+                    self.downstream.send_packet(
                         0x1C,
                         VarInt.pack(eid)
                         + self.gamestate._pack_metadata(entity.metadata),
@@ -171,7 +173,7 @@ class LoginPlugin:
                     (4, equip.helmet),
                 ]:
                     if item.item:
-                        self.client.send_packet(
+                        self.downstream.send_packet(
                             0x04,
                             VarInt.pack(eid) + Short.pack(slot_id) + Slot.pack(item),
                         )
@@ -197,7 +199,7 @@ class LoginPlugin:
                 self.transferring_to_server = False
             else:
                 packet_id = 0x00
-            self.client.send_packet(
+            self.downstream.send_packet(
                 packet_id,
                 Chat.pack(
                     TextComponent(
@@ -207,15 +209,15 @@ class LoginPlugin:
             )
             return await self.close()
 
-        self.server = ServerStream(reader, writer)
-        self.handle_server_task = asyncio.create_task(self.handle_server())
+        self.upstream = ServerStream(reader, writer)
+        self.handle_upstream_task = asyncio.create_task(self.handle_upstream())
 
         if self.keep_alive_task:
             self.keep_alive_task.cancel()
 
-        self.client.pause(discard=True)
+        self.downstream.pause(discard=True)
 
-        self.server.send_packet(
+        self.upstream.send_packet(
             0x00,
             VarInt.pack(47),
             String.pack(self.FAKE_CONNECT_HOST[0]),
@@ -233,17 +235,17 @@ class LoginPlugin:
                     # if we have cached details for this server
                     # immediately start the login encryption process
                     server_id, public_key = cache[self.CONNECT_HOST]
-                    self.secret_task = asyncio.create_task(
+                    self.secret_task = self.create_task(
                         self._session_encrypt(server_id, public_key)
                     )
 
-        self.server.send_packet(0x00, String.pack(self.username))
+        self.upstream.send_packet(0x00, String.pack(self.username))
 
     async def _start_device_code_flow(self: ProxhyPlugin):
         try:
             device = await auth.request_device_code()
 
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent("To log in, visit")
                 .color("gold")
                 .appends(
@@ -280,7 +282,7 @@ class LoginPlugin:
                 )
             except auth.AuthException as e:
                 if e.code == "XSTS-2148916233":
-                    self.client.send_packet(
+                    self.downstream.send_packet(
                         0x40,
                         Chat.pack(
                             TextComponent(
@@ -289,7 +291,7 @@ class LoginPlugin:
                         ),
                     )
                 else:
-                    self.client.send_packet(
+                    self.downstream.send_packet(
                         0x40,
                         Chat.pack(
                             TextComponent("An unknown error occurred:")
@@ -300,7 +302,7 @@ class LoginPlugin:
                 return
 
             if username != self.username:
-                self.client.send_packet(
+                self.downstream.send_packet(
                     0x40,
                     Chat.pack(
                         TextComponent("Wrong account! Logged into")
@@ -318,20 +320,22 @@ class LoginPlugin:
             success_msg = TextComponent(
                 f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
             ).color("green")
-            self.client.chat(success_msg)
+            self.downstream.chat(success_msg)
             self.state = State.LOGIN
             self.transferring_to_server = True
 
             await self.packet_login_start(Buffer(String.pack(self.username)))
 
         except AuthException as e:
-            self.client.chat(TextComponent(f"Authentication failed: {e}").color("red"))
+            self.downstream.chat(
+                TextComponent(f"Authentication failed: {e}").color("red")
+            )
 
     async def login_keep_alive(self: ProxhyPlugin):
         while True:
             await asyncio.sleep(10)
-            if self.state == State.PLAY and self.client.open and self.logging_in:
-                self.client.send_packet(0x00, VarInt.pack(random.randint(0, 256)))
+            if self.state == State.PLAY and self.downstream.open and self.logging_in:
+                self.downstream.send_packet(0x00, VarInt.pack(random.randint(0, 256)))
             else:
                 await self.close()
                 break
@@ -356,16 +360,16 @@ class LoginPlugin:
         self.logging_in = True
 
         # fake server stream
-        self.server = Mock()
+        self.upstream = Mock()
 
         async with hypixel.Client() as c:
             uuid_ = await c._get_uuid(self.username)
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x02, String.pack(str(uuid.UUID(uuid_))), String.pack(self.username)
         )
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x01,
             Int.pack(0),
             UnsignedByte.pack(3),
@@ -376,7 +380,7 @@ class LoginPlugin:
             Boolean.pack(True),
         )
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x08,
             Double.pack(0),
             Double.pack(0),
@@ -389,11 +393,13 @@ class LoginPlugin:
         self.keep_alive_task = self.create_task(self.login_keep_alive())
 
         if reason == "logging_in":
-            self.client.chat("You have not logged into Proxhy with this account yet!")
+            self.downstream.chat(
+                "You have not logged into Proxhy with this account yet!"
+            )
             self.device_code_task = self.create_task(self._start_device_code_flow())
         else:
             self.regenerating_credentials = True
-            self.client.set_title(
+            self.downstream.set_title(
                 title=TextComponent("Please Wait").color("red"),
                 subtitle=TextComponent("You will be redirected to")
                 .color("white")
@@ -406,7 +412,7 @@ class LoginPlugin:
                     self.username
                 )
             except Exception as e:
-                return self.client.send_packet(
+                return self.downstream.send_packet(
                     0x40,
                     Chat.pack(
                         TextComponent(
@@ -420,29 +426,29 @@ class LoginPlugin:
                 .color("green")
                 .appends(TextComponent(self.CONNECT_HOST[0]).color("gold"))
             )
-            self.client.reset_title()
-            self.client.chat(success_msg)
+            self.downstream.reset_title()
+            self.downstream.chat(success_msg)
             self.state = State.LOGIN
 
             await self.packet_login_start(Buffer(String.pack(self.username)))
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self: ProxhyPlugin, _):
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x00, String.pack(orjson.dumps(self.server_list_ping).decode())
         )
 
     @listen_client(0x01, State.STATUS, blocking=True)
     async def packet_ping_request(self: ProxhyPlugin, buff: Buffer):
-        self.client.send_packet(0x01, buff.getvalue())
+        self.downstream.send_packet(0x01, buff.getvalue())
         # close connection
         await self.close()
 
     @listen_server(0x03, State.LOGIN, blocking=True)
     async def packet_set_compression(self: ProxhyPlugin, buff: Buffer):
-        self.server.compression_threshold = buff.unpack(VarInt)
-        self.server.compression = (
-            False if self.server.compression_threshold == -1 else True
+        self.upstream.compression_threshold = buff.unpack(VarInt)
+        self.upstream.compression = (
+            False if self.upstream.compression_threshold == -1 else True
         )
 
     @listen_server(0x01, State.LOGIN, blocking=True)
@@ -480,14 +486,14 @@ class LoginPlugin:
         encrypted_secret = pkcs1_v15_padded_rsa_encrypt(public_key, self.secret)
         encrypted_verify_token = pkcs1_v15_padded_rsa_encrypt(public_key, verify_token)
 
-        self.server.send_packet(
+        self.upstream.send_packet(
             0x01,
             ByteArray.pack(encrypted_secret),
             ByteArray.pack(encrypted_verify_token),
         )
 
         # enable encryption
-        self.server.key = self.secret
+        self.upstream.key = self.secret
 
     async def _session_encrypt(
         self: ProxhyPlugin, server_id: bytes, public_key: bytes
@@ -525,13 +531,13 @@ class LoginPlugin:
     @subscribe("login_success")
     async def _broadcast_event_login_success(self: ProxhyPlugin, _match, _data):
         if self.dev_mode:
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent("==> Dev Mode Activated <==").color("green").bold()
             )
 
             return
 
-        asyncio.create_task(self._check_for_update())
+        self.create_task(self._check_for_update())
 
     async def _check_for_update(self: ProxhyPlugin):
         async with httpx.AsyncClient() as aclient:
@@ -551,7 +557,7 @@ class LoginPlugin:
         latest_url = base_url.format(latest)
 
         if latest and current != latest:
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent("A new version of Proxhy is available!")
                 .appends(TextComponent("(").color("gray"))
                 .append(
@@ -577,7 +583,7 @@ class LoginPlugin:
                 )
                 .append(TextComponent(")").color("gray"))
             )
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent("- See the")
                 .color("gray")
                 .appends(

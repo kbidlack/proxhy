@@ -1,8 +1,5 @@
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
-
 from petty.nbt import dumps, from_dict
 from petty.protocol.datatypes import Item, SlotData, String, TextComponent
 
@@ -11,6 +8,9 @@ from proxhy.argtypes import Gamemode, Submode
 
 from .window import Window, get_trigger
 
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
+
 
 class MiscPlugin:
     @command("rq")
@@ -18,7 +18,7 @@ class MiscPlugin:
         """Requeue the last played game."""
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
-        self.server.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
+        self.upstream.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
 
     @command("play")
     async def _command_play(self: ProxhyPlugin, mode: Gamemode, *submodes: Submode):
@@ -27,16 +27,16 @@ class MiscPlugin:
             if Submode.SUBMODES.get(mode.mode_str):
                 raise CommandException("Please specify a submode!")
             # no submodes for this game, play directly
-            self.server.chat(f"/play {mode.mode_str}")
+            self.upstream.chat(f"/play {mode.mode_str}")
         elif submodes[-1].play_id is None:
             raise CommandException("Please specify a complete submode!")
         else:
-            self.server.chat(f"/play {submodes[-1].play_id}")
+            self.upstream.chat(f"/play {submodes[-1].play_id}")
 
     @command("pos")
     async def _command_pos(self: ProxhyPlugin):
         """Get your current position."""
-        self.client.chat(
+        self.downstream.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 
@@ -58,7 +58,7 @@ class MiscPlugin:
             clicked_item: SlotData,
         ):
             if clicked_item.item is not None:
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent("You clicked ")
                     .color("green")
                     .append(TextComponent(clicked_item.item.display_name).color("blue"))

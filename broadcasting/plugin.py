@@ -12,7 +12,7 @@ from plugins.gamestate import GameStatePlugin
 from plugins.window import WindowPlugin
 
 if TYPE_CHECKING:
-    from proxhy.proxhy import Proxhy
+    from proxhy.plugin import ProxhyPlugin
 
 
 class BroadcastPeerPlugin(
@@ -26,5 +26,5 @@ class BroadcastPeerPlugin(
     GameStatePlugin,
     Proxy,
 ):
-    proxy: Proxhy
+    proxy: ProxhyPlugin
     eid: int

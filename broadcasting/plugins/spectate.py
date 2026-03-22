@@ -1,11 +1,7 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import math
 import random
-from typing import Callable, Literal, Optional, TypedDict
+from typing import TYPE_CHECKING, Callable, Literal, Optional, TypedDict
 
 import hypixel
 import numba
@@ -41,6 +37,9 @@ from proxhypixel.formatting import (
     format_player_dict,
     get_rankname,
 )
+
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 
 # camera candidates: 8 azimuths x 4 elevations x 2 radii = 64 positions
 # elevations: 45°, 35°, 25°, 15° from horizontal
@@ -283,8 +282,10 @@ class BroadcastPeerSpectatePlugin:
             pos = rot = None
             if self.spec_eid == self.proxy._transformer.player_eid:
                 pos, rot = self.proxy.gamestate.position, self.proxy.gamestate.rotation
-                self.client.send_packet(*self.proxy.gamestate._build_player_inventory())
-                self.client.send_packet(
+                self.downstream.send_packet(
+                    *self.proxy.gamestate._build_player_inventory()
+                )
+                self.downstream.send_packet(
                     0x2F, Byte.pack(-1), Short.pack(-1), Slot.pack(SlotData())
                 )
             elif entity := self.proxy.gamestate.get_entity(self.spec_eid):
@@ -300,7 +301,7 @@ class BroadcastPeerSpectatePlugin:
                     self._set_slot(slot, item)
 
             if pos and rot:
-                self.client.send_packet(
+                self.downstream.send_packet(
                     0x08,
                     Double.pack(pos.x),
                     Double.pack(pos.y),
@@ -416,7 +417,7 @@ class BroadcastPeerSpectatePlugin:
     def _spawn_bat(self: BroadcastPeerPlugin):
         self.bat_eid = random.getrandbits(31)
         self.watch_pos, self.watch_rot = self._get_camera()
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x0F,
             VarInt.pack(self.bat_eid)
             + UnsignedByte.pack(65)
@@ -448,7 +449,7 @@ class BroadcastPeerSpectatePlugin:
             )
 
             if max(abs(dx), abs(dy), abs(dz)) > 4:
-                self.client.send_packet(
+                self.downstream.send_packet(
                     0x18,
                     VarInt.pack(self.bat_eid),
                     Int.pack(int(self.watch_pos.x * 32)),
@@ -459,7 +460,7 @@ class BroadcastPeerSpectatePlugin:
                     Boolean.pack(False),
                 )
             else:
-                self.client.send_packet(
+                self.downstream.send_packet(
                     0x15,
                     VarInt.pack(self.bat_eid),
                     Byte.pack(int(dx * 32)),
@@ -468,7 +469,7 @@ class BroadcastPeerSpectatePlugin:
                     Boolean.pack(False),
                 )
 
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x16,
                 VarInt.pack(self.bat_eid),
                 Angle.pack(self.watch_rot.yaw),
@@ -482,7 +483,7 @@ class BroadcastPeerSpectatePlugin:
             pos = self.gamestate.position
             if pos.y < -100:
                 owner = self.proxy.username
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent("Click here to teleport back to")
                     .color("green")
                     .bold()
@@ -502,19 +503,19 @@ class BroadcastPeerSpectatePlugin:
                 await asyncio.sleep(1)
 
     def _set_gamemode(self: BroadcastPeerPlugin, gm: int):
-        self.client.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
+        self.downstream.send_packet(0x2B, UnsignedByte.pack(3), Float.pack(float(gm)))
 
-    @subscribe("setting:broadcast:titles")
+    @subscribe("setting:broadcast.titles")
     async def _setting_broadcast_titles(
         self: BroadcastPeerPlugin, _match, data: list[Literal["ON", "OFF"]]
     ):
         _, new_state = data
         if new_state == "OFF":
-            self.client.send_packet(0x45, VarInt.pack(4))  # reset
+            self.downstream.send_packet(0x45, VarInt.pack(4))  # reset
         else:
             for packet in self.gamestate._build_title():
                 id, packet_data = packet
-                self.client.send_packet(id, packet_data)
+                self.downstream.send_packet(id, packet_data)
 
     @subscribe("setting:broadcast.fly_speed")
     async def _setting_broadcast_fly_speed(self: BroadcastPeerPlugin, _match, _data):
@@ -525,7 +526,7 @@ class BroadcastPeerSpectatePlugin:
         self.flight_speed = _fly_speed_mapping[self.settings.fly_speed.get()]
 
         flags = PlayerAbilityFlags.INVULNERABLE | self.flying | self.flight
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x39,
             Byte.pack(int(flags))
             + Float.pack(self.flight_speed)
@@ -533,7 +534,9 @@ class BroadcastPeerSpectatePlugin:
         )
 
     def _set_slot(self: BroadcastPeerPlugin, slot: int, item: SlotData):
-        self.client.send_packet(0x2F, Byte.pack(0), Short.pack(slot), Slot.pack(item))
+        self.downstream.send_packet(
+            0x2F, Byte.pack(0), Short.pack(slot), Slot.pack(item)
+        )
 
     def _reset_spec(self: BroadcastPeerPlugin):
         self.watching, self._cam, self._cam_stuck, self._rot, self._last_pos = (
@@ -543,8 +546,8 @@ class BroadcastPeerSpectatePlugin:
             None,
             None,
         )
-        self.client.send_packet(0x43, VarInt.pack(self.eid))
-        self.client.send_packet(
+        self.downstream.send_packet(0x43, VarInt.pack(self.eid))
+        self.downstream.send_packet(
             0x30,
             UnsignedByte.pack(0),
             Short.pack(45),
@@ -561,7 +564,7 @@ class BroadcastPeerSpectatePlugin:
         entity = self.gamestate.get_entity(target)
 
         if entity is None:
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent(
                     f"That entity does not exist! (how did you do that?!) [{target=}, {action=}]"
                 ).color("red")
@@ -599,7 +602,7 @@ class BroadcastPeerSpectatePlugin:
     def _spectate(self: BroadcastPeerPlugin, eid: int):
         self.spec_eid = eid
         self._set_gamemode(3)
-        self.client.send_packet(0x43, VarInt.pack(eid))
+        self.downstream.send_packet(0x43, VarInt.pack(eid))
 
     # WIP
     # @command("watch")
@@ -628,7 +631,7 @@ class PlayerSpectateWindow(Window):
             num_slots=9,
         )
 
-        asyncio.create_task(self._load_details())
+        self.proxy.create_task(self._load_details())
         self.set_slot(
             1,
             SlotData(
@@ -662,7 +665,7 @@ class PlayerSpectateWindow(Window):
         #         ),
         #     ),
         # )
-        asyncio.create_task(self._update_slots())
+        self.proxy.create_task(self._update_slots())
 
     class Details(TypedDict):
         Name: str

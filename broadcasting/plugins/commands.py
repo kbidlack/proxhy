@@ -1,9 +1,5 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from broadcasting.plugin import BroadcastPeerPlugin
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
 from petty.events import subscribe
 from petty.protocol.datatypes import (
@@ -19,6 +15,9 @@ from plugins.commands import (
     CommandGroup,
     CommandsPlugin,
 )
+
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 
 
 class BroadcastPeerCommandsPlugin(CommandsPlugin):
@@ -52,7 +51,7 @@ class BroadcastPeerCommandsPlugin(CommandsPlugin):
                 if error_msg.data.get("clickEvent") is None:
                     error_msg = error_msg.click_event("suggest_command", message)
 
-                self.client.chat(error_msg)
+                self.downstream.chat(error_msg)
             else:
                 if output:
                     if segments[0].startswith("//"):  # send output of command
@@ -63,9 +62,9 @@ class BroadcastPeerCommandsPlugin(CommandsPlugin):
                         if isinstance(output, TextComponent):
                             if output.data.get("clickEvent") is None:
                                 output = output.click_event("suggest_command", message)
-                        self.client.chat(output)
+                        self.downstream.chat(output)
         else:
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent("Unknown command '")
                 .color("red")
                 .append(TextComponent(f"/{cmd_name}").color("gold"))
@@ -120,7 +119,7 @@ class BroadcastPeerCommandsPlugin(CommandsPlugin):
                     if cmd.startswith(precommand.lower())
                 ]
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x3A,
             VarInt.pack(len(suggestions)),
             *(String.pack(s) for s in suggestions),

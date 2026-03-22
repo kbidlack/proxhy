@@ -1,21 +1,21 @@
 from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
-
 from petty.protocol.datatypes import TextComponent
 
 from plugins.commands import command
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 class DebugPlugin:
     @command("game")
     async def _command_game(self: ProxhyPlugin):
         """Display current game info."""
-        self.client.chat(TextComponent("Game:").color("green"))
+        self.downstream.chat(TextComponent("Game:").color("green"))
         for key in type(self.game).__annotations__:
             if value := getattr(self.game, key):
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent(f"{key.capitalize()}: ")
                     .color("aqua")
                     .append(TextComponent(str(value)).color("yellow"))
@@ -24,10 +24,10 @@ class DebugPlugin:
     @command("rqgame")
     async def _command_rqgame(self: ProxhyPlugin):
         """Display requeue game info."""
-        self.client.chat(TextComponent("Requeue Game:").color("green"))
+        self.downstream.chat(TextComponent("Requeue Game:").color("green"))
         for key in type(self.rq_game).__annotations__:
             if value := getattr(self.rq_game, key):
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent(f"{key.capitalize()}: ")
                     .color("aqua")
                     .append(TextComponent(str(value)).color("yellow"))
@@ -59,7 +59,7 @@ class DebugPlugin:
     @command("pos")
     async def _command_pos(self: ProxhyPlugin):
         """Get your current position."""
-        self.client.chat(
+        self.downstream.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 

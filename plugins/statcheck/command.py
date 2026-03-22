@@ -1,13 +1,9 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import datetime
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
 import hypixel
 import orjson
@@ -28,6 +24,9 @@ from proxhypixel.mappings import (
     BEDWARS_MAPPING_SIMPLE,
     BEDWARS_NON_DREAM_MAPPING,
 )
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 class StatcheckCommandPlugin:
@@ -85,16 +84,16 @@ class StatcheckCommandPlugin:
 
     @subscribe("login_success")
     async def _statcheck_event_login_success(self: ProxhyPlugin, _match, _data):
-        asyncio.create_task(self._login_success_helper())
+        self.create_task(self._login_success_helper())
 
     async def _login_success_helper(self: ProxhyPlugin):
         self.hypixel_client = hypixel.Client(self.hypixel_api_key)
-        asyncio.create_task(self.migrate_log_stats())
-        asyncio.create_task(self.log_stats("login"))
+        self.create_task(self.migrate_log_stats())
+        self.create_task(self.log_stats("login"))
 
     @subscribe("close")
     async def _statcheck_event_close(self: ProxhyPlugin, _match, _data):
-        asyncio.create_task(self._close_statcheck_helper())
+        self.create_task(self._close_statcheck_helper())
 
     async def _close_statcheck_helper(self: ProxhyPlugin):
         try:

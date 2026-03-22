@@ -88,11 +88,11 @@ wheels = [
 
 [[package]]
 name = "attrs"
-version = "25.4.0"
+version = "26.1.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/6b/5c/685e6633917e101e5dcb62b9dd76946cbb57c26e133bae9e0cd36033c0a9/attrs-25.4.0.tar.gz", hash = "sha256:16d5969b87f0859ef33a48b35d55ac1be6e42ae49d5e853b597db70c35c57e11", size = 934251, upload-time = "2025-10-06T13:54:44.725Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/9a/8e/82a0fe20a541c03148528be8cac2408564a6c9a0cc7e9171802bc1d26985/attrs-26.1.0.tar.gz", hash = "sha256:d03ceb89cb322a8fd706d4fb91940737b6642aa36998fe130a9bc96c985eff32", size = 952055, upload-time = "2026-03-19T14:22:25.026Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3a/2a/7cc015f5b9f5db42b7d48157e23356022889fc354a2813c15934b7cb5c0e/attrs-25.4.0-py3-none-any.whl", hash = "sha256:adcf7e2a1fb3b36ac48d97835bb6d8ade15b8dcce26aba8bf1d14847b57a3373", size = 67615, upload-time = "2025-10-06T13:54:43.17Z" },
+    { url = "https://files.pythonhosted.org/packages/64/b4/17d4b0b2a2dc85a6df63d1157e028ed19f90d4cd97c36717afef2bc2f395/attrs-26.1.0-py3-none-any.whl", hash = "sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309", size = 67548, upload-time = "2026-03-19T14:22:23.645Z" },
 ]
 
 [[package]]
@@ -140,9 +140,10 @@ wheels = [
 [[package]]
 name = "compass"
 version = "0.1.0"
-source = { git = "https://github.com/kbidlack/compass.git?subdirectory=client&rev=3a151d42530be3755a91178e127abc44bc9b4cf5#3a151d42530be3755a91178e127abc44bc9b4cf5" }
+source = { git = "https://github.com/kbidlack/compass.git?rev=213d1a9813d67d48686bef3be1aeb33cd0ece7fb#213d1a9813d67d48686bef3be1aeb33cd0ece7fb" }
 dependencies = [
     { name = "httpx" },
+    { name = "petty" },
     { name = "pyroh" },
 ]
 
@@ -296,18 +297,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/6f/6d/0703ccc57f3a7233505399edb88de3cbd678da106337b9fcde432b65ed60/idna-3.11.tar.gz", hash = "sha256:795dafcc9c04ed0c1fb032c2aa73654d8e8c5023a7df64a53f39190ada629902", size = 194582, upload-time = "2025-10-12T14:55:20.501Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/0e/61/66938bbb5fc52dbdf84594873d5b51fb1f7c7794e9c0f5bd885f30bc507b/idna-3.11-py3-none-any.whl", hash = "sha256:771a87f49d9defaf64091e6e6fe9c18d4833f140bd19464795bc32d966ca37ea", size = 71008, upload-time = "2025-10-12T14:55:18.883Z" },
-]
-
-[[package]]
-name = "iroh"
-version = "0.35.0"
-source = { registry = "https://pypi.org/simple" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/47/42/3ca27c758e491152fd402ec6e0497e889076dff8fb34f2f3991257ce593e/iroh-0.35.0-py3-none-macosx_10_12_x86_64.whl", hash = "sha256:b08f2a25b6bc34f79998c7b42ff16a26f42c4423486ea1bfe5db895a5fadaf57", size = 10977157, upload-time = "2025-06-23T19:26:56.062Z" },
-    { url = "https://files.pythonhosted.org/packages/72/7d/05fa04f81c9e10f7e99c13073841765fdcdbdae9c4f725dd5e0f882015bb/iroh-0.35.0-py3-none-macosx_11_0_arm64.whl", hash = "sha256:e5297b4e733a4d980b2e7d4b5dd42d3329fc87c3bb3e52c3ad40e0edb3cc0d75", size = 10184001, upload-time = "2025-06-23T19:26:58.208Z" },
-    { url = "https://files.pythonhosted.org/packages/76/84/523a3e6bbd77ce6de55c7452b8025be72c8daba18084a4cc28204f4b9668/iroh-0.35.0-py3-none-manylinux_2_28_aarch64.whl", hash = "sha256:c09b987c5c9e71048af236d00d3ce15c73ff0a9ed872fddf75aba8691dd9c36d", size = 11286267, upload-time = "2025-06-23T19:27:01.504Z" },
-    { url = "https://files.pythonhosted.org/packages/a6/01/afba5b09b5c7dbde2beee05a4e73656de4e3469f930524c15f17b96590f9/iroh-0.35.0-py3-none-manylinux_2_28_x86_64.whl", hash = "sha256:94657b606cf1aff2848cd97169f339ea145095cdf89e6aff22cfb9c868cca846", size = 11677036, upload-time = "2025-06-23T19:27:03.745Z" },
-    { url = "https://files.pythonhosted.org/packages/38/41/f6997897a9c46712bb9a94cee5487dfce8dc78d47a2b9f237f5ff3708908/iroh-0.35.0-py3-none-win_amd64.whl", hash = "sha256:e18fb474fa1ff9ae9c1b8bf4bc53d68ab636d5d1be852a57080bcbf6e9d58d92", size = 10778906, upload-time = "2025-06-23T19:27:05.913Z" },
 ]
 
 [[package]]
@@ -505,8 +494,8 @@ wheels = [
 
 [[package]]
 name = "petty"
-version = "0.1.0"
-source = { git = "https://github.com/kbidlack/petty.git?rev=f1cddd3ccec75bfd5971299736158f5132e2b495#f1cddd3ccec75bfd5971299736158f5132e2b495" }
+version = "0.2.0"
+source = { git = "https://github.com/kbidlack/petty.git?rev=ea200702955ee0fc5b7cd71cc832a7968bc98490#ea200702955ee0fc5b7cd71cc832a7968bc98490" }
 dependencies = [
     { name = "cryptography" },
     { name = "orjson" },
@@ -566,7 +555,6 @@ version = "2026.2.23"
 source = { editable = "." }
 dependencies = [
     { name = "compass" },
-    { name = "cryptography" },
     { name = "httpx" },
     { name = "hypixel-py" },
     { name = "keyring" },
@@ -583,20 +571,19 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "compass", git = "https://github.com/kbidlack/compass.git?subdirectory=client&rev=3a151d42530be3755a91178e127abc44bc9b4cf5" },
-    { name = "cryptography", specifier = ">=45.0" },
+    { name = "compass", git = "https://github.com/kbidlack/compass.git?rev=213d1a9813d67d48686bef3be1aeb33cd0ece7fb" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypixel-py", specifier = ">=0.4.2" },
     { name = "keyring", specifier = ">=25.6" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.3" },
     { name = "orjson", specifier = ">=3.11.7" },
-    { name = "petty", git = "https://github.com/kbidlack/petty.git?rev=f1cddd3ccec75bfd5971299736158f5132e2b495" },
+    { name = "petty", git = "https://github.com/kbidlack/petty.git?rev=ea200702955ee0fc5b7cd71cc832a7968bc98490" },
     { name = "platformdirs", specifier = ">=4.3" },
     { name = "pyjwt", specifier = ">=2.10" },
-    { name = "pyroh", git = "https://github.com/kbidlack/pyroh?rev=cd6609060a1bd74636118191c9bb80a963d01cb9" },
+    { name = "pyroh", specifier = ">=0.3.0" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
-    { name = "winloop", specifier = ">=0.4.1" },
+    { name = "winloop", specifier = ">=0.5.0" },
 ]
 
 [[package]]
@@ -610,19 +597,29 @@ wheels = [
 
 [[package]]
 name = "pyjwt"
-version = "2.11.0"
+version = "2.12.1"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/5c/5a/b46fa56bf322901eee5b0454a34343cdbdae202cd421775a8ee4e42fd519/pyjwt-2.11.0.tar.gz", hash = "sha256:35f95c1f0fbe5d5ba6e43f00271c275f7a1a4db1dab27bf708073b75318ea623", size = 98019, upload-time = "2026-01-30T19:59:55.694Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/c2/27/a3b6e5bf6ff856d2509292e95c8f57f0df7017cf5394921fc4e4ef40308a/pyjwt-2.12.1.tar.gz", hash = "sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b", size = 102564, upload-time = "2026-03-13T19:27:37.25Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/6f/01/c26ce75ba460d5cd503da9e13b21a33804d38c2165dec7b716d06b13010c/pyjwt-2.11.0-py3-none-any.whl", hash = "sha256:94a6bde30eb5c8e04fee991062b534071fd1439ef58d2adc9ccb823e7bcd0469", size = 28224, upload-time = "2026-01-30T19:59:54.539Z" },
+    { url = "https://files.pythonhosted.org/packages/e5/7a/8dd906bd22e79e47397a61742927f6747fe93242ef86645ee9092e610244/pyjwt-2.12.1-py3-none-any.whl", hash = "sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c", size = 29726, upload-time = "2026-03-13T19:27:35.677Z" },
 ]
 
 [[package]]
 name = "pyroh"
-version = "0.1.0"
-source = { git = "https://github.com/kbidlack/pyroh?rev=cd6609060a1bd74636118191c9bb80a963d01cb9#cd6609060a1bd74636118191c9bb80a963d01cb9" }
-dependencies = [
-    { name = "iroh" },
+version = "0.3.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0b/f2/e89039314ca0b7300f405598ad83e32eb74f40e50b643a4e57f8e65a4e11/pyroh-0.3.0.tar.gz", hash = "sha256:9f081c1d8fa56f478b890deac551fa1bfa26a0a1974447534f9e542e89bc450a", size = 46531, upload-time = "2026-03-11T19:32:46.097Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d3/b4/151673edf74f33ec53cbeb5ff90b65d38992156ec60cba921a099d8c871e/pyroh-0.3.0-cp314-abi3-macosx_10_12_x86_64.whl", hash = "sha256:1940c00ce344bc5515abe255d0d6933807d3db995193be771f71b855f73c30bb", size = 7730675, upload-time = "2026-03-11T19:32:41.582Z" },
+    { url = "https://files.pythonhosted.org/packages/4b/bb/837f2ad22d26ba2bac8a6b5d8fa595a2c707bfaf0f9334fdd0b1e5bf18ff/pyroh-0.3.0-cp314-abi3-macosx_11_0_arm64.whl", hash = "sha256:5bdaf92ed1f3f4df0789c7fd852a5f19d7002ab39c64eeaf24e4bf19dde7aff5", size = 7463382, upload-time = "2026-03-11T19:32:38.107Z" },
+    { url = "https://files.pythonhosted.org/packages/45/ac/8949d32cfc0e21680bfef8ce5f41b551308bbd7b47db70e388854fdbbf0b/pyroh-0.3.0-cp314-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:9eb3f42211daf76b674571f0634e6125258dcf86d192c4380b04c438321c0ce4", size = 8943277, upload-time = "2026-03-11T19:32:50.461Z" },
+    { url = "https://files.pythonhosted.org/packages/aa/e4/295ee84b452bad66f4cfb4fe19ccf8714535617e230b28e07a61a3dc5d60/pyroh-0.3.0-cp314-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:93519116642362ce8d0edd091a55135545f03cc2f31cd91b430cc03d90c1b398", size = 8810720, upload-time = "2026-03-11T19:32:39.965Z" },
+    { url = "https://files.pythonhosted.org/packages/f3/01/971299cb34cb5408323d8746712f14ebdb6aa44a834e981dd68132828f9b/pyroh-0.3.0-cp314-abi3-musllinux_1_2_aarch64.whl", hash = "sha256:e1d3c6362c1c49bc7ea25c57725724f840445bfccec5b9d29d3b1696c8abf9f3", size = 9107983, upload-time = "2026-03-11T19:32:44.672Z" },
+    { url = "https://files.pythonhosted.org/packages/ec/65/7a1f939481f4a75df2fe51312f655eb6fcb0175176c7743392a1f9258d52/pyroh-0.3.0-cp314-abi3-musllinux_1_2_x86_64.whl", hash = "sha256:def67da862209650838987595991088b884b92ffd988a581590e4dcdbfba8102", size = 9193864, upload-time = "2026-03-11T19:32:48.821Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/de/de0969748dbb87e749b649b7113e2a128f13d6303702cc4dbd568278cf67/pyroh-0.3.0-cp314-abi3-win_amd64.whl", hash = "sha256:31828959c8bafc9860a71b30294c47e2ccc7ddc670d59ec04d1e58c18d3781e2", size = 7079507, upload-time = "2026-03-11T19:32:47.067Z" },
+    { url = "https://files.pythonhosted.org/packages/98/83/217a1cbc6db03f7989d719c9d4a015a3734b0ea1071243c344a36390761b/pyroh-0.3.0-cp314-abi3-win_arm64.whl", hash = "sha256:0a31c57da695bcd0d3a95d532292413363829cf9cd05dcef80527eb917b15906", size = 6969857, upload-time = "2026-03-11T19:32:34.507Z" },
+    { url = "https://files.pythonhosted.org/packages/ea/fb/3574aec83b73a680db670e28c32bb1a53dbb55b2020d0d953aad53c70ce8/pyroh-0.3.0-cp314-cp314t-musllinux_1_2_aarch64.whl", hash = "sha256:3881e21ba35715a639969e5480e46532a4a5b60c0f4a089131a25da174c741b9", size = 9108195, upload-time = "2026-03-11T19:32:42.96Z" },
+    { url = "https://files.pythonhosted.org/packages/55/ca/c6a128de55b2c275304b143c06c8b721c2d94db4d803f9d4fafee37a3aa3/pyroh-0.3.0-cp314-cp314t-musllinux_1_2_x86_64.whl", hash = "sha256:16016f34bed13b12f9b05287b12d6ddea5a2a842c5e5e1091fc29aed660f5b97", size = 9193781, upload-time = "2026-03-11T19:32:36.258Z" },
 ]
 
 [[package]]

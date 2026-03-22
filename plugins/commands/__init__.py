@@ -256,21 +256,21 @@ class CommandsPlugin:
                 if error_msg.data.get("clickEvent") is None:
                     error_msg = error_msg.click_event("suggest_command", message)
 
-                self.client.chat(error_msg)
+                self.downstream.chat(error_msg)
             else:
                 if output:
                     if segments[0].startswith("//"):  # send output of command
                         # remove chat formatting
                         output = re.sub(r"§.", "", str(output))
-                        self.server.chat(output)
+                        self.upstream.chat(output)
                     else:
                         if isinstance(output, TextComponent):
                             if output.data.get("clickEvent") is None:
                                 output = output.click_event("suggest_command", message)
 
-                        self.client.chat(output)
+                        self.downstream.chat(output)
         else:
-            self.server.send_packet(0x01, String.pack(message))
+            self.upstream.send_packet(0x01, String.pack(message))
 
     @listen_client(0x14)
     async def packet_tab_complete(self: ProxhyPlugin, buff: Buffer):
@@ -325,9 +325,9 @@ class CommandsPlugin:
 
         if forward:
             self.suggestions.put_nowait(suggestions)
-            self.server.send_packet(0x14, String.pack(text), Boolean.pack(False))
+            self.upstream.send_packet(0x14, String.pack(text), Boolean.pack(False))
         else:
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x3A,
                 VarInt.pack(len(suggestions)),
                 *(String.pack(s) for s in suggestions),
@@ -347,7 +347,7 @@ class CommandsPlugin:
             # since every case where we receive a tab complete packet
             # from the server should have a corresponding one from the client
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x3A, VarInt.pack(len(suggestions)), *(String.pack(s) for s in suggestions)
         )
 

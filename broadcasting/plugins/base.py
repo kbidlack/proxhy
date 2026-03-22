@@ -1,10 +1,6 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from broadcasting.plugin import BroadcastPeerPlugin
 import asyncio
 import uuid
-from typing import Literal, Optional
+from typing import TYPE_CHECKING, Literal, Optional
 
 from petty.events import subscribe
 from petty.protocol.datatypes import (
@@ -19,6 +15,9 @@ from petty.protocol.datatypes import (
 from gamestate.state import PlayerAbilityFlags
 from plugins.commands import CommandException, command
 from proxhy.argtypes import ServerPlayer
+
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 
 
 class BroadcastPeerBasePlugin:
@@ -55,7 +54,7 @@ class BroadcastPeerBasePlugin:
             # username not set; handshake only?
             return
 
-        self.proxy.client.chat(
+        self.proxy.downstream.chat(
             TextComponent(self.username)
             .color("aqua")
             .appends(TextComponent("left the broadcast!").color("red"))
@@ -64,7 +63,7 @@ class BroadcastPeerBasePlugin:
         # Play UI click sound at low pitch for leave
         self.proxy._play_sound("random.click", pitch=40)
 
-        self.proxy.client.send_packet(
+        self.proxy.downstream.send_packet(
             0x38,
             VarInt.pack(4),  # action: remove player
             VarInt.pack(1),  # number of players
@@ -101,7 +100,7 @@ class BroadcastPeerBasePlugin:
                     )
                 pos = entity.position
 
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x08,
                 Double.pack(pos.x),
                 Double.pack(pos.y),
@@ -122,7 +121,7 @@ class BroadcastPeerBasePlugin:
             raise CommandException(
                 "Position teleport requires x, y, and z coordinates!"
             )
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x08,
             Double.pack(x),
             Double.pack(y),
@@ -140,7 +139,7 @@ class BroadcastPeerBasePlugin:
     @command("pos")
     async def _command_pos(self: BroadcastPeerPlugin):
         """Get your current position."""
-        self.client.chat(
+        self.downstream.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 
@@ -153,7 +152,7 @@ class BroadcastPeerBasePlugin:
         else:  # self.flight == 0
             self.flight = PlayerAbilityFlags.ALLOW_FLYING
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x39,
             Byte.pack(PlayerAbilityFlags.INVULNERABLE | self.flying | self.flight)
             + Float.pack(self.flight_speed)

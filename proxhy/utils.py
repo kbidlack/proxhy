@@ -7,7 +7,7 @@ import uuid as _uuid
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Optional
 
 from hypixel import (
     ApiError,
@@ -231,3 +231,9 @@ def zero_pad_calver(ver: str):
     """Pad a Proxhy version (CalVer) with 0s; e.g. 2026.2.19 -> 2026.02.19)"""
     dv = datetime.strptime(ver, "%Y.%m.%d")
     return dv.strftime("%Y.%m.%d")
+
+
+def short_node_id(node_id: str, prefix=8, suffix=8) -> str:
+    if len(node_id) <= prefix + suffix:
+        return node_id  # nothing to shorten
+    return f"{node_id[:prefix]}…{node_id[-suffix:]}"

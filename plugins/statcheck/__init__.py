@@ -1,14 +1,10 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import asyncio
 import re
 import uuid
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable, Optional, TypedDict
+from typing import TYPE_CHECKING, Any, Callable, Optional, TypedDict
 
 import hypixel
 import keyring
@@ -40,6 +36,9 @@ from proxhypixel.formatting import (
     SUPPORTED_MODES,
     format_player_dict,
 )
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 BW_MAPS: dict = load_json_asset("bedwars_maps.json")
 RUSH_MAPPINGS = load_json_asset("rush_mappings.json")
@@ -292,7 +291,7 @@ class StatCheckPlugin:
         self: ProxhyPlugin, player_uuid: str, display_name: str, listed: bool = True
     ) -> None:
         """Send a packet to update a player's display name in the tab list."""
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x38,
             VarInt.pack(3),
             VarInt.pack(1),
@@ -310,7 +309,7 @@ class StatCheckPlugin:
         if not updates:
             return
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x38,
             VarInt.pack(3),
             VarInt.pack(len(updates)),
@@ -395,7 +394,7 @@ class StatCheckPlugin:
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self: ProxhyPlugin, _):
         for player, _uuid in (self.dead | self.final_dead).items():
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x38,
                 VarInt.pack(4),
                 VarInt.pack(1),
@@ -423,7 +422,7 @@ class StatCheckPlugin:
         # data = [old_state, new_state]
         if data == ["OFF", "ON"]:
             self.received_who.clear()
-            # self.server.chat("/who")
+            # self.upstream.chat("/who")
             await self._update_stats()
         elif data == ["ON", "OFF"]:
             await self._reset_stats()
@@ -505,13 +504,13 @@ class StatCheckPlugin:
                 packet += Boolean.pack(True)  # has display name
                 packet += Chat.pack(self._get_dead_display_name(player))
 
-            self.client.send_packet(0x38, packet)
+            self.downstream.send_packet(0x38, packet)
         elif data == ["ON", "OFF"]:
             packet = VarInt.pack(4) + VarInt.pack(len(final_dead_no_self))
             for _, u in final_dead_no_self.items():
                 packet += UUID.pack(uuid.UUID(u))
 
-            self.client.send_packet(0x38, packet)
+            self.downstream.send_packet(0x38, packet)
 
     @subscribe("cb_gamestate_update")
     async def _statcheck_event_cb_gamestate_update_teams(
@@ -559,7 +558,7 @@ class StatCheckPlugin:
                 except KeyError:
                     pass  # hypixel likes to remove players that aren't there
 
-        self.client.send_packet(0x38, buff.getvalue())
+        self.downstream.send_packet(0x38, buff.getvalue())
 
     async def _get_player(self: ProxhyPlugin, player: str) -> dict[str, Player]:
         """Get a player from cache or fetch from API."""
@@ -761,13 +760,13 @@ class StatCheckPlugin:
                     # game being hypixel sub-server, clears on packet_join_game
                     if not self.game_error:
                         self.game_error = player
-                        self.client.chat(err_message[type(player)])
+                        self.downstream.chat(err_message[type(player)])
 
                     continue
                 except Exception as player:
                     if not self.game_error:
                         self.game_error = player
-                        self.client.chat(
+                        self.downstream.chat(
                             TextComponent(
                                 f"An unknown error occurred! ({player})"
                             ).color("red")
@@ -954,8 +953,8 @@ class StatCheckPlugin:
                     raise ValueError(
                         f"wtf how are there {len(other_adjacent_players)} ppl on that team???\nplayers on alt rush team: {other_adjacent_players}"
                     )
-        self.client.reset_title()
-        self.client.set_title(title=title, subtitle=subtitle)
+        self.downstream.reset_title()
+        self.downstream.set_title(title=title, subtitle=subtitle)
         # raise ValueError(
         #   f'Expected "FIRST RUSH", "BOTH ADJACENT", or "OFF" state for setting bedwars.announce_first_rush; got {self.settings.bedwars.announce_first_rush.state} instead.'
         # )
@@ -1089,7 +1088,7 @@ class StatCheckPlugin:
         elif not enemy_nicks:
             result = "No stats found!"
 
-        self.client.chat(
+        self.downstream.chat(
             TextComponent("Top stats:\n\n")
             .color("gold")
             .bold()
@@ -1135,7 +1134,7 @@ class StatCheckPlugin:
     async def _statcheck_event_chat_server_player_joined(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
-        self.client.send_packet(0x02, buff.getvalue())
+        self.downstream.send_packet(0x02, buff.getvalue())
         if self.settings.bedwars.api_key_reminder.get() == "ON":
             message = buff.unpack(Chat)
             m = JOIN_RE.match(message)
@@ -1150,7 +1149,7 @@ class StatCheckPlugin:
                     await self.validate_api_key()
 
                 if self._api_key_valid is False:  # only warn if explicitly invalid
-                    self.client.chat(
+                    self.downstream.chat(
                         TextComponent("Invalid API key! ")
                         .color("red")
                         .append(
@@ -1172,7 +1171,7 @@ class StatCheckPlugin:
         if not self.received_who.is_set():
             self.received_who.set()
         else:
-            self.client.send_packet(0x02, buff.getvalue())
+            self.downstream.send_packet(0x02, buff.getvalue())
 
         self.players_without_stats.update(message.removeprefix("ONLINE: ").split(", "))
         self.players_without_stats.difference_update(
@@ -1190,12 +1189,12 @@ class StatCheckPlugin:
     async def _statcheck_event_chat_server_bedwars_rejoin(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
-        self.client.send_packet(0x02, buff.getvalue())
+        self.downstream.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
         # refresh stats
         self.players_without_stats.add(self.username)  # TODO: does not work with nicks
-        self.server.send_packet(0x01, String.pack("/who"))
+        self.upstream.send_packet(0x01, String.pack("/who"))
         self.received_who.clear()
 
         self.game.started = True
@@ -1218,7 +1217,7 @@ class StatCheckPlugin:
         self: ProxhyPlugin, _match, buff: Buffer
     ):
         if self.game.gametype != "bedwars" or self.stats_highlighted:
-            return self.client.send_packet(0x02, buff.getvalue())
+            return self.downstream.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
         is_duels = self.game.mode == "bedwars_two_one_duels"
@@ -1226,7 +1225,7 @@ class StatCheckPlugin:
             self.settings.bedwars.display_top_stats.get() != "OFF" and not is_duels
         )
         if message in {msg_set[-2] for msg_set in GAME_START_MESSAGE_SETS}:  # runs once
-            self.server.send_packet(0x01, String.pack("/who"))
+            self.upstream.send_packet(0x01, String.pack("/who"))
             self.received_who.clear()
             self.game.started = True
 
@@ -1237,14 +1236,14 @@ class StatCheckPlugin:
                     in {"bedwars_eight_one", "bedwars_eight_two"}
                     and not self.adjacent_teams_highlighted
                 ):
-                    asyncio.create_task(self.highlight_adjacent_teams())
+                    self.create_task(self.highlight_adjacent_teams())
 
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent("Fetching top stats...").color("gold").bold()
                 )
 
         if not suppress:
-            self.client.send_packet(0x02, buff.getvalue())
+            self.downstream.send_packet(0x02, buff.getvalue())
 
     @command("key", "apikey")
     async def _command_key(self: ProxhyPlugin, key: str):
@@ -1267,7 +1266,7 @@ class StatCheckPlugin:
         self._api_key_validated_at = asyncio.get_event_loop().time()
 
         self.game_error = None
-        self.client.chat(TextComponent("Updated API Key!").color("green"))
+        self.downstream.chat(TextComponent("Updated API Key!").color("green"))
 
         await self._update_stats()
         if not self.stats_highlighted:
@@ -1305,7 +1304,7 @@ class StatCheckPlugin:
         # but not for the user themselves
         real_u = self.get_player_to_uuid_mapping().get(player) or ""
         if real_u:
-            self.client.send_packet(
+            self.downstream.send_packet(
                 0x38,
                 VarInt.pack(4),
                 VarInt.pack(1),
@@ -1313,7 +1312,7 @@ class StatCheckPlugin:
             )
 
         # spawn player
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x38,
             VarInt.pack(0),
             VarInt.pack(1),
@@ -1339,7 +1338,7 @@ class StatCheckPlugin:
         except KeyError:
             pass  # already removed; e.g. self.dead was cleared on new game join
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x38,
             VarInt.pack(4),
             VarInt.pack(1),
@@ -1350,7 +1349,7 @@ class StatCheckPlugin:
     async def _statcheck_event_chat_server_player_recon(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
-        self.client.send_packet(0x02, buff.getvalue())
+        self.downstream.send_packet(0x02, buff.getvalue())
 
         await self.received_locraw.wait()  # so that we can run the next check
         if not self.in_bedwars_game():
@@ -1367,16 +1366,16 @@ class StatCheckPlugin:
             await asyncio.sleep(0.1)
             retries += 1
 
-        asyncio.create_task(self.respawn_timer(player, reconnect=True))
+        self.create_task(self.respawn_timer(player, reconnect=True))
 
     @subscribe(f"chat:server:{'|'.join(KILL_MSGS)}")
     async def _statcheck_event_chat_server_kill_msg(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
         if not self.in_bedwars_game():
-            return self.client.send_packet(0x02, buff.getvalue())
+            return self.downstream.send_packet(0x02, buff.getvalue())
 
-        self.client.send_packet(0x02, buff.getvalue())
+        self.downstream.send_packet(0x02, buff.getvalue())
         message = buff.unpack(Chat)
 
         if message.startswith("BED DESTRUCTION >"):
@@ -1395,7 +1394,7 @@ class StatCheckPlugin:
         if fk:
             self.final_dead[killed] = str(u := minecraft_uuid_v2())
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
-                self.client.send_packet(
+                self.downstream.send_packet(
                     0x38,
                     VarInt.pack(0),  # spawn player
                     VarInt.pack(1),  # number of players
@@ -1408,4 +1407,4 @@ class StatCheckPlugin:
                     Chat.pack(self._get_dead_display_name(killed)),
                 )
         else:
-            asyncio.create_task(self.respawn_timer(killed))
+            self.create_task(self.respawn_timer(killed))

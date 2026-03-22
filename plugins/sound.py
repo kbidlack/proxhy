@@ -1,11 +1,10 @@
-from typing import TYPE_CHECKING
+import asyncio
+from typing import TYPE_CHECKING, Callable, Coroutine
+
+from petty.protocol.datatypes import Float, Int, String, UnsignedByte
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
-import asyncio
-from typing import Callable, Coroutine
-
-from petty.protocol.datatypes import Float, Int, String, UnsignedByte
 
 
 class SoundPlugin:
@@ -32,7 +31,7 @@ class SoundPlugin:
             pitch: Pitch value (63 = normal, lower = deeper)
         """
         pos = self.gamestate.position
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x29,  # Sound Effect
             String.pack(sound),
             Int.pack(int(pos.x * 8)),

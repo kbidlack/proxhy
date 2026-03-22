@@ -1,55 +1,53 @@
 import asyncio
 import re
-import typing
+from asyncio import StreamReader, StreamWriter
 from typing import TYPE_CHECKING
 
-import pyroh
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
-
-if TYPE_CHECKING:
-    from plugins.broadcastee.plugin import BroadcasteePlugin
 from petty.protocol.datatypes import Buffer, Short, String, VarInt
 
 from plugins.commands import CommandsPlugin, command
 from proxhy.settings import ProxhySettings
 
+if TYPE_CHECKING:
+    from plugins.broadcastee.plugin import BroadcasteePlugin
+
 
 class BroadcasteeClosePlugin:
     @subscribe("close")
     async def _broadcastee_event_close(self: BroadcasteePlugin, _match, _data):
-        typing.cast(pyroh.StreamWriter, self.server.writer)
-        self.server.writer.write_eof()
-        await self.server.writer.drain()
+        self.upstream.writer.write_eof()
+        await self.upstream.writer.drain()
 
     @listen_server(0x46, blocking=True)
     async def _packet_set_compression(self: BroadcasteePlugin, buff: Buffer):
-        self.server.send_packet(0x46)
-        self.server.compression_threshold = buff.unpack(VarInt)
-        self.server.compression = True
+        self.upstream.send_packet(0x46)
+        self.upstream.compression_threshold = buff.unpack(VarInt)
+        self.upstream.compression = True
 
     async def create_server(
         self: BroadcasteePlugin,
-        reader: pyroh.StreamReader,
-        writer: pyroh.StreamWriter,
+        reader: StreamReader,
+        writer: StreamWriter,
     ):
-        self.server = ServerStream(reader, writer)
+        self.upstream = ServerStream(reader, writer)
 
     async def join(self: BroadcasteePlugin, username: str, node_id: str):
         self.state = State.PLAY
 
-        self.handle_server_task = asyncio.create_task(self.handle_server())
+        self.handle_upstream_task = asyncio.create_task(self.handle_upstream())
 
-        self.server.send_packet(
+        self.upstream.send_packet(
             0x00,
             VarInt.pack(47),
             String.pack(node_id),
             Short.pack(25565),
             VarInt.pack(State.LOGIN.value),
         )
-        self.server.send_packet(0x00, String.pack(username))
+        self.upstream.send_packet(0x00, String.pack(username))
 
-        await self.server.drain()
+        await self.upstream.drain()
 
 
 class BroadcasteeSettingsPlugin:
@@ -69,7 +67,7 @@ class BroadcasteeSettingsPlugin:
         if buff.unpack(String) == "login_success":
             for setting in self.settings.broadcast.get_all_settings():
                 value = setting.get()
-                self.server.send_packet(
+                self.upstream.send_packet(
                     0x17,
                     String.pack("PROXHY|Settings"),
                     String.pack(setting._key),
@@ -84,7 +82,7 @@ class BroadcasteeSettingsPlugin:
         setting = match.string.split(":")[1]
 
         old_value, new_value = data
-        self.server.send_packet(
+        self.upstream.send_packet(
             0x17,
             String.pack("PROXHY|Settings"),
             String.pack(setting),
@@ -96,12 +94,12 @@ class BroadcasteeSettingsPlugin:
 class BroadcasteeCommandsPlugin(CommandsPlugin):
     @command("help")
     async def _command_help(self: BroadcasteePlugin, *args: str):
-        self.server.chat(f"/help {' '.join(args)}")
+        self.upstream.chat(f"/help {' '.join(args)}")
 
     @listen_client(0x14)
     async def packet_tab_complete(self: BroadcasteePlugin, buff: Buffer):
-        self.server.send_packet(0x14, buff.getvalue())
+        self.upstream.send_packet(0x14, buff.getvalue())
 
     @listen_server(0x3A)
     async def packet_server_tab_complete(self: BroadcasteePlugin, buff: Buffer):
-        self.client.send_packet(0x3A, buff.getvalue())
+        self.downstream.send_packet(0x3A, buff.getvalue())

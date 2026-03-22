@@ -1,8 +1,5 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import asyncio
+from typing import TYPE_CHECKING
 
 import numba
 import numpy as np
@@ -12,6 +9,9 @@ from petty.protocol.datatypes import (
     Float,
     Int,
 )
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 @numba.njit(cache=True, fastmath=True)
@@ -64,7 +64,7 @@ class SpatialPlugin:
             return
 
         color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
-        self.client.set_actionbar_text(
+        self.downstream.set_actionbar_text(
             f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
         )
         for _ in range(10):
@@ -87,7 +87,7 @@ class SpatialPlugin:
             raise NotImplementedError(
                 "Data field is 0 for most particles. ironcrack, blockcrack, and blockdust not implemented."
             )
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x2A,  # display particle
             Int.pack(particle_id),  # particle id
             Boolean.pack(True),  # long distance?

@@ -1,10 +1,7 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import re
 import shelve
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from petty.events import subscribe
 from petty.protocol.datatypes import Buffer, Chat, TextComponent
@@ -13,6 +10,9 @@ from platformdirs import user_config_dir
 from plugins.commands import CommandException, CommandGroup, Lazy
 from proxhy.argtypes import AutoboopPlayer, HypixelPlayer
 from proxhypixel.formatting import get_rankname
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 class AutoboopPlugin:
@@ -35,7 +35,9 @@ class AutoboopPlugin:
                 if not players:
                     return TextComponent("No players in autoboop!").color("green")
 
-                self.client.chat(TextComponent("Players in autoboop:").color("green"))
+                self.downstream.chat(
+                    TextComponent("Players in autoboop:").color("green")
+                )
                 msg = TextComponent("> ").color("green")
                 for i, name in enumerate(players):
                     if i != 0:
@@ -108,6 +110,6 @@ class AutoboopPlugin:
         with shelve.open(self.AB_DATA_PATH) as db:
             user_players = db.get(self.username, {})
             if player_name.lower() in user_players:
-                self.server.chat(f"/boop {player_name}")
+                self.upstream.chat(f"/boop {player_name}")
 
-        self.client.send_packet(0x02, buff.getvalue())
+        self.downstream.send_packet(0x02, buff.getvalue())

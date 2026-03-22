@@ -1,10 +1,6 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import math
 from textwrap import fill
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from petty.nbt import dumps, from_dict
 from petty.protocol.datatypes import (
@@ -19,6 +15,9 @@ from proxhy.argtypes import SettingPath, SettingValue
 from proxhy.settings import ProxhySettings
 
 from ._settings import Setting, SettingGroup, SettingsStorage, create_setting
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 class SettingsPlugin:
@@ -53,7 +52,7 @@ class SettingsPlugin:
         _, new_color = setting.setting.states[new_state]
 
         # Send confirmation message
-        self.client.chat(
+        self.downstream.chat(
             TextComponent("Changed ")
             .append(TextComponent(setting.setting.display_name).color("yellow"))
             .appends("from")
@@ -293,7 +292,7 @@ class SettingsMenu(Window):
             prev_color,
             next_color,
         )
-        self.proxy.client.chat(msg)
+        self.proxy.downstream.chat(msg)
         await self.proxy.emit(f"setting:{s_raw._key}", [prev_state, next_state])
 
     def open_group_callback(

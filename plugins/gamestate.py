@@ -1,9 +1,5 @@
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
 import time
-from typing import Hashable
+from typing import TYPE_CHECKING, Hashable
 
 from petty.events import listen_client, subscribe
 
@@ -11,6 +7,9 @@ from petty.events import listen_client, subscribe
 from petty.protocol.datatypes import Buffer, VarInt
 
 from gamestate.state import Entity, GameState
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 class ExpiringSet[T: Hashable]:
@@ -48,23 +47,23 @@ class GameStatePlugin:
         self.gamestate = GameState()
         self.in_combat_with = ExpiringSet(ttl=5)
 
-        _original_send_packet = self.client.send_packet
+        _original_send_packet = self.downstream.send_packet
 
         def _hooked_cb_send_packet(packet_id: int, *data: bytes) -> None:
             self._handle_clientbound_packet(packet_id, Buffer(b"".join(data)))
             _original_send_packet(packet_id, *data)
 
-        self.client.send_packet = _hooked_cb_send_packet  # type: ignore
+        self.downstream.send_packet = _hooked_cb_send_packet  # type: ignore
 
     @subscribe("login_success")
     async def _gamestate_event_login_success(self: ProxhyPlugin, _, _data):
-        _original_send_packet = self.server.send_packet
+        _original_send_packet = self.upstream.send_packet
 
         def _hooked_sb_send_packet(packet_id: int, *data: bytes) -> None:
             self._handle_serverbound_packet(packet_id, Buffer(b"".join(data)))
             _original_send_packet(packet_id, *data)
 
-        self.server.send_packet = _hooked_sb_send_packet  # type: ignore
+        self.upstream.send_packet = _hooked_sb_send_packet  # type: ignore
 
     def _handle_clientbound_packet(self: ProxhyPlugin, packet_id: int, buff: Buffer):
         self.gamestate.update_clientbound(packet_id, buff.getvalue())
@@ -76,7 +75,7 @@ class GameStatePlugin:
 
     @listen_client(0x02, blocking=True)
     async def _packet_use_entity(self: ProxhyPlugin, buff: Buffer):
-        self.server.send_packet(0x02, buff.getvalue())
+        self.upstream.send_packet(0x02, buff.getvalue())
 
         target = buff.unpack(VarInt)
         type_ = buff.unpack(VarInt)
