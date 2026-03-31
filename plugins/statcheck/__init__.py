@@ -1106,7 +1106,10 @@ class StatCheckPlugin:
         real_player_teams: list[Team] = [
             team
             for team in self.gamestate.teams.values()
-            if re.match("§.§l[A-Z] §r§.", team.prefix)
+            # e.g. yellow is §e§lY §r§e
+            # but white specifically has no color code in front:
+            # §lW §r§f
+            if re.match("§.?§l[A-Z] §r§.", team.prefix)
         ]
         return next(
             (team for team in real_player_teams if user in team.members),
