@@ -118,6 +118,7 @@ JOIN_RE = re.compile(
     r"(?P<ign>[A-Za-z0-9_]{3,16}) has joined (?P<context>.+)!$"
 )
 COLOR_CODE = re.compile(r"(§[0-9a-fk-or])", re.IGNORECASE)
+TEAM_COLOR_CODE = re.compile(r"(§[0-9a-f])", re.IGNORECASE)
 
 # Team color mappings
 TEAM_NAME_TO_LETTER = {
@@ -615,7 +616,7 @@ class StatCheckPlugin:
             team = self.get_team(self.username)
             if team:
                 team_name = re.sub(r"\d+", "", team.name)
-                m = COLOR_CODE.search(team.prefix)
+                m = TEAM_COLOR_CODE.search(team.prefix)
                 color_code = m.group(1) if m else ""
                 return team_name, color_code
             raise ValueError("No team found")
@@ -637,7 +638,7 @@ class StatCheckPlugin:
             match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
             if match_:
                 team_name = match_.group(1)
-                m = COLOR_CODE.search(sidebar_own_team.prefix)
+                m = TEAM_COLOR_CODE.search(sidebar_own_team.prefix)
                 color_code = m.group(1) if m else ""
                 return team_name, color_code
             else:
@@ -666,7 +667,7 @@ class StatCheckPlugin:
         team_name = re.sub(r"\d+", "", team.name)
         color_code = ""
         if team.prefix:
-            m = COLOR_CODE.search(team.prefix)
+            m = TEAM_COLOR_CODE.search(team.prefix)
             color_code = m.group(1) if m else ""
 
         return team_name, color_code
@@ -1109,7 +1110,7 @@ class StatCheckPlugin:
             # e.g. yellow is §e§lY §r§e
             # but white specifically has no color code in front:
             # §lW §r§f
-            if re.match("§.?§l[A-Z] §r§.", team.prefix)
+            if re.match("(§.)?§l[A-Z] §r§.", team.prefix)
         ]
         return next(
             (team for team in real_player_teams if user in team.members),
