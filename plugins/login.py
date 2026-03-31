@@ -8,7 +8,6 @@ from secrets import token_bytes
 from typing import TYPE_CHECKING, Literal, Optional
 from unittest.mock import Mock
 
-import aiohttp
 import httpx
 import hypixel
 import orjson
@@ -511,16 +510,15 @@ class LoginPlugin:
             "selectedProfile": self.uuid,
             "serverId": generate_verification_hash(server_id, secret, public_key),
         }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(
+        async with httpx.AsyncClient(verify=False) as client:
+            response = await client.post(
                 "https://sessionserver.mojang.com/session/minecraft/join",
                 json=payload,
-                ssl=False,
-            ) as response:
-                if not response.status == 204:
-                    raise Exception(
-                        f"Login failed: {response.status} {await response.json()}"
-                    )
+            )
+            if response.status_code != 204:
+                raise Exception(
+                    f"Login failed: {response.status_code} {response.json()}"
+                )
 
         return secret
 

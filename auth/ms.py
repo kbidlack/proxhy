@@ -23,7 +23,7 @@ import time
 from typing import TYPE_CHECKING, TypedDict
 from urllib.parse import parse_qs, urlencode, urlparse
 
-import aiohttp
+import httpx
 
 from .errors import AuthException, InvalidCredentials, NotPremium
 
@@ -224,33 +224,32 @@ async def request_device_code(
         "scope": SCOPE,
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
             AZURE_DEVICE_CODE_URL,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"Failed to request device code: {resp.status}",
-                    code="DEVICE-CODE-FAILED",
-                    detail=text,
-                )
+            timeout=timeout,
+        )
+        if not resp.is_success:
+            raise AuthException(
+                f"Failed to request device code: {resp.status_code}",
+                code="DEVICE-CODE-FAILED",
+                detail=resp.text,
+            )
 
-            result = await resp.json()
-            return {
-                "user_code": result["user_code"],
-                "device_code": result["device_code"],
-                "verification_uri": result["verification_uri"],
-                "expires_in": result["expires_in"],
-                "interval": result["interval"],
-                "message": result.get(
-                    "message",
-                    f"Go to {result['verification_uri']} and enter code: {result['user_code']}",
-                ),
-            }
+        result = resp.json()
+        return {
+            "user_code": result["user_code"],
+            "device_code": result["device_code"],
+            "verification_uri": result["verification_uri"],
+            "expires_in": result["expires_in"],
+            "interval": result["interval"],
+            "message": result.get(
+                "message",
+                f"Go to {result['verification_uri']} and enter code: {result['user_code']}",
+            ),
+        }
 
 
 async def poll_device_code(
@@ -283,7 +282,7 @@ async def poll_device_code(
         "device_code": device_code,
     }
 
-    async with aiohttp.ClientSession() as session:
+    async with httpx.AsyncClient() as client:
         while True:
             if time.time() - start_time > expires_in:
                 raise AuthException(
@@ -291,48 +290,48 @@ async def poll_device_code(
                     code="DEVICE-CODE-EXPIRED",
                 )
 
-            async with session.post(
+            resp = await client.post(
                 AZURE_TOKEN_URL,
                 data=data,
                 headers={"Content-Type": "application/x-www-form-urlencoded"},
-                timeout=aiohttp.ClientTimeout(total=timeout),
-            ) as resp:
-                result = await resp.json()
+                timeout=timeout,
+            )
+            result = resp.json()
 
-                if resp.ok:
-                    return {
-                        "access_token": result["access_token"],
-                        "refresh_token": result.get("refresh_token", ""),
-                    }
+            if resp.is_success:
+                return {
+                    "access_token": result["access_token"],
+                    "refresh_token": result.get("refresh_token", ""),
+                }
 
-                error = result.get("error", "")
+            error = result.get("error", "")
 
-                if error == "authorization_pending":
-                    if on_pending:
-                        on_pending()
-                    await _async_sleep(interval)
-                    continue
-                elif error == "slow_down":
-                    interval += 5
-                    await _async_sleep(interval)
-                    continue
-                elif error == "authorization_declined":
-                    raise AuthException(
-                        "User declined authorization",
-                        code="DEVICE-CODE-DECLINED",
-                    )
-                elif error == "expired_token":
-                    raise AuthException(
-                        "Device code expired",
-                        code="DEVICE-CODE-EXPIRED",
-                    )
-                else:
-                    description = result.get("error_description", "Unknown error")
-                    raise AuthException(
-                        f"Device code polling failed: {description}",
-                        code="DEVICE-CODE-FAILED",
-                        detail=str(result),
-                    )
+            if error == "authorization_pending":
+                if on_pending:
+                    on_pending()
+                await _async_sleep(interval)
+                continue
+            elif error == "slow_down":
+                interval += 5
+                await _async_sleep(interval)
+                continue
+            elif error == "authorization_declined":
+                raise AuthException(
+                    "User declined authorization",
+                    code="DEVICE-CODE-DECLINED",
+                )
+            elif error == "expired_token":
+                raise AuthException(
+                    "Device code expired",
+                    code="DEVICE-CODE-EXPIRED",
+                )
+            else:
+                description = result.get("error_description", "Unknown error")
+                raise AuthException(
+                    f"Device code polling failed: {description}",
+                    code="DEVICE-CODE-FAILED",
+                    detail=str(result),
+                )
 
 
 async def _async_sleep(seconds: float) -> None:
@@ -373,28 +372,28 @@ async def get_authorization_token(
     if code_verifier:
         data["code_verifier"] = code_verifier
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
             AZURE_TOKEN_URL,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if not resp.ok:
-                result = await resp.json()
-                error = result.get("error", "unknown")
-                description = result.get("error_description", "")
-                raise AuthException(
-                    f"Failed to get authorization token: {error}",
-                    code="OAUTH-TOKEN-FAILED",
-                    detail=description,
-                )
+            timeout=timeout,
+        )
+        if not resp.is_success:
+            result = resp.json()
+            error = result.get("error", "unknown")
+            description = result.get("error_description", "")
+            raise AuthException(
+                f"Failed to get authorization token: {error}",
+                code="OAUTH-TOKEN-FAILED",
+                detail=description,
+            )
 
-            result = await resp.json()
-            return {
-                "access_token": result["access_token"],
-                "refresh_token": result.get("refresh_token", ""),
-            }
+        result = resp.json()
+        return {
+            "access_token": result["access_token"],
+            "refresh_token": result.get("refresh_token", ""),
+        }
 
 
 async def refresh_authorization_token(
@@ -420,44 +419,43 @@ async def refresh_authorization_token(
         "scope": SCOPE,
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
             AZURE_TOKEN_URL,
             data=data,
             headers={"Content-Type": "application/x-www-form-urlencoded"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if resp.status == 400:
-                try:
-                    result = await resp.json()
-                    error = result.get("error", "")
-                    if error in ("invalid_grant", "expired_token"):
-                        raise InvalidCredentials(
-                            "Refresh token is invalid or expired",
-                            code="MSA-REFRESH-EXPIRED",
-                        )
-                except InvalidCredentials:
-                    raise
-                except Exception:
-                    pass
-                raise InvalidCredentials(
-                    "Failed to refresh token",
-                    code="MSA-REFRESH-INVALID",
-                )
+            timeout=timeout,
+        )
+        if resp.status_code == 400:
+            try:
+                result = resp.json()
+                error = result.get("error", "")
+                if error in ("invalid_grant", "expired_token"):
+                    raise InvalidCredentials(
+                        "Refresh token is invalid or expired",
+                        code="MSA-REFRESH-EXPIRED",
+                    )
+            except InvalidCredentials:
+                raise
+            except Exception:
+                pass
+            raise InvalidCredentials(
+                "Failed to refresh token",
+                code="MSA-REFRESH-INVALID",
+            )
 
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"Token refresh failed: {resp.status}",
-                    code="MSA-REFRESH-FAILED",
-                    detail=text,
-                )
+        if not resp.is_success:
+            raise AuthException(
+                f"Token refresh failed: {resp.status_code}",
+                code="MSA-REFRESH-FAILED",
+                detail=resp.text,
+            )
 
-            result = await resp.json()
-            return {
-                "access_token": result["access_token"],
-                "refresh_token": result.get("refresh_token", ""),
-            }
+        result = resp.json()
+        return {
+            "access_token": result["access_token"],
+            "refresh_token": result.get("refresh_token", ""),
+        }
 
 
 async def authenticate_with_xbl(
@@ -484,42 +482,41 @@ async def authenticate_with_xbl(
         "TokenType": "JWT",
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
             XBL_AUTH_URL,
             json=payload,
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"Xbox Live authentication failed: {resp.status}",
-                    code="XBL-FAILED",
-                    detail=text,
-                )
+            timeout=timeout,
+        )
+        if not resp.is_success:
+            raise AuthException(
+                f"Xbox Live authentication failed: {resp.status_code}",
+                code="XBL-FAILED",
+                detail=resp.text,
+            )
 
-            data = await resp.json()
-            token = data.get("Token")
+        data = resp.json()
+        token = data.get("Token")
 
-            try:
-                user_hash = data["DisplayClaims"]["xui"][0]["uhs"]
-            except (KeyError, IndexError) as e:
-                raise AuthException(
-                    f"Xbox Live response missing user hash: {e}",
-                    code="XBL-MALFORMED",
-                )
+        try:
+            user_hash = data["DisplayClaims"]["xui"][0]["uhs"]
+        except (KeyError, IndexError) as e:
+            raise AuthException(
+                f"Xbox Live response missing user hash: {e}",
+                code="XBL-MALFORMED",
+            )
 
-            if not token:
-                raise AuthException(
-                    "Xbox Live response missing token",
-                    code="XBL-MALFORMED",
-                )
+        if not token:
+            raise AuthException(
+                "Xbox Live response missing token",
+                code="XBL-MALFORMED",
+            )
 
-            return token, user_hash
+        return token, user_hash
 
 
 async def authenticate_with_xsts(
@@ -545,58 +542,57 @@ async def authenticate_with_xsts(
         "TokenType": "JWT",
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
             XSTS_AUTH_URL,
             json=payload,
             headers={
                 "Content-Type": "application/json",
                 "Accept": "application/json",
             },
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if resp.status == 401:
-                data = await resp.json()
-                xerr = data.get("XErr")
+            timeout=timeout,
+        )
+        if resp.status_code == 401:
+            data = resp.json()
+            xerr = data.get("XErr")
 
-                error_messages = {
-                    2148916227: "This account has been banned from Xbox",
-                    2148916233: "No Xbox account exists. Sign in to Xbox first.",
-                    2148916235: "Xbox Live is not available in your region",
-                    2148916236: "Adult verification required (South Korea)",
-                    2148916237: "Adult verification required (South Korea)",
-                    2148916238: "Child account must be added to a Family",
-                }
+            error_messages = {
+                2148916227: "This account has been banned from Xbox",
+                2148916233: "No Xbox account exists. Sign in to Xbox first.",
+                2148916235: "Xbox Live is not available in your region",
+                2148916236: "Adult verification required (South Korea)",
+                2148916237: "Adult verification required (South Korea)",
+                2148916238: "Child account must be added to a Family",
+            }
 
-                message = error_messages.get(xerr, "XSTS authorization failed")
-                raise AuthException(message, code=f"XSTS-{xerr or 401}")
+            message = error_messages.get(xerr, "XSTS authorization failed")
+            raise AuthException(message, code=f"XSTS-{xerr or 401}")
 
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"XSTS authorization failed: {resp.status}",
-                    code="XSTS-FAILED",
-                    detail=text,
-                )
+        if not resp.is_success:
+            raise AuthException(
+                f"XSTS authorization failed: {resp.status_code}",
+                code="XSTS-FAILED",
+                detail=resp.text,
+            )
 
-            data = await resp.json()
-            token = data.get("Token")
+        data = resp.json()
+        token = data.get("Token")
 
-            try:
-                user_hash = data["DisplayClaims"]["xui"][0]["uhs"]
-            except (KeyError, IndexError) as e:
-                raise AuthException(
-                    f"XSTS response missing user hash: {e}",
-                    code="XSTS-MALFORMED",
-                )
+        try:
+            user_hash = data["DisplayClaims"]["xui"][0]["uhs"]
+        except (KeyError, IndexError) as e:
+            raise AuthException(
+                f"XSTS response missing user hash: {e}",
+                code="XSTS-MALFORMED",
+            )
 
-            if not token:
-                raise AuthException(
-                    "XSTS response missing token",
-                    code="XSTS-MALFORMED",
-                )
+        if not token:
+            raise AuthException(
+                "XSTS response missing token",
+                code="XSTS-MALFORMED",
+            )
 
-            return token, user_hash
+        return token, user_hash
 
 
 async def authenticate_with_minecraft(
@@ -620,31 +616,30 @@ async def authenticate_with_minecraft(
         "ensureLegacyEnabled": True,
     }
 
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
             MC_LOGIN_URL,
             json=payload,
             headers={"Content-Type": "application/json"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"Minecraft authentication failed: {resp.status}",
-                    code="MC-LOGIN-FAILED",
-                    detail=text,
-                )
+            timeout=timeout,
+        )
+        if not resp.is_success:
+            raise AuthException(
+                f"Minecraft authentication failed: {resp.status_code}",
+                code="MC-LOGIN-FAILED",
+                detail=resp.text,
+            )
 
-            data = await resp.json()
-            access_token = data.get("access_token")
+        data = resp.json()
+        access_token = data.get("access_token")
 
-            if not access_token:
-                raise AuthException(
-                    "Minecraft response missing access token",
-                    code="MC-LOGIN-MALFORMED",
-                )
+        if not access_token:
+            raise AuthException(
+                "Minecraft response missing access token",
+                code="MC-LOGIN-MALFORMED",
+            )
 
-            return access_token
+        return access_token
 
 
 async def check_ownership(
@@ -661,28 +656,27 @@ async def check_ownership(
     Returns:
         True if the account owns the game
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
             MC_ENTITLEMENTS_URL,
             headers={"Authorization": f"Bearer {mc_access_token}"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"Entitlements check failed: {resp.status}",
-                    code="MC-ENTITLEMENTS-FAILED",
-                    detail=text,
-                )
+            timeout=timeout,
+        )
+        if not resp.is_success:
+            raise AuthException(
+                f"Entitlements check failed: {resp.status_code}",
+                code="MC-ENTITLEMENTS-FAILED",
+                detail=resp.text,
+            )
 
-            data = await resp.json()
-            items = data.get("items", [])
+        data = resp.json()
+        items = data.get("items", [])
 
-            # Check for Minecraft Java Edition ownership
-            java_products = ("product_minecraft", "game_minecraft")
-            return any(item.get("name") in java_products for item in items) or bool(
-                items
-            )  # Fallback: any items means some ownership
+        # Check for Minecraft Java Edition ownership
+        java_products = ("product_minecraft", "game_minecraft")
+        return any(item.get("name") in java_products for item in items) or bool(
+            items
+        )  # Fallback: any items means some ownership
 
 
 async def get_profile(
@@ -699,37 +693,36 @@ async def get_profile(
     Returns:
         Tuple of (username, uuid)
     """
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
+    async with httpx.AsyncClient() as client:
+        resp = await client.get(
             MC_PROFILE_URL,
             headers={"Authorization": f"Bearer {mc_access_token}"},
-            timeout=aiohttp.ClientTimeout(total=timeout),
-        ) as resp:
-            if resp.status == 404:
-                raise NotPremium(
-                    "Minecraft profile not found. Account may not own Java Edition.",
-                    code="MC-NOT-PREMIUM",
-                )
+            timeout=timeout,
+        )
+        if resp.status_code == 404:
+            raise NotPremium(
+                "Minecraft profile not found. Account may not own Java Edition.",
+                code="MC-NOT-PREMIUM",
+            )
 
-            if not resp.ok:
-                text = await resp.text()
-                raise AuthException(
-                    f"Failed to get Minecraft profile: {resp.status}",
-                    code="MC-PROFILE-FAILED",
-                    detail=text,
-                )
+        if not resp.is_success:
+            raise AuthException(
+                f"Failed to get Minecraft profile: {resp.status_code}",
+                code="MC-PROFILE-FAILED",
+                detail=resp.text,
+            )
 
-            data = await resp.json()
-            username = data.get("name", "")
-            uuid = data.get("id", "")
+        data = resp.json()
+        username = data.get("name", "")
+        uuid = data.get("id", "")
 
-            if not username or not uuid:
-                raise AuthException(
-                    "Minecraft profile incomplete (missing name/id)",
-                    code="MC-PROFILE-INCOMPLETE",
-                )
+        if not username or not uuid:
+            raise AuthException(
+                "Minecraft profile incomplete (missing name/id)",
+                code="MC-PROFILE-INCOMPLETE",
+            )
 
-            return username, uuid
+        return username, uuid
 
 
 async def complete_login(

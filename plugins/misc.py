@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 class MiscPlugin:
     @command("version")
     async def _command_version(self: ProxhyPlugin):
+        """Get the currently running version of Proxhy."""
         return TextComponent(zero_pad_calver(version("proxhy"))).color("yellow")
 
     @command("rq")
