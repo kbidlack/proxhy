@@ -835,7 +835,8 @@ class StatCheckPlugin:
         if not self._api_key_valid:
             return
         if self.game.map is None:
-            raise ValueError("Could not determine map!")
+            self.logger.warning("highlight_adjacent_teams: could not determine map")
+            return
         try:
             side_rush, alt_rush = self.get_adjacent_teams()
         except ValueError:  # player is not on a team
@@ -850,9 +851,10 @@ class StatCheckPlugin:
             first_rush, first_players = alt_rush, alt_players
             other_adjacent_rush, other_adjacent_players = side_rush, side_players
         else:
-            raise ValueError(
-                f'Expected Literal "side" or "alt" for self.game.map.rush_direction; got {self.game.map.rush_direction} instead.'
+            self.logger.warning(
+                f"highlight_adjacent_teams: unexpected rush_direction {self.game.map.rush_direction!r}"
             )
+            return
 
         empty_team_dialogue_first = (
             TextComponent(f"{first_rush.upper()} TEAM")
@@ -874,9 +876,10 @@ class StatCheckPlugin:
         elif self.settings.bedwars.display_top_stats.get() == "FKDR":
             key = lambda fp: fp["raw_fkdr"]  # noqa: E731
         else:
-            raise ValueError(
-                f'Expected "OFF", "INDEX", "STAR", or "FKDR" for setting bedwars.display_top_stats; got {self.settings.bedwars.display_top_stats.get()} instead.'
+            self.logger.warning(
+                f"highlight_adjacent_teams: unexpected display_top_stats value {self.settings.bedwars.display_top_stats.get()!r}"
             )
+            return
 
         subtitle = None
 
@@ -918,9 +921,12 @@ class StatCheckPlugin:
                             "display_name"
                         ]
             case _:
-                raise ValueError(
-                    f"wtf how are there {len(first_players)} ppl on that team???\nplayers on first rush team: {first_players}"
+                self.logger.warning(
+                    "highlight_adjacent_teams: unexpected first rush team size %d: %s",
+                    len(first_players),
+                    first_players,
                 )
+                return
 
         if self.settings.bedwars.announce_first_rush.get() == "BOTH ADJACENT":
             match len(other_adjacent_players):
@@ -951,9 +957,12 @@ class StatCheckPlugin:
                             "display_name"
                         ]
                 case _:
-                    raise ValueError(
-                        f"wtf how are there {len(other_adjacent_players)} ppl on that team???\nplayers on alt rush team: {other_adjacent_players}"
+                    self.logger.warning(
+                        "highlight_adjacent_teams: unexpected alt rush team size %d: %s",
+                        len(other_adjacent_players),
+                        other_adjacent_players,
                     )
+                    return
         self.downstream.reset_title()
         self.downstream.set_title(title=title, subtitle=subtitle)
         # raise ValueError(
@@ -1001,7 +1010,11 @@ class StatCheckPlugin:
         if not self.players_with_stats:
             return  # no stats
 
-        own_team_color = self.get_team_color(self.username)["name"]
+        try:
+            own_team_color = self.get_team_color(self.username)["name"]
+        except ValueError as e:
+            self.logger.warning("stat_highlights: could not determine own team color: %s", e)
+            return
 
         # find team color as str (e.g. Pink, Blue, etc.)
         # TODO: move to method?

@@ -1,3 +1,5 @@
+import logging
+
 from petty.endpoints import Proxy
 
 from plugins.autoboop import AutoboopPlugin
@@ -37,3 +39,4 @@ class ProxhyPlugin(
 ):
     FAKE_CONNECT_HOST: tuple[str, int]
     dev_mode: bool
+    logger: logging.LoggerAdapter

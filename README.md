@@ -72,10 +72,10 @@ With pip:
 pip uninstall proxhy
 ```
 
-**Note**: Proxhy stores settings, cached data, and login credentials in platform-specific directories:
+**Note**: Proxhy stores settings, cached data, login credentials, and logs in platform-specific directories:
 
-- **macOS**: `~/Library/Application Support/proxhy`, `~/Library/Caches/proxhy`
-- **Linux**: `~/.config/proxhy`, `~/.cache/proxhy`, `~/.local/share/proxhy`
-- **Windows**: `%LOCALAPPDATA%\proxhy`, `%LOCALAPPDATA%\proxhy\Cache`
+- **macOS**: `~/Library/Application Support/proxhy`, `~/Library/Caches/proxhy`, `~/Library/Logs/proxhy`
+- **Linux**: `~/.config/proxhy`, `~/.cache/proxhy`, `~/.local/share/proxhy`, `~/.local/state/proxhy/log`
+- **Windows**: `%LOCALAPPDATA%\proxhy`, `%LOCALAPPDATA%\proxhy\Cache`, `%LOCALAPPDATA%\proxhy\Logs`
 
 These directories are not automatically removed during uninstallation.
