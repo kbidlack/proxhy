@@ -895,44 +895,56 @@ class BroadcastPlugin:
         )
 
     async def handle_new_connection(self: ProxhyPlugin, conn: pyroh.Connection):
-        if not self.compass_client.registered:
-            # TODO: log
-            conn.close()
-            return
-
         try:
             async with asyncio.timeout(3):
                 reader, writer = await conn.accept_bi()
                 intent = StreamIntent(int.from_bytes(await reader.read(1)))
                 username = (await reader.read(16)).decode("utf-8").strip("0")
-        except (asyncio.TimeoutError, ValueError):
-            # TODO: log
+        except (asyncio.TimeoutError, ValueError) as e:
+            self.logger.warning(
+                f"handle_new_connection: failed to accept connection from {conn.remote_node_id!r}: {e}"
+            )
             conn.close()
             return
 
-        def _reject():
+        async def _reject():
             writer.write(int.to_bytes(0))
+            await writer.drain()
             conn.close()
 
-        try:
-            response = await self.compass_client.verify(username, conn.remote_node_id)
-        except RequestFailure:
-            _reject()
-            return  # TODO: log
+        if not self.dev_mode:
+            try:
+                response = await self.compass_client.verify(
+                    username, conn.remote_node_id
+                )
+            except RequestFailure:
+                self.logger.warning(
+                    f"handle_new_connection: compass verification request failed for {username!r}"
+                )
+                await _reject()
+                return
 
-        verified = response.success
-        uid = response.details
+            verified = response.success
+            uid = response.details
 
-        if not verified:
-            _reject()
-            return  # TODO: log
+            if not verified:
+                self.logger.warning(
+                    f"handle_new_connection: {username!r} failed compass verification"
+                )
+                await _reject()
+                return
+        else:
+            uid = await self.hypixel_client.get_uuid(username)
 
         existing = self.received_broadcast_invites.get(
             username
         ) or self.received_broadcast_requests.get(username)
         if existing is not None:
-            _reject()
-            return  # TODO: log
+            self.logger.warning(
+                f"handle_new_connection: duplicate connection from {username!r}, rejecting"
+            )
+            await _reject()
+            return
 
         request = ConnectionRequest(
             from_player=username,

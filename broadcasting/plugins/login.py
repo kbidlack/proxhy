@@ -273,7 +273,7 @@ class BroadcastPeerLoginPlugin:
             .append(TextComponent("]").color("dark_gray"))
             .appends(TextComponent(f"{self.username}").color("aqua"))
         )
-        self.downstream.send_packet(
+        self.proxy.downstream.send_packet(
             0x38,
             VarInt.pack(0),  # action: add player
             VarInt.pack(1),  # number of players
@@ -282,7 +282,7 @@ class BroadcastPeerLoginPlugin:
             properties_data,
             VarInt.pack(2),  # gamemode: adventure
             VarInt.pack(0),  # ping
-            Boolean.pack(True),  # no display name for self
+            Boolean.pack(True),
             Chat.pack(display_name),
         )
 

@@ -26,13 +26,14 @@ _log_dir.mkdir(parents=True, exist_ok=True)
 _log_file = _log_dir / f"proxhy_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
 
 logging.basicConfig(
-    level=logging.DEBUG,
+    level=logging.WARNING,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
     handlers=[
         logging.FileHandler(_log_file, encoding="utf-8"),
         logging.StreamHandler(),
     ],
 )
+logging.getLogger("proxhy").setLevel(logging.INFO)
 
 logger = logging.getLogger("proxhy")
 
