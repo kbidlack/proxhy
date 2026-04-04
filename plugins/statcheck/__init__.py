@@ -583,16 +583,13 @@ class StatCheckPlugin:
         team_name = None
         color_code = None
 
-        # Special handling for current user - check sidebar for "YOU"
         if player_name == self.username:
             result = self._get_own_team_info()
             if result is None:
                 raise ValueError("Could not determine own team info")
             team_name, color_code = result
-        # Check for nicked player cached color
         elif player_name in self.nick_team_colors:
             team_name, color_code = self._get_nicked_player_team_info(player_name)
-        # Handle regular players
         else:
             team_name, color_code = self._get_regular_player_team_info(player_name)
 
@@ -650,10 +647,9 @@ class StatCheckPlugin:
         self: ProxhyPlugin, player_name: str
     ) -> tuple[str, str]:
         """Get team name and color code for a nicked player."""
-        m = COLOR_CODE.search(self.nick_team_colors[player_name])
+        m = TEAM_COLOR_CODE.search(self.nick_team_colors[player_name])
         color_code = m.group(1) if m else ""
-        # Use constant mapping instead of inline dict
-        team_name = COLOR_CODE_TO_NAME.get(color_code, "Unknown")
+        team_name = COLOR_CODE_TO_NAME.get(color_code, "?")
         return team_name, color_code
 
     def _get_regular_player_team_info(
@@ -818,13 +814,9 @@ class StatCheckPlugin:
                         self._send_tablist_update(str(player.uuid), display_name)
 
         # if we've gotten everyone from /who, stat highlights can be called
-        if (
-            self.settings.bedwars.display_top_stats.get() != "OFF"
-            and self.game.mode != "bedwars_two_one_duels"
-        ):
-            if not self.stats_highlighted:
-                await self.stat_highlights()
-                self.stats_highlighted = True
+        if not self.stats_highlighted:
+            await self.stat_highlights()
+            self.stats_highlighted = True
 
         self.update_stats_complete.set()  # emit an event to say we've finished statchecks
 
@@ -922,9 +914,7 @@ class StatCheckPlugin:
                         ]
             case _:
                 self.logger.warning(
-                    "highlight_adjacent_teams: unexpected first rush team size %d: %s",
-                    len(first_players),
-                    first_players,
+                    f"highlight_adjacent_teams: unexpected first rush team size {len(first_players):d}: {first_players}"
                 )
                 return
 
@@ -958,9 +948,7 @@ class StatCheckPlugin:
                         ]
                 case _:
                     self.logger.warning(
-                        "highlight_adjacent_teams: unexpected alt rush team size %d: %s",
-                        len(other_adjacent_players),
-                        other_adjacent_players,
+                        f"highlight_adjacent_teams: unexpected alt rush team size {len(other_adjacent_players):d}: {other_adjacent_players}"
                     )
                     return
         self.downstream.reset_title()
@@ -1007,17 +995,20 @@ class StatCheckPlugin:
 
     async def stat_highlights(self: ProxhyPlugin) -> None:
         """Display top 3 enemy players and nicked players."""
+        if self.settings.bedwars.display_top_stats.get() == "OFF":
+            return
+        if self.game.mode == "bedwars_two_one_duels":
+            return
         if not self.players_with_stats:
             return  # no stats
 
         try:
             own_team_color = self.get_team_color(self.username)["name"]
         except ValueError as e:
-            self.logger.warning("stat_highlights: could not determine own team color: %s", e)
+            self.logger.warning(
+                f"stat_highlights: could not determine own team color: {e}"
+            )
             return
-
-        # find team color as str (e.g. Pink, Blue, etc.)
-        # TODO: move to method?
 
         enemy_players = []
         enemy_nicks = []
@@ -1287,11 +1278,7 @@ class StatCheckPlugin:
 
         await self._update_stats()
         if not self.stats_highlighted:
-            if (
-                self.settings.bedwars.display_top_stats.get() != "OFF"
-                and self.game.mode != "bedwars_two_one_duels"
-            ):
-                await self.stat_highlights()
+            await self.stat_highlights()
 
     def match_kill_message(self: ProxhyPlugin, message: str) -> Optional[re.Match]:
         """Match a kill message against known patterns.

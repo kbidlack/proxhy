@@ -35,5 +35,5 @@ where = ["."]
 "assets" = ["*.json", "*.png"]
 
 [tool.uv.sources]
-compass = { git = "https://github.com/kbidlack/compass.git", rev = "213d1a9813d67d48686bef3be1aeb33cd0ece7fb" }
+compass = { git = "https://github.com/kbidlack/compass.git", rev = "076df9ed1b9fe12333dd9f331f05f9a5e0518636" }
 petty = { git = "https://github.com/kbidlack/petty.git", rev = "ea200702955ee0fc5b7cd71cc832a7968bc98490" }

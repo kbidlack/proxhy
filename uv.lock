@@ -139,8 +139,8 @@ wheels = [
 
 [[package]]
 name = "compass"
-version = "0.1.0"
-source = { git = "https://github.com/kbidlack/compass.git?rev=213d1a9813d67d48686bef3be1aeb33cd0ece7fb#213d1a9813d67d48686bef3be1aeb33cd0ece7fb" }
+version = "0.1.1"
+source = { git = "https://github.com/kbidlack/compass.git?rev=076df9ed1b9fe12333dd9f331f05f9a5e0518636#076df9ed1b9fe12333dd9f331f05f9a5e0518636" }
 dependencies = [
     { name = "httpx" },
     { name = "petty" },
@@ -571,7 +571,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "compass", git = "https://github.com/kbidlack/compass.git?rev=213d1a9813d67d48686bef3be1aeb33cd0ece7fb" },
+    { name = "compass", git = "https://github.com/kbidlack/compass.git?rev=076df9ed1b9fe12333dd9f331f05f9a5e0518636" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypixel-py", specifier = ">=0.4.2" },
     { name = "keyring", specifier = ">=25.6" },
