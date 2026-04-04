@@ -573,8 +573,11 @@ class BroadcastPlugin:
                 .append(f"! [OSError(errno={e.errno})]")
             )
         except ValueError:
-            # TODO: log
-            raise CommandException(f"This should not happen! {node_id=}")
+            raise CommandException(
+                TextComponent("Invalid node id! (").append(
+                    TextComponent(node_id).color("gold").append(")")
+                )
+            )
 
         self.create_task(self._iphone_ringtone())
         self.downstream.chat(
