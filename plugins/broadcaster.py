@@ -118,6 +118,7 @@ class BroadcastPlugin:
         self.sent_broadcast_requests = set()
         self.received_broadcast_invites = dict()
         self.received_broadcast_requests = dict()
+        self._last_broadcast_request_time: float = 0
 
         self._setup_broadcast_commands()
         self._setup_compass_commands()
@@ -511,6 +512,13 @@ class BroadcastPlugin:
                 .hover_text(TextComponent(f"/bc {command} {name}").color("gold"))
             )
 
+        now = asyncio.get_event_loop().time()
+        if now - self._last_broadcast_request_time < 5:
+            raise CommandException(
+                TextComponent("Please wait before sending another broadcast request!")
+                .color("red")
+            )
+
         if name.casefold() == self.username.casefold():
             raise CommandException(TextComponent(f"You cannot {command} yourself!"))
 
@@ -579,6 +587,7 @@ class BroadcastPlugin:
                 )
             )
 
+        self._last_broadcast_request_time = asyncio.get_event_loop().time()
         self.create_task(self._iphone_ringtone())
         self.downstream.chat(
             TextComponent(sent_msg)
