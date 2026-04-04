@@ -31,12 +31,22 @@ class MiscPlugin:
     async def _command_play(self: ProxhyPlugin, mode: Gamemode, *submodes: Submode):
         """Convenient aliases for Hypixel's /play command. Ex. /play bedwars solo"""
         if not submodes:
-            if Submode.SUBMODES.get(mode.mode_str):
-                raise CommandException("Please specify a submode!")
+            if submode_options := Submode.SUBMODES.get(mode.mode_str):
+                options = ", ".join(sorted(submode_options.keys()))
+                raise CommandException(
+                    TextComponent("Please specify a submode! Options: ").append(
+                        TextComponent(options).color("dark_aqua")
+                    )
+                )
             # no submodes for this game, play directly
             self.upstream.chat(f"/play {mode.mode_str}")
         elif submodes[-1].play_id is None:
-            raise CommandException("Please specify a complete submode!")
+            options = ", ".join(sorted((submodes[-1].node.children or {}).keys()))
+            raise CommandException(
+                TextComponent("Please specify a complete submode! Options: ").append(
+                    TextComponent(options).color("dark_aqua")
+                )
+            )
         else:
             self.upstream.chat(f"/play {submodes[-1].play_id}")
 
