@@ -406,6 +406,11 @@ class LoginPlugin:
                 .appends(TextComponent("soon!").color("white")),
                 duration=200,
             )
+            self.downstream.chat(
+                TextComponent("Regenerating credentials; you will be redirected to")
+                .appends(TextComponent(self.CONNECT_HOST[0]).color("green"))
+                .appends(TextComponent("soon!").color("yellow"))
+            )
             try:
                 self.access_token, self.username, self.uuid = await auth.load_auth_info(
                     self.username
