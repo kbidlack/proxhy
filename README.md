@@ -4,36 +4,22 @@ A Hypixel proxy.
 
 ## Installation
 
-The preferred method of installation is to use a Python package manager like `pipx` or `uv`:
-
-```bash
-pipx install git+https://github.com/kbidlack/proxhy
-```
-
-or
+The preferred method of installation is to use a Python package manager like `uv`:
 
 ```bash
 uv tool install git+https://github.com/kbidlack/proxhy
 ```
 
-Alternatively, you can install it using `pip`.
+You can also try out an ephemerally installed version with `uvx`:
 
 ```bash
-pip install git+https://github.com/kbidlack/proxhy
+uvx --from git+https://github.com/kbidlack/proxhy proxhy
 ```
 
 ## Upgrading
 
-With pipx or uv:
-
 ```bash
-pipx upgrade proxhy  # or: uv tool upgrade proxhy
-```
-
-With pip:
-
-```bash
-pip install --upgrade git+https://github.com/kbidlack/proxhy
+uv upgrade proxhy
 ```
 
 ## Usage
@@ -42,6 +28,12 @@ Start the proxy:
 
 ```bash
 proxhy
+```
+
+or
+
+```bash
+uv tool run proxhy
 ```
 
 By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:41223`.
@@ -60,16 +52,8 @@ By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:4122
 
 ## Uninstallation
 
-With pipx or uv:
-
 ```bash
-pipx uninstall proxhy  # or: uv tool uninstall proxhy
-```
-
-With pip:
-
-```bash
-pip uninstall proxhy
+uv tool uninstall proxhy
 ```
 
 **Note**: Proxhy stores settings, cached data, login credentials, and logs in platform-specific directories:
