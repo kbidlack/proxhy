@@ -225,6 +225,19 @@ class CompassGroup(SettingGroup):
             storage=storage,
         )
 
+        self.verify_node_id: Setting[Literal["ON", "OFF"]] = create_setting(
+            key="compass.verify_node_id",
+            display_name="Verify Node ID",
+            description="Verify the Iroh node ID of incoming requests via the compass broker",
+            item="minecraft:gold_nugget",
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
+            default_state="ON",
+            storage=storage,
+        )
+
 
 class ProxhySettings(SettingGroup):
     """Main settings class with type-safe access to all settings."""

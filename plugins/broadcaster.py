@@ -40,7 +40,7 @@ from gamestate.state import Vec3d
 from plugins.commands import CommandException, CommandGroup, command
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
 from proxhy.p2p import StreamIntent
-from proxhy.utils import short_node_id
+from proxhy.utils import offline_uuid, short_node_id
 
 from .broadcastee.proxy import broadcastee_plugin_list
 
@@ -303,10 +303,6 @@ class BroadcastPlugin:
         @bc.command("accept")
         async def _command_broadcast_accept(self: ProxhyPlugin, player: MojangPlayer):
             """Accept a broadcast invite or request from a player."""
-            if not self.compass_client.registered:
-                raise CommandException(
-                    "The compass client is not connected yet! (wait a second?)"
-                )
 
             request = self.received_broadcast_invites.get(
                 player.name
@@ -515,8 +511,9 @@ class BroadcastPlugin:
         now = asyncio.get_event_loop().time()
         if now - self._last_broadcast_request_time < 5:
             raise CommandException(
-                TextComponent("Please wait before sending another broadcast request!")
-                .color("red")
+                TextComponent(
+                    "Please wait before sending another broadcast request!"
+                ).color("red")
             )
 
         if name.casefold() == self.username.casefold():
@@ -924,7 +921,7 @@ class BroadcastPlugin:
             await writer.drain()
             conn.close()
 
-        if not self.dev_mode:
+        if not self.dev_mode and self.settings.compass.verify_node_id:
             try:
                 response = await self.compass_client.verify(
                     username, conn.remote_node_id
@@ -946,7 +943,20 @@ class BroadcastPlugin:
                 await _reject()
                 return
         else:
-            uid = await self.hypixel_client.get_uuid(username)
+            try:
+                async with asyncio.timeout(3):
+                    uid = await self.hypixel_client.get_uuid(username)
+            except Exception as e:
+                err_msg = (
+                    "timed out"
+                    if isinstance(e, asyncio.TimeoutError)
+                    else f"unknown error ({e!r})"
+                )
+                uid = offline_uuid(username)
+                self.logger.warning(
+                    f"handle_new_connection: {err_msg} while fetching uuid for {username!r};"
+                    f"using hash of 'OfflinePlayer:{username}'"
+                )
 
         existing = self.received_broadcast_invites.get(
             username

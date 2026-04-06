@@ -81,6 +81,9 @@ class Setting[S: str]:
         self.set(state_keys[next_index])
         return current_state, state_keys[next_index]
 
+    def __bool__(self) -> bool:
+        return self.get().lower() not in {"off", "false"}
+
 
 class SettingGroup:
     """Represents a group of settings with metadata."""
