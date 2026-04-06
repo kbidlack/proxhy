@@ -663,31 +663,6 @@ class BroadcastPlugin:
             self.joining_broadcast = False
             raise
 
-    async def _setup_broadcastee_proxy(
-        self: ProxhyPlugin,
-        reader: asyncio.StreamReader,
-        writer: asyncio.StreamWriter,
-        identifier: str,
-    ):
-        BroadcasteeProxy = type(
-            "BroadcasteeProxy",
-            (*broadcastee_plugin_list, Proxy),
-            {"username": self.username, "uuid": self.uuid},
-        )
-
-        new_proxy = BroadcasteeProxy(
-            self.downstream.reader,
-            self.downstream.writer,
-            autostart=False,
-        )
-
-        await new_proxy.create_server(reader, writer)
-        await self.transfer_to(new_proxy)
-
-        self.upstream.writer.write_eof()
-
-        await new_proxy.join(self.username, identifier)
-
     @subscribe("login_success")
     async def _broadcast_event_login_success(self: ProxhyPlugin, _match, _data):
         bc_pyroh_server_task = self.create_task(
