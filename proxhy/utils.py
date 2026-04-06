@@ -28,6 +28,9 @@ class APIClient(Client):
     # because i don't wnat to have to query twice
     # to get uuid & name
 
+    async def __aenter__(self) -> APIClient:
+        return await super().__aenter__()
+
     async def _get_skin_properties_helper(self, uuid: str):
         """Helper to fetch skin properties from Mojang session server."""
         uuid_no_hyphens = uuid.replace("-", "")

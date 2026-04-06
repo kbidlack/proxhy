@@ -37,7 +37,7 @@ from broadcasting.transform import (
     build_spawn_player_packet,
 )
 from gamestate.state import Vec3d
-from plugins.commands import CommandException, CommandGroup, command
+from plugins.commands import CommandException, CommandGroup, Lazy, command
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
 from proxhy.p2p import StreamIntent
 from proxhy.utils import offline_uuid, short_node_id
@@ -287,11 +287,13 @@ class BroadcastPlugin:
             await self._join_broadcast_with_streams(reader, writer, node_id)
 
         @bc.command("join")
-        async def _command_broadcast_join(self: ProxhyPlugin, player: MojangPlayer):
+        async def _command_broadcast_join(
+            self: ProxhyPlugin, player: Lazy[MojangPlayer]
+        ):
             """Send a request to join a player's broadcast."""
-            node_id = await self._get_player_node_id(player)
+            mplayer, node_id = await self._get_player_node_id(player)
             reader, writer = await self._ask_peer(
-                name=player.name,
+                name=mplayer.name,
                 node_id=node_id,
                 reason=StreamIntent.BROADCAST_REQUEST,
                 command="request",
@@ -301,12 +303,12 @@ class BroadcastPlugin:
             await self._join_broadcast_with_streams(reader, writer, node_id)
 
         @bc.command("accept")
-        async def _command_broadcast_accept(self: ProxhyPlugin, player: MojangPlayer):
+        async def _command_broadcast_accept(self: ProxhyPlugin, username: str):
             """Accept a broadcast invite or request from a player."""
 
             request = self.received_broadcast_invites.get(
-                player.name
-            ) or self.received_broadcast_requests.get(player.name)
+                username
+            ) or self.received_broadcast_requests.get(username)
             if request is None:
                 raise CommandException(
                     TextComponent(
@@ -353,11 +355,13 @@ class BroadcastPlugin:
             client.downstream.close()
 
         @bc.command("invite")
-        async def _command_broadcast_invite(self: ProxhyPlugin, player: MojangPlayer):
+        async def _command_broadcast_invite(
+            self: ProxhyPlugin, player: Lazy[MojangPlayer]
+        ):
             """Send a broadcast invite to a player."""
-            node_id = await self._get_player_node_id(player)
+            mplayer, node_id = await self._get_player_node_id(player)
             result = await self._ask_peer(
-                player.name,
+                mplayer.name,
                 node_id,
                 reason=StreamIntent.BROADCAST_INVITE,
                 command="invite",
@@ -462,9 +466,13 @@ class BroadcastPlugin:
                     msg.append(TextComponent(name).color("aqua"))
                 return msg
 
-    async def _get_player_node_id(self: ProxhyPlugin, player: MojangPlayer) -> str:
+    async def _get_player_node_id(
+        self: ProxhyPlugin, player: Lazy[MojangPlayer]
+    ) -> tuple[MojangPlayer, str]:
         if not self.compass_client.registered:
             raise CommandException("The compass client is not connected yet!")
+
+        player = await player
 
         try:
             async with asyncio.timeout(1):
@@ -489,7 +497,7 @@ class BroadcastPlugin:
         if not response.success:
             raise CommandException(response.details)
 
-        return response.details
+        return player, response.details
 
     async def _ask_peer(
         self: ProxhyPlugin,
@@ -929,7 +937,7 @@ class BroadcastPlugin:
                     if isinstance(e, asyncio.TimeoutError)
                     else f"unknown error ({e!r})"
                 )
-                uid = offline_uuid(username)
+                uid = str(offline_uuid(username))
                 self.logger.warning(
                     f"handle_new_connection: {err_msg} while fetching uuid for {username!r};"
                     f"using hash of 'OfflinePlayer:{username}'"

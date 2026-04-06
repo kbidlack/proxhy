@@ -135,7 +135,7 @@ class BroadcastPeerLoginPlugin:
             try:
                 async with APIClient() as c:
                     async with asyncio.timeout(2):
-                        self.uuid = str(uuid.UUID(await c._get_uuid(self.username)))
+                        self.uuid = str(uuid.UUID(await c.get_uuid(self.username)))
                         self.skin_properties = await c.get_skin_properties(self.uuid)
             except asyncio.TimeoutError:
                 self.proxy.downstream.chat(

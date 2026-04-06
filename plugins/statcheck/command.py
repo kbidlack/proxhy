@@ -87,7 +87,9 @@ class StatcheckCommandPlugin:
         self.create_task(self._login_success_helper())
 
     async def _login_success_helper(self: ProxhyPlugin):
-        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
+        self.hypixel_client = hypixel.Client(
+            self.hypixel_api_key, cache_h=False, cache_m=False
+        )
         self.create_task(self.migrate_log_stats())
         self.create_task(self.log_stats("login"))
 

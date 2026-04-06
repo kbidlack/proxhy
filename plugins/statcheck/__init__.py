@@ -12,6 +12,7 @@ from hypixel import (
     ApiError,
     InvalidApiKey,
     KeyRequired,
+    MalformedApiKey,
     Player,
     PlayerNotFound,
     RateLimitError,
@@ -244,11 +245,11 @@ class StatCheckPlugin:
         return all_players
 
     @property
-    def hypixel_api_key(self):
+    def hypixel_api_key(self) -> str:
         if self._hypixel_api_key:
             return self._hypixel_api_key
 
-        return keyring.get_password("proxhy", "hypixel_api_key")
+        return keyring.get_password("proxhy", "hypixel_api_key") or ""
 
     @hypixel_api_key.setter
     def hypixel_api_key(self: ProxhyPlugin, key: str):
@@ -1254,22 +1255,34 @@ class StatCheckPlugin:
             self.downstream.send_packet(0x02, buff.getvalue())
 
     @command("key", "apikey")
-    async def _command_key(self: ProxhyPlugin, key: str):
-        """Set your Hypixel API key."""
-        try:
-            new_client = hypixel.Client(key)
-            await new_client.player("gamerboy80")  # test key
-        except (InvalidApiKey, KeyRequired, ApiError):
-            raise CommandException("Invalid API Key!")
-        else:
-            if new_client:
-                await new_client.close()
+    async def _command_key(self: ProxhyPlugin, key: str = ""):
+        """Set or view your Hypixel API key."""
 
-        if self.hypixel_client:
-            await self.hypixel_client.close()
+        if not key:
+            if self.hypixel_api_key:
+                return (
+                    TextComponent("Hypixel API Key:")
+                    .color("yellow")
+                    .appends(
+                        TextComponent("[Click to Reveal]")
+                        .color("green")
+                        .click_event("suggest_command", self.hypixel_api_key)
+                    )
+                )
+            else:
+                raise CommandException("You have not set your Hypixel API key yet!")
+
+        try:
+            self.hypixel_client.remove_key(self.hypixel_api_key)
+            self.hypixel_client.add_key(key)
+            await self.hypixel_client.validate_keys()
+        except (MalformedApiKey, InvalidApiKey, KeyRequired, ApiError):
+            self.hypixel_client.remove_key(key)
+            self.hypixel_client.add_key(self.hypixel_api_key)
+            raise CommandException("Invalid API Key!")
 
         self.hypixel_api_key = key
-        self.hypixel_client = hypixel.Client(key)
+        self.hypixel_client = hypixel.Client(key, cache_h=False, cache_m=False)
         self._api_key_valid = True
         self._api_key_validated_at = asyncio.get_event_loop().time()
 
