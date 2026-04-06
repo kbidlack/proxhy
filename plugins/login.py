@@ -11,6 +11,8 @@ from unittest.mock import Mock
 import httpx
 import hypixel
 import orjson
+from hypixel import TimeoutError
+from numba.cuda.cudadrv.runtime import Runtime
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
 from petty.protocol.crypt import (
@@ -38,7 +40,7 @@ from petty.protocol.datatypes import (
 import auth
 from auth.errors import AuthException
 from proxhy import utils
-from proxhy.utils import Cache
+from proxhy.utils import APIClient, Cache
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
@@ -361,8 +363,24 @@ class LoginPlugin:
         # fake server stream
         self.upstream = Mock()
 
-        async with hypixel.Client() as c:
-            uuid_ = await c._get_uuid(self.username)
+        try:
+            _, _, uuid_ = await auth.load_auth_info(
+                self.username, refresh_if_expired=False
+            )
+        except RuntimeError:
+            try:
+                async with hypixel.Client(timeout=5) as c:
+                    uuid_ = await c.get_uuid(self.username)
+            except Exception as e:
+                self.downstream.send_packet(
+                    0x40,
+                    Chat.pack(
+                        TextComponent(f"Failed to fetch your UUID! ({e!r})").color(
+                            "dark_red"
+                        )
+                    ),
+                )
+                await self.close()
 
         self.downstream.send_packet(
             0x02, String.pack(str(uuid.UUID(uuid_))), String.pack(self.username)

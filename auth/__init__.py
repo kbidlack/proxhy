@@ -392,7 +392,9 @@ def token_needs_refresh(username: str) -> bool:
         return True
 
 
-async def load_auth_info(username: str = "") -> tuple[str, str, str]:
+async def load_auth_info(
+    username: str = "", refresh_if_expired: bool = True
+) -> tuple[str, str, str]:
     """
     Load cached auth info and refresh token if needed.
 
@@ -415,7 +417,7 @@ async def load_auth_info(username: str = "") -> tuple[str, str, str]:
 
     access_token, refresh_token, uuid = parts
 
-    if token_needs_refresh(username):
+    if token_needs_refresh(username) and refresh_if_expired:
         access_token, refresh_token = await _refresh_and_update_tokens(
             username, refresh_token, uuid
         )
