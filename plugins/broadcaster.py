@@ -610,6 +610,8 @@ class BroadcastPlugin:
                 .append(TextComponent(name).color("gold"))
                 .appends("expired!")
             )
+        except CommandException:
+            raise
         except Exception as e:
             raise CommandException(
                 TextComponent("An unknown error occurred while trying to connect to")
@@ -871,7 +873,7 @@ class BroadcastPlugin:
             TextComponent(f"The broadcast {word} from")
             .color("red")
             .appends(TextComponent(request.from_player).color("aqua"))
-            .appends(TextComponent(" expired!").color("red"))
+            .appends(TextComponent("expired!").color("red"))
         )
         request.writer.write(int.to_bytes(0))
 
