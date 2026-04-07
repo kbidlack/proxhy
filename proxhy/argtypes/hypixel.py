@@ -583,6 +583,7 @@ class Stat:
     json_key: str
     main: str
     aliases: list[str]
+    overall_only: bool = False
 
 
 class Statistic(CommandArg):
@@ -951,7 +952,227 @@ class Statistic(CommandArg):
                 main="presents",
                 aliases=[],
             ),
-        }
+        },
+        "skywars": {
+            # derived
+            "kdr": Stat(name="KDR", json_key="kdr", main="kdr", aliases=["k/d"]),
+            "wlr": Stat(name="WLR", json_key="wlr", main="wlr", aliases=["w/l"]),
+            # combat
+            "kills": Stat(name="Kills", json_key="kills", main="kills", aliases=[]),
+            "deaths": Stat(
+                name="Deaths", json_key="deaths", main="deaths", aliases=["dies"]
+            ),
+            "assists": Stat(
+                name="Assists", json_key="assists", main="assists", aliases=[]
+            ),
+            "melee_kills": Stat(
+                name="Melee Kills",
+                json_key="melee_kills",
+                main="melee_kills",
+                aliases=["melees"],
+            ),
+            "void_kills": Stat(
+                name="Void Kills",
+                json_key="void_kills",
+                main="void_kills",
+                aliases=[],
+            ),
+            "bow_kills": Stat(
+                name="Bow Kills",
+                json_key="bow_kills",
+                main="bow_kills",
+                aliases=["bows"],
+            ),
+            "fall_kills": Stat(
+                name="Fall Kills", json_key="fall_kills", main="fall_kills", aliases=[]
+            ),
+            "mob_kills": Stat(
+                name="Mob Kills", json_key="mob_kills", main="mob_kills", aliases=[]
+            ),
+            "arrows_hit": Stat(
+                name="Arrows Hit", json_key="arrows_hit", main="arrows_hit", aliases=[]
+            ),
+            "arrows_shot": Stat(
+                name="Arrows Shot",
+                json_key="arrows_shot",
+                main="arrows_shot",
+                aliases=[],
+            ),
+            "killstreak": Stat(
+                name="Killstreak",
+                json_key="killstreak",
+                main="killstreak",
+                aliases=["ks"],
+            ),
+            "survived_players": Stat(
+                name="Survived",
+                json_key="survived_players",
+                main="survived",
+                aliases=["survived"],
+            ),
+            # wins
+            "wins": Stat(name="Wins", json_key="wins", main="wins", aliases=[]),
+            "losses": Stat(name="Losses", json_key="losses", main="losses", aliases=[]),
+            "winstreak": Stat(
+                name="Winstreak", json_key="winstreak", main="winstreak", aliases=["ws"]
+            ),
+            # game info
+            "games": Stat(name="Games", json_key="games", main="games", aliases=[]),
+            "chests_opened": Stat(
+                name="Chests Opened",
+                json_key="chests_opened",
+                main="chests_opened",
+                aliases=["chests"],
+            ),
+            "time_played": Stat(
+                name="Time Played",
+                json_key="time_played",
+                main="time_played",
+                aliases=[],
+            ),
+            "quits": Stat(
+                name="Quits", json_key="quits", main="quits", aliases=["leaves"]
+            ),
+            # records
+            "most_kills_game": Stat(
+                name="Most Kills (Game)",
+                json_key="most_kills_game",
+                main="most_kills_game",
+                aliases=["best_game"],
+            ),
+            "fastest_win": Stat(
+                name="Fastest Win",
+                json_key="fastest_win",
+                main="fastest_win",
+                aliases=[],
+            ),
+            "longest_bow_shot": Stat(
+                name="Longest Bow Shot",
+                json_key="longest_bow_shot",
+                main="longest_bow_shot",
+                aliases=[],
+            ),
+            "longest_bow_kill": Stat(
+                name="Longest Bow Kill",
+                json_key="longest_bow_kill",
+                main="longest_bow_kill",
+                aliases=[],
+            ),
+            # overall only
+            "highest_winstreak": Stat(
+                name="Highest Winstreak",
+                json_key="highestWinstreak",
+                main="highest_winstreak",
+                aliases=["hws"],
+                overall_only=True,
+            ),
+            "highest_killstreak": Stat(
+                name="Highest Killstreak",
+                json_key="highestKillstreak",
+                main="highest_killstreak",
+                aliases=["hks"],
+                overall_only=True,
+            ),
+            "games_played": Stat(
+                name="Games Played (All)",
+                json_key="games_played_skywars",
+                main="games_played",
+                aliases=["plays"],
+                overall_only=True,
+            ),
+            "blocks_broken": Stat(
+                name="Blocks Broken",
+                json_key="blocks_broken",
+                main="blocks_broken",
+                aliases=[],
+                overall_only=True,
+            ),
+            "blocks_placed": Stat(
+                name="Blocks Placed",
+                json_key="blocks_placed",
+                main="blocks_placed",
+                aliases=[],
+                overall_only=True,
+            ),
+            "egg_thrown": Stat(
+                name="Eggs Thrown",
+                json_key="egg_thrown",
+                main="egg_thrown",
+                aliases=["eggs"],
+                overall_only=True,
+            ),
+            "enderpearls_thrown": Stat(
+                name="Enderpearls Thrown",
+                json_key="enderpearls_thrown",
+                main="enderpearls_thrown",
+                aliases=["pearls"],
+                overall_only=True,
+            ),
+            "items_enchanted": Stat(
+                name="Items Enchanted",
+                json_key="items_enchanted",
+                main="items_enchanted",
+                aliases=["enchants"],
+                overall_only=True,
+            ),
+            "refill_chest_destroy": Stat(
+                name="Refill Chests Destroyed",
+                json_key="refill_chest_destroy",
+                main="refill_chest_destroy",
+                aliases=["refills"],
+                overall_only=True,
+            ),
+            "souls_gathered": Stat(
+                name="Souls Gathered",
+                json_key="souls_gathered",
+                main="souls_gathered",
+                aliases=[],
+                overall_only=True,
+            ),
+            "soul_well": Stat(
+                name="Soul Well Uses",
+                json_key="soul_well",
+                main="soul_well",
+                aliases=[],
+                overall_only=True,
+            ),
+            "challenge_wins": Stat(
+                name="Challenge Wins",
+                json_key="challenge_wins",
+                main="challenge_wins",
+                aliases=["challenges"],
+                overall_only=True,
+            ),
+            "shard": Stat(
+                name="Shards",
+                json_key="shard",
+                main="shard",
+                aliases=["shards"],
+                overall_only=True,
+            ),
+            # cosmetics / collectibles
+            "souls": Stat(
+                name="Souls",
+                json_key="souls",
+                main="souls",
+                aliases=[],
+                overall_only=True,
+            ),
+            "heads": Stat(
+                name="Heads",
+                json_key="heads",
+                main="heads",
+                aliases=[],
+                overall_only=True,
+            ),
+            "coins": Stat(
+                name="Coins",
+                json_key="coins",
+                main="coins",
+                aliases=[],
+                overall_only=True,
+            ),
+        },
     }
 
     @staticmethod

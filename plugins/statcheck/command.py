@@ -15,14 +15,20 @@ from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
 from proxhy.utils import APIClient
 from proxhypixel.formatting import (
+    _sw_xp_to_level,
     format_bedwars_dict,
     format_bw_star,
+    format_skywars_dict,
+    format_sw_star,
     get_rankname,
 )
 from proxhypixel.mappings import (
     BEDWARS_DREAM_MAPPING_SIMPLE,
     BEDWARS_MAPPING_SIMPLE,
     BEDWARS_NON_DREAM_MAPPING,
+    SKYWARS_MODE_MAPPING,
+    SKYWARS_MODE_MAPPING_EXTRA,
+    SKYWARS_MODE_MAPPING_FULL,
 )
 
 if TYPE_CHECKING:
@@ -30,7 +36,7 @@ if TYPE_CHECKING:
 
 
 class StatcheckCommandPlugin:
-    SUPPORTED_GAMEMODES = {"bedwars"}
+    SUPPORTED_GAMEMODES = {"bedwars", "skywars"}
 
     log_path: Path
     log_stats: Callable[[str], Coroutine[Any, Any, None]]
@@ -224,7 +230,7 @@ class StatcheckCommandPlugin:
                 try:
                     entry = orjson.loads(line.strip())
                     if entry.get("player", "").casefold() == uuid and entry.get(
-                        "bedwars"
+                        gamemode
                     ):
                         entry["dt"] = datetime.datetime.fromisoformat(
                             entry["timestamp"]
@@ -380,14 +386,18 @@ class StatcheckCommandPlugin:
         gamemode = mode.mode_str
 
         # resolve player
+        _GAMEMODE_API_KEY = {
+            "bedwars": "Bedwars",
+            "skywars": "SkyWars",
+        }
+
         try:
             if player is not None:
                 current_player = player._player
             else:
                 current_player = await self.hypixel_client.player(self.username)
-            current_stats = current_player._data.get("stats", {}).get(
-                gamemode.capitalize(), {}
-            )
+            api_key = _GAMEMODE_API_KEY.get(gamemode, gamemode.capitalize())
+            current_stats = current_player._data.get("stats", {}).get(api_key, {})
         except Exception as e:
             raise CommandException(f"Failed to fetch current stats: {e}")
 
@@ -397,6 +407,10 @@ class StatcheckCommandPlugin:
 
         if gamemode == "bedwars":
             return await self._sc_bedwars(
+                current_player, current_stats, optional_window, stats, display_abridged
+            )
+        elif gamemode == "skywars":
+            return await self._sc_skywars(
                 current_player, current_stats, optional_window, stats, display_abridged
             )
 
@@ -486,3 +500,77 @@ class StatcheckCommandPlugin:
             stat_message += f"§r§f{stat.name}: §r{stat_value} "
 
         return TextComponent.from_legacy(stat_message).hover_text(hover_text)
+
+    async def _sc_skywars(
+        self: ProxhyPlugin,
+        player: hypixel.Player,
+        current_stats: dict,
+        window: Optional[float],
+        stats: tuple[Stat, ...],
+        display_abridged=True,
+    ):
+        if not stats:
+            STATS = Statistic.STATS["skywars"]
+            stats = (STATS["kills"], STATS["kdr"], STATS["wins"], STATS["wlr"])
+
+        SW_RATIO_DEPENDENCIES = {
+            "kdr": ("kills", "deaths"),
+            "wlr": ("wins", "losses"),
+        }
+
+        required_keys: list[str] = []
+        for mode_suffix in [""] + list(SKYWARS_MODE_MAPPING_FULL.values()):
+            suffix = f"_{mode_suffix}" if mode_suffix else ""
+            for s in stats:
+                if s.json_key in SW_RATIO_DEPENDENCIES:
+                    for dep in SW_RATIO_DEPENDENCIES[s.json_key]:
+                        required_keys.append(f"{dep}{suffix}")
+                else:
+                    required_keys.append(f"{s.json_key}{suffix}")
+
+        xp = current_stats.get("skywars_experience", 0)
+        level = _sw_xp_to_level(xp)
+        rankname = get_rankname(player)
+
+        if window:
+            old_stats, chosen_date = self._find_closest_stat_log(
+                player.uuid, window, "skywars"
+            )
+            diffs = self._calculate_stat_deltas(current_stats, old_stats, required_keys)
+            fdict = format_skywars_dict(diffs)
+            formatted_date = self._format_date_with_ordinal(chosen_date)
+            hover_text = f"Recent stats for {rankname}\nCalculated using data from {formatted_date}\n"
+        else:
+            fdict = format_skywars_dict(current_stats)
+            hover_text = f"Lifetime Stats for {rankname}§f:\n"
+
+        mode_stats = [s for s in stats if not s.overall_only]
+
+        def _mode_line(mode_: str, mode_key: str) -> str:
+            line = f"\n§c§l[{mode_.upper()}] "
+            for stat in mode_stats:
+                stat_value = fdict.get(f"{stat.json_key}_{mode_key}", 0)
+                line += f"§r§f{stat.name}: §r{stat_value} "
+            return line
+
+        if mode_stats:
+            hover_text += "".join(
+                _mode_line(m, k) for m, k in SKYWARS_MODE_MAPPING.items()
+            )
+            if display_abridged:
+                hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
+            else:
+                hover_text += "\n"
+                hover_text += "".join(
+                    _mode_line(m, k) for m, k in SKYWARS_MODE_MAPPING_EXTRA.items()
+                )
+
+        stat_message = f"{format_sw_star(level, player)} {rankname}: "
+        for stat in stats:
+            stat_value = fdict.get(stat.json_key, 0)
+            stat_message += f"§r§f{stat.name}: §r{stat_value} "
+
+        tc = TextComponent.from_legacy(stat_message)
+        if mode_stats:
+            tc = tc.hover_text(hover_text)
+        return tc

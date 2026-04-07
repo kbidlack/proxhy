@@ -13,7 +13,7 @@ from proxhypixel.mappings import (
     BEDWARS_MAPPING_FULL,
 )
 
-SUPPORTED_MODES: set[GAMETYPE_T] = {"bedwars"}
+SUPPORTED_MODES: set[GAMETYPE_T] = {"bedwars", "skywars"}
 
 
 def _resolve_player(player: Player | dict) -> dict:
@@ -418,7 +418,7 @@ def format_sw_wlr(wlr):
         return "§0" + str(wlr)
 
 
-def sw_icon(player: Player):
+def sw_icon(player: Player | dict):
     # Thanks SO MUCH to hxzelx on the forums for making a list of all of these.
     # If I had to search up all of these it would be joever
     icons = {
@@ -469,12 +469,13 @@ def sw_icon(player: Player):
         "mythic_prestige": "§lಠ§d_§5ಠ",
     }
     try:
-        return icons[player._data["stats"]["SkyWars"]["selected_prestige_icon"]]
+        data = player._data if isinstance(player, Player) else player
+        return icons[data["stats"]["SkyWars"]["selected_prestige_icon"]]
     except KeyError:  # occasionally there are errors with the default icon
         return "⋆"
 
 
-def format_sw_star(level, player: Player):
+def format_sw_star(level, player: Player | dict):
     stars = ""
     colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
     level = floor(level)
@@ -541,8 +542,128 @@ def format_player_dict(player: Player | dict, gamemode: GAMETYPE_T):
         fdict["rankname"] = get_rankname(data)
         fdict["raw_name"] = data.get("displayname", "")
         return fdict
+    elif gamemode == "skywars":
+        skywars_data = data.get("stats", {}).get("SkyWars", {})
+        fdict = dict(format_skywars_dict(skywars_data))
+        xp = skywars_data.get("skywars_experience", 0)
+        level = _sw_xp_to_level(xp)
+        kills = skywars_data.get("kills", 0)
+        deaths = skywars_data.get("deaths", 0)
+        wins = skywars_data.get("wins", 0)
+        losses = skywars_data.get("losses", 0)
+        fdict["star"] = format_sw_star(level, player)
+        fdict["raw_level"] = level
+        fdict["raw_kdr"] = safe_div(kills, deaths)
+        fdict["raw_wlr"] = safe_div(wins, losses)
+        fdict["rankname"] = get_rankname(data)
+        fdict["raw_name"] = data.get("displayname", "")
+        return fdict
     else:
         raise NotImplementedError("this is not implemented 🤯")
+
+
+_SW_XP_THRESHOLDS = [0, 20, 70, 150, 250, 500, 1000, 2000, 3500, 6000, 10000, 15000]
+
+
+def _sw_xp_to_level(xp: int | float) -> float:
+    for i in range(1, len(_SW_XP_THRESHOLDS)):
+        if xp < _SW_XP_THRESHOLDS[i]:
+            prev = _SW_XP_THRESHOLDS[i - 1]
+            return (i - 1) + (xp - prev) / (_SW_XP_THRESHOLDS[i] - prev)
+    return 12 + (xp - 15000) / 10000
+
+
+def format_skywars_dict(_data: dict):
+    _map_dict = {
+        # combat
+        "kills": format_sw_kills,
+        "deaths": format_sw_kills,
+        "kdr": format_sw_kdr,
+        "assists": format_sw_kills,
+        "melee_kills": format_sw_kills,
+        "void_kills": format_sw_kills,
+        "bow_kills": format_sw_kills,
+        "fall_kills": format_other,
+        "mob_kills": format_other,
+        "arrows_hit": format_other,
+        "arrows_shot": format_other,
+        "killstreak": format_other,
+        "survived_players": format_other,
+        # wins
+        "wins": format_sw_wins,
+        "losses": format_sw_wins,
+        "wlr": format_sw_wlr,
+        "winstreak": format_sw_wins,
+        # game info
+        "games": format_other,
+        "chests_opened": format_other,
+        "time_played": format_other,
+        "quits": format_other,
+        # records
+        "most_kills_game": format_other,
+        "fastest_win": format_other,
+        "longest_bow_shot": format_other,
+        "longest_bow_kill": format_other,
+        # overall only
+        "highestWinstreak": format_sw_wins,
+        "highestKillstreak": format_other,
+        "games_played_skywars": format_other,
+        "blocks_broken": format_other,
+        "blocks_placed": format_other,
+        "egg_thrown": format_other,
+        "enderpearls_thrown": format_other,
+        "items_enchanted": format_other,
+        "refill_chest_destroy": format_other,
+        "souls_gathered": format_other,
+        "soul_well": format_other,
+        "soul_well_legendaries": format_other,
+        "soul_well_rares": format_other,
+        "paid_souls": format_other,
+        "souls": format_other,
+        "heads": format_other,
+        "coins": format_other,
+        "challenge_wins": format_other,
+        "shard": format_other,
+    }
+
+    base_keys = list(_map_dict.keys())
+    data: defaultdict[str, int | float] = defaultdict(int, _data.copy())
+
+    modes = [
+        "",
+        "solo",
+        "solo_normal",
+        "solo_insane",
+        "team",
+        "team_normal",
+        "team_insane",
+        "mega",
+        "mega_normal",
+        "mega_doubles",
+        "ranked",
+        "ranked_normal",
+        "crazytourney_normal",
+        "tourney_teams_tourney",
+    ]
+    for mode in modes:
+        suffix = f"_{mode}" if mode else ""
+
+        for key in base_keys:
+            _map_dict[f"{key}{suffix}"] = _map_dict[key]
+
+        kills = data[f"kills{suffix}"]
+        deaths = data[f"deaths{suffix}"]
+        wins = data[f"wins{suffix}"]
+        losses = data[f"losses{suffix}"]
+
+        data[f"kdr{suffix}"] = safe_div(kills, deaths)
+        data[f"wlr{suffix}"] = safe_div(wins, losses)
+
+    for key in data:
+        if func := _map_dict.get(key):
+            data[key] = func(data[key])
+
+    return data
 
 
 def format_bedwars_dict(_data: dict):
