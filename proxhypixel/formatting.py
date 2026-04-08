@@ -726,6 +726,8 @@ def format_bedwars_dict(_data: dict):
         "resources_collected_bedwars": format_other,  # resources_collected; collects
         "wrapped_present_resources_collected_bedwars": format_other,  # presents
         "items_purchased_bedwars": format_other,  # purchases; items
+        "coins": format_other,
+        "Experience": format_other,
     }
 
     keys = _map_dict.copy().keys()

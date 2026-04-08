@@ -945,6 +945,21 @@ class Statistic(CommandArg):
                 main="winstreak",
                 aliases=["ws"],
             ),
+            # overall only
+            "coins": Stat(
+                name="Coins",
+                json_key="coins",
+                main="coins",
+                aliases=[],
+                overall_only=True,
+            ),
+            "experience": Stat(
+                name="Experience",
+                json_key="Experience",
+                main="experience",
+                aliases=["xp", "exp"],
+                overall_only=True,
+            ),
             # seasonal
             "presents": Stat(
                 name="Presents Collected",

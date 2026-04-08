@@ -467,6 +467,7 @@ class StatcheckCommandPlugin:
             BEDWARS_NON_DREAM_MAPPING if display_abridged else BEDWARS_MAPPING_SIMPLE
         )
 
+        mode_stats = [s for s in stats if not s.overall_only]
         mode_lines = []
         dreams_linebreak_added = False
 
@@ -481,16 +482,16 @@ class StatcheckCommandPlugin:
 
             mode_line = f"\n§c§l[{mode_.upper()}] "
 
-            for stat in stats:
+            for stat in mode_stats:
                 stat_json_key = f"{mode_key}_{stat.json_key}"
                 stat_value = fdict.get(stat_json_key, 0)
                 mode_line += f"§r§f{stat.name}: §r{stat_value} "
 
             mode_lines.append(mode_line)
 
-        if mode_lines:
+        if mode_stats and mode_lines:
             hover_text += "".join(mode_lines)
-        if display_abridged:
+        if mode_stats and display_abridged:
             hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
 
         # TODO: reduce code duplication here
@@ -499,7 +500,10 @@ class StatcheckCommandPlugin:
             stat_value = fdict.get(stat.json_key, 0)
             stat_message += f"§r§f{stat.name}: §r{stat_value} "
 
-        return TextComponent.from_legacy(stat_message).hover_text(hover_text)
+        tc = TextComponent.from_legacy(stat_message)
+        if mode_stats:
+            tc = tc.hover_text(hover_text)
+        return tc
 
     async def _sc_skywars(
         self: ProxhyPlugin,
