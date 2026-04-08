@@ -1008,7 +1008,7 @@ class Statistic(CommandArg):
                 name="Survived",
                 json_key="survived_players",
                 main="survived",
-                aliases=["survived"],
+                aliases=[],
             ),
             # wins
             "wins": Stat(name="Wins", json_key="wins", main="wins", aliases=[]),

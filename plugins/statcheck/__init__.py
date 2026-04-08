@@ -1275,14 +1275,14 @@ class StatCheckPlugin:
         try:
             self.hypixel_client.remove_key(self.hypixel_api_key)
             self.hypixel_client.add_key(key)
-            await self.hypixel_client.validate_keys()
-        except (MalformedApiKey, InvalidApiKey, KeyRequired, ApiError):
+            # validate_keys does not work anymore
+            await self.hypixel_client.player_count()
+        except (MalformedApiKey, InvalidApiKey):
             self.hypixel_client.remove_key(key)
             self.hypixel_client.add_key(self.hypixel_api_key)
             raise CommandException("Invalid API Key!")
 
         self.hypixel_api_key = key
-        self.hypixel_client = hypixel.Client(key, cache_h=False, cache_m=False)
         self._api_key_valid = True
         self._api_key_validated_at = asyncio.get_event_loop().time()
 
