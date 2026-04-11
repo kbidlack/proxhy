@@ -10,7 +10,7 @@ import orjson
 from petty.events import subscribe
 from petty.protocol.datatypes import TextComponent
 
-from plugins.commands import CommandException, Lazy, command
+from plugins.commands import CommandContext, CommandException, Lazy, command
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
 from proxhy.utils import APIClient
@@ -35,29 +35,42 @@ if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
 
-class StatcheckCommandPlugin:
-    SUPPORTED_GAMEMODES = {"bedwars", "skywars"}
+class SCSupportedGamemode(Gamemode):
+    SUPPORTED: set[GAMETYPE_T] = {"bedwars", "skywars"}
 
-    log_path: Path
-    log_stats: Callable[[str], Coroutine[Any, Any, None]]
-
-    def _check_gamemode(self: ProxhyPlugin, gamemode: Gamemode):
-        if gamemode.mode_str not in self.SUPPORTED_GAMEMODES:
+    @classmethod
+    async def convert(cls, ctx: CommandContext, value: str) -> "SCSupportedGamemode":
+        gamemode = await super().convert(ctx, value)
+        if gamemode.mode_str not in cls.SUPPORTED:
             raise CommandException(
                 TextComponent(gamemode.display_name)
                 .color("gold")
                 .appends("is not a supported gamemode!")
             )
+        return cls(gamemode.mode_str)
+
+    @classmethod
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
+        s = partial.lower().strip()
+        return [
+            cls.GAMES[mode]["main_alias"]
+            for mode in cls.SUPPORTED
+            if cls.GAMES[mode]["main_alias"].startswith(s)
+        ]
+
+
+class StatcheckCommandPlugin:
+    log_path: Path
+    log_stats: Callable[[str], Coroutine[Any, Any, None]]
 
     @command("sc", "statcheck")
     async def _command_statcheck(
         self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Gamemode = Gamemode("bedwars"),
+        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         *stats: Statistic,
     ):
         """Check player stats."""
-        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(player=player, mode=mode, stat_names=stats)
 
@@ -65,12 +78,11 @@ class StatcheckCommandPlugin:
     async def _command_scweekly(
         self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Gamemode = Gamemode("bedwars"),
+        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         window: float = 7.0,
         *stats: Statistic,
     ):
         """Check a player's weekly (or timed) stats."""
-        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(player, window, mode, stat_names=stats)
 
@@ -78,11 +90,10 @@ class StatcheckCommandPlugin:
     async def _command_scfull(
         self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Gamemode = Gamemode("bedwars"),
+        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         *stats: Statistic,
     ):
         """Check player stats with all modes."""
-        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(
             player=player, mode=mode, stat_names=stats, display_abridged=False
@@ -379,7 +390,7 @@ class StatcheckCommandPlugin:
         self: ProxhyPlugin,
         player: Optional[HypixelPlayer] = None,
         window: float = -1.0,
-        mode: Gamemode = Gamemode("bedwars"),
+        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         stat_names: tuple[Statistic, ...] = tuple(),
         display_abridged=True,
     ):

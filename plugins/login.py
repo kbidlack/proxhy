@@ -11,8 +11,6 @@ from unittest.mock import Mock
 import httpx
 import hypixel
 import orjson
-from hypixel import TimeoutError
-from numba.cuda.cudadrv.runtime import Runtime
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
 from petty.protocol.crypt import (
@@ -40,7 +38,7 @@ from petty.protocol.datatypes import (
 import auth
 from auth.errors import AuthException
 from proxhy import utils
-from proxhy.utils import APIClient, Cache
+from proxhy.utils import Cache
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
@@ -539,6 +537,7 @@ class LoginPlugin:
                 json=payload,
             )
             if response.status_code != 204:
+                # TODO: log
                 raise Exception(
                     f"Login failed: {response.status_code} {response.json()}"
                 )
