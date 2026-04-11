@@ -1218,9 +1218,14 @@ class Statistic(CommandArg):
         s = value.lower().strip()
         gamemode = await ctx.get_arg(Gamemode)
 
-        gamemodes = (
-            [gamemode.mode_str] if gamemode is not None else list(Gamemode.GAMES.keys())
-        )
+        if gamemode is not None:
+            gamemodes = [gamemode.mode_str]
+        else:
+            proxy_game = getattr(ctx.proxy, "game", None)
+            current_gm = proxy_game.gametype if proxy_game else ""
+            gamemodes = (
+                [current_gm] if current_gm in cls.STAT_LOOKUP else list(cls.STAT_LOOKUP.keys())
+            )
 
         for gm in gamemodes:
             if stat := cls.STAT_LOOKUP[gm].get(s):
@@ -1240,9 +1245,14 @@ class Statistic(CommandArg):
         if gamemode is not None:
             statistics = list(cls.STATS[gamemode.mode_str].keys())
         else:
-            statistics: list[str] = []
-            for gm in Gamemode.GAMES:
-                statistics.extend(cls.STATS[gm].keys())
+            proxy_game = getattr(ctx.proxy, "game", None)
+            current_gm = proxy_game.gametype if proxy_game else ""
+            if current_gm in cls.STATS:
+                statistics = list(cls.STATS[current_gm].keys())
+            else:
+                statistics: list[str] = []
+                for gm in cls.STATS:
+                    statistics.extend(cls.STATS[gm].keys())
 
         matches = [stat for stat in statistics if stat.startswith(s)]
         matches.sort(key=len)

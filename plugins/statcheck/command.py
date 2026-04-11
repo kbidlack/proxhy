@@ -39,7 +39,7 @@ class SCSupportedGamemode(Gamemode):
     SUPPORTED: set[GAMETYPE_T] = {"bedwars", "skywars"}
 
     @classmethod
-    async def convert(cls, ctx: CommandContext, value: str) -> "SCSupportedGamemode":
+    async def convert(cls, ctx: CommandContext, value: str) -> SCSupportedGamemode:
         gamemode = await super().convert(ctx, value)
         if gamemode.mode_str not in cls.SUPPORTED:
             raise CommandException(
@@ -63,40 +63,82 @@ class StatcheckCommandPlugin:
     log_path: Path
     log_stats: Callable[[str], Coroutine[Any, Any, None]]
 
+    def _resolve_mode(
+        self: ProxhyPlugin, mode: Optional[SCSupportedGamemode]
+    ) -> SCSupportedGamemode:
+        if mode is not None:
+            return mode
+        gametype = self.game.gametype
+        if gametype in SCSupportedGamemode.SUPPORTED:
+            return SCSupportedGamemode(gametype)
+        return SCSupportedGamemode("bedwars")
+
     @command("sc", "statcheck")
     async def _command_statcheck(
         self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
+        mode: Optional[SCSupportedGamemode] = None,
+        window: Optional[float] = None,
         *stats: Statistic,
     ):
         """Check player stats."""
         player = await _player if _player else None
-        return await self._sc_internal(player=player, mode=mode, stat_names=stats)
+        return await self._sc_internal(
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=window,
+            stat_names=stats,
+        )
 
     @command("scw", "scweekly")
     async def _command_scweekly(
         self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
-        window: float = 7.0,
+        mode: Optional[SCSupportedGamemode] = None,
         *stats: Statistic,
     ):
-        """Check a player's weekly (or timed) stats."""
+        """Check player stats for the past 7 days."""
         player = await _player if _player else None
-        return await self._sc_internal(player, window, mode, stat_names=stats)
+        return await self._sc_internal(
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=7.0,
+            stat_names=stats,
+        )
+
+    @command("scwfull", "scweeklyfull")
+    async def _command_scweeklyfull(
+        self: ProxhyPlugin,
+        _player: Optional[Lazy[HypixelPlayer]] = None,
+        mode: Optional[SCSupportedGamemode] = None,
+        *stats: Statistic,
+    ):
+        """Check player stats for the past 7 days with all modes."""
+        player = await _player if _player else None
+        return await self._sc_internal(
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=7.0,
+            stat_names=stats,
+            display_abridged=False,
+        )
 
     @command("scfull")
     async def _command_scfull(
         self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
+        mode: Optional[SCSupportedGamemode] = None,
+        window: Optional[float] = None,
         *stats: Statistic,
     ):
         """Check player stats with all modes."""
         player = await _player if _player else None
         return await self._sc_internal(
-            player=player, mode=mode, stat_names=stats, display_abridged=False
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=window,
+            stat_names=stats,
+            display_abridged=False,
         )
 
     @subscribe("login_success")
@@ -389,7 +431,7 @@ class StatcheckCommandPlugin:
     async def _sc_internal(
         self: ProxhyPlugin,
         player: Optional[HypixelPlayer] = None,
-        window: float = -1.0,
+        window: Optional[float] = None,
         mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         stat_names: tuple[Statistic, ...] = tuple(),
         display_abridged=True,
@@ -414,15 +456,13 @@ class StatcheckCommandPlugin:
 
         stats = tuple(s.stat for s in stat_names)
 
-        optional_window = window if window != -1.0 else None
-
         if gamemode == "bedwars":
             return await self._sc_bedwars(
-                current_player, current_stats, optional_window, stats, display_abridged
+                current_player, current_stats, window, stats, display_abridged
             )
         elif gamemode == "skywars":
             return await self._sc_skywars(
-                current_player, current_stats, optional_window, stats, display_abridged
+                current_player, current_stats, window, stats, display_abridged
             )
 
     async def _sc_bedwars(
@@ -460,7 +500,7 @@ class StatcheckCommandPlugin:
 
         rankname = get_rankname(player)
 
-        if window:
+        if window is not None:
             old_stats, chosen_date = self._find_closest_stat_log(
                 player.uuid, window, "bedwars"
             )
@@ -547,7 +587,7 @@ class StatcheckCommandPlugin:
         level = _sw_xp_to_level(xp)
         rankname = get_rankname(player)
 
-        if window:
+        if window is not None:
             old_stats, chosen_date = self._find_closest_stat_log(
                 player.uuid, window, "skywars"
             )

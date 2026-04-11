@@ -1,3 +1,7 @@
+from __future__ import annotations  # i know we're running python 3.14
+
+# but for some reason the vec3d below in other: Vec3d fails if I don't
+# put this here???
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -27,19 +31,19 @@ class Vec3d:
         self.y = y
         self.z = z
 
-    def __sub__(self, other: "Vec3d") -> "Vec3d":
+    def __sub__(self, other: Vec3d) -> Vec3d:
         return Vec3d(self.x - other.x, self.y - other.y, self.z - other.z)
 
-    def __add__(self, other: "Vec3d") -> "Vec3d":
+    def __add__(self, other: Vec3d) -> Vec3d:
         return Vec3d(self.x + other.x, self.y + other.y, self.z + other.z)
 
-    def __mul__(self, scalar: float) -> "Vec3d":
+    def __mul__(self, scalar: float) -> Vec3d:
         return Vec3d(self.x * scalar, self.y * scalar, self.z * scalar)
 
-    def __truediv__(self, scalar: float) -> "Vec3d":
+    def __truediv__(self, scalar: float) -> Vec3d:
         return Vec3d(self.x / scalar, self.y / scalar, self.z / scalar)
 
-    def __floordiv__(self, scalar: float) -> "Vec3d":
+    def __floordiv__(self, scalar: float) -> Vec3d:
         return Vec3d(self.x // scalar, self.y // scalar, self.z // scalar)
 
     def __eq__(self, other: object) -> bool:
@@ -52,7 +56,7 @@ class Vec3d:
             return True
         return self.x != other.x or self.y != other.y or self.z != other.z
 
-    def copy(self) -> "Vec3d":
+    def copy(self) -> Vec3d:
         return Vec3d(self.x, self.y, self.z)
 
 
@@ -76,16 +80,16 @@ class Vec3i:
         self.y = y
         self.z = z
 
-    def __sub__(self, other: "Vec3i") -> "Vec3i":
+    def __sub__(self, other: Vec3i) -> Vec3i:
         return Vec3i(self.x - other.x, self.y - other.y, self.z - other.z)
 
-    def __add__(self, other: "Vec3i") -> "Vec3i":
+    def __add__(self, other: Vec3i) -> Vec3i:
         return Vec3i(self.x + other.x, self.y + other.y, self.z + other.z)
 
-    def __mul__(self, scalar: int) -> "Vec3i":
+    def __mul__(self, scalar: int) -> Vec3i:
         return Vec3i(self.x * scalar, self.y * scalar, self.z * scalar)
 
-    def __floordiv__(self, scalar: int) -> "Vec3i":
+    def __floordiv__(self, scalar: int) -> Vec3i:
         return Vec3i(self.x // scalar, self.y // scalar, self.z // scalar)
 
     def __eq__(self, other: object) -> bool:
@@ -98,7 +102,7 @@ class Vec3i:
             return True
         return self.x != other.x or self.y != other.y or self.z != other.z
 
-    def copy(self) -> "Vec3i":
+    def copy(self) -> Vec3i:
         return Vec3i(self.x, self.y, self.z)
 
 
