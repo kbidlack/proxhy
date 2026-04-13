@@ -1,7 +1,6 @@
 # nearly 500 lines of fake code
 # credit for most of the busywork goes to someone other than me
 from collections import defaultdict
-from math import floor
 
 from hypixel import Player
 from hypixel.color import Color
@@ -418,116 +417,6 @@ def format_sw_wlr(wlr):
         return "§0" + str(wlr)
 
 
-def sw_icon(player: Player | dict):
-    # Thanks SO MUCH to hxzelx on the forums for making a list of all of these.
-    # If I had to search up all of these it would be joever
-    icons = {
-        "angel_1": "★",
-        "angel_2": "☆",
-        "angel_3": "⁕",
-        "angel_4": "✶",
-        "angel_5": "✳",
-        "angel_6": "✴",
-        "angel_7": "✷",
-        "angel_8": "❋",
-        "angel_9": "✼",
-        "angel_10": "❂",
-        "angel_11": "❁",
-        "angel_12": "☬",
-        "omega_icon": "Ω",
-        "favor_icon": "⚔",
-        "default": "⋆",
-        "iron_prestige": "✙",
-        "gold_prestige": "❤",
-        "diamond_prestige": "☠",
-        "emerald_prestige": "✦",
-        "sapphire_prestige": "✌",
-        "ruby_prestige": "❦",
-        "crystal_prestige": "✵",
-        "opal_prestige": "❣",
-        "amethyst_prestige": "☯",
-        "rainbow_prestige": "✺",
-        "first_class_prestige": "✈",
-        "assassin_prestige": "⚰",
-        "veteran_prestige": "✠",
-        "god_like_prestige": "♕",
-        "warrior_prestige": "⚡",
-        "captain_prestige": "⁂",
-        "soldier_prestige": "✰",
-        "infantry_prestige": "⁑",
-        "sergeant_prestige": "☢",
-        "lieutenant_prestige": "✥",
-        "admiral_prestige": "♝",
-        "general_prestige": "♆",
-        "villain_prestige": "☁",
-        "skilled_prestige": "⍟",
-        "sneaky_prestige": "♗",
-        "overlord_prestige": "♔",
-        "war_chief_prestige": "♞",
-        "warlock_prestige": "✏",
-        "emperor_prestige": "❈",
-        "mythic_prestige": "§lಠ§d_§5ಠ",
-    }
-    try:
-        data = player._data if isinstance(player, Player) else player
-        return icons[data["stats"]["SkyWars"]["selected_prestige_icon"]]
-    except KeyError:  # occasionally there are errors with the default icon
-        return "⋆"
-
-
-def format_sw_star(level, player: Player | dict):
-    stars = ""
-    colors = ["§7", "§f", "§6", "§b", "§2", "§3", "§4", "§d", "§9", "§5"]
-    level = floor(level)
-    if level < 50:
-        stars = f"{colors[int(level // 5)]}[{level}{sw_icon(player)}]"
-    elif level < 55:
-        level = str(level)
-        stars = f"§c[§6{level[0]}§e{level[1]}§a{sw_icon(player)}§b]"
-    elif level < 60:
-        stars = f"§7[§f{level}{sw_icon(player)}§7]"
-    elif level < 65:
-        stars = f"§4[§c{level}{sw_icon(player)}§4]"
-    elif level < 70:
-        stars = f"§c[§f{level}{sw_icon(player)}§c]"
-    elif level < 75:
-        stars = f"§e[§6{level}{sw_icon(player)}§7]"
-    elif level < 80:
-        stars = f"§f[§1{level}{sw_icon(player)}§f]"
-    elif level < 85:
-        stars = f"§f[§b{level}{sw_icon(player)}§f]"
-    elif level < 90:
-        stars = f"§f[§3{level}{sw_icon(player)}§f]"
-    elif level < 95:
-        stars = f"§a[§3{level}{sw_icon(player)}§a]"
-    elif level < 100:
-        stars = f"§c[§e{level}{sw_icon(player)}§c]"
-    elif level < 105:
-        stars = f"§9[§1{level}{sw_icon(player)}§9]"
-    elif level < 110:
-        stars = f"§6[§4{level}{sw_icon(player)}§6]"
-    elif level < 115:
-        stars = f"§1[§d{level}{sw_icon(player)}§1]"
-    elif level < 120:
-        stars = f"§8[§7{level}{sw_icon(player)}§8]"
-    elif level < 125:
-        stars = f"§d[§5{level}{sw_icon(player)}§d]"
-    elif level < 130:
-        stars = f"§f[§e{level}{sw_icon(player)}§f]"
-    elif level < 135:
-        stars = f"§c[§e{level}{sw_icon(player)}§c]"
-    elif level < 140:
-        stars = f"§6[§c{level}{sw_icon(player)}§6]"
-    elif level < 145:
-        stars = f"§a[§c{level}{sw_icon(player)}§a]"
-    elif level < 150:
-        stars = f"§a[§b{level}{sw_icon(player)}§a]"
-    else:
-        level = str(level)
-        stars = f"§l§c§k[§r§6§l{level[0]}§e§l{level[1]}§a§l{level[2]}§b§l{sw_icon(player)}§l§c§k]§r"
-    return stars
-
-
 def format_player_dict(player: Player | dict, gamemode: GAMETYPE_T):
     data = _resolve_player(player)
     if gamemode == "bedwars":
@@ -551,7 +440,7 @@ def format_player_dict(player: Player | dict, gamemode: GAMETYPE_T):
         deaths = skywars_data.get("deaths", 0)
         wins = skywars_data.get("wins", 0)
         losses = skywars_data.get("losses", 0)
-        fdict["star"] = format_sw_star(level, player)
+        fdict["star"] = (skywars_data.get("levelFormattedWithBrackets") or "").rstrip()
         fdict["raw_level"] = level
         fdict["raw_kdr"] = safe_div(kills, deaths)
         fdict["raw_wlr"] = safe_div(wins, losses)

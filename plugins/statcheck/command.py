@@ -15,11 +15,9 @@ from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
 from proxhy.utils import APIClient
 from proxhypixel.formatting import (
-    _sw_xp_to_level,
     format_bedwars_dict,
     format_bw_star,
     format_skywars_dict,
-    format_sw_star,
     get_rankname,
 )
 from proxhypixel.mappings import (
@@ -583,8 +581,6 @@ class StatcheckCommandPlugin:
                 else:
                     required_keys.append(f"{s.json_key}{suffix}")
 
-        xp = current_stats.get("skywars_experience", 0)
-        level = _sw_xp_to_level(xp)
         rankname = get_rankname(player)
 
         if window is not None:
@@ -620,7 +616,8 @@ class StatcheckCommandPlugin:
                     _mode_line(m, k) for m, k in SKYWARS_MODE_MAPPING_EXTRA.items()
                 )
 
-        stat_message = f"{format_sw_star(level, player)} {rankname}: "
+        star = (current_stats.get("levelFormattedWithBrackets") or "").rstrip()
+        stat_message = f"{star} {rankname}: "
         for stat in stats:
             stat_value = fdict.get(stat.json_key, 0)
             stat_message += f"§r§f{stat.name}: §r{stat_value} "
