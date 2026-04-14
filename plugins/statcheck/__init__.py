@@ -1254,6 +1254,13 @@ class StatCheckPlugin:
         if not suppress:
             self.downstream.send_packet(0x02, buff.getvalue())
 
+    @command("resetkey")
+    async def _command_reset_key(self: ProxhyPlugin):
+        """Reset your Hypixel API key."""
+        self.hypixel_client.remove_key(self.hypixel_api_key)
+        self.hypixel_api_key = ""
+        return TextComponent("Reset your Hypixel API key!").color("green")
+
     @command("key", "apikey")
     async def _command_key(self: ProxhyPlugin, key: str = ""):
         """Set or view your Hypixel API key."""
@@ -1267,6 +1274,11 @@ class StatCheckPlugin:
                         TextComponent("[Click to Reveal]")
                         .color("green")
                         .click_event("suggest_command", self.hypixel_api_key)
+                    )
+                    .appends(
+                        TextComponent("[Click to Reset]")
+                        .color("red")
+                        .click_event("run_command", "/resetkey")
                     )
                 )
             else:
