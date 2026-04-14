@@ -89,8 +89,7 @@ class StatcheckCommandPlugin:
 
         if player.last_login is None:
             raise CommandException(
-                TextComponent(rankname)
-                .appends("has their online status hidden.")
+                TextComponent(rankname).appends("has their online status hidden.")
             )
 
         online = player.last_logout is None or player.last_login > player.last_logout
@@ -538,6 +537,10 @@ class StatcheckCommandPlugin:
                     required_keys.append(f"{prefix}{s.json_key}")
 
         rankname = get_rankname(player)
+        online = player.last_login and (
+            player.last_logout is None or player.last_login > player.last_logout
+        )
+        online_suffix = " §a(ONLINE)" if online else ""
 
         if window is not None:
             old_stats, chosen_date = self._find_closest_stat_log(
@@ -550,7 +553,7 @@ class StatcheckCommandPlugin:
             hover_text = f"Recent stats for {rankname}\nCalculated using data from {formatted_date}\n"
         else:
             fdict = format_bedwars_dict(current_stats)
-            hover_text = f"Lifetime Stats for {rankname}§f:\n"
+            hover_text = f"Lifetime Stats for {rankname}§f:{online_suffix}\n"
             old_stats = {}
 
         modes = (
@@ -623,6 +626,10 @@ class StatcheckCommandPlugin:
                     required_keys.append(f"{s.json_key}{suffix}")
 
         rankname = get_rankname(player)
+        online = player.last_login and (
+            player.last_logout is None or player.last_login > player.last_logout
+        )
+        online_suffix = " §a(ONLINE)" if online else ""
 
         if window is not None:
             old_stats, chosen_date = self._find_closest_stat_log(
@@ -634,7 +641,7 @@ class StatcheckCommandPlugin:
             hover_text = f"Recent stats for {rankname}\nCalculated using data from {formatted_date}\n"
         else:
             fdict = format_skywars_dict(current_stats)
-            hover_text = f"Lifetime Stats for {rankname}§f:\n"
+            hover_text = f"Lifetime Stats for {rankname}§f:{online_suffix}\n"
 
         mode_stats = [s for s in stats if not s.overall_only]
 
