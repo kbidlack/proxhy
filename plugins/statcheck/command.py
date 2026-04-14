@@ -71,6 +71,47 @@ class StatcheckCommandPlugin:
             return SCSupportedGamemode(gametype)
         return SCSupportedGamemode("bedwars")
 
+    @command("lastlogin", "ll")
+    async def _command_lastlogin(
+        self: ProxhyPlugin,
+        _player: Optional[Lazy[HypixelPlayer]] = None,
+    ):
+        """Check when a player last logged in to Hypixel."""
+        try:
+            if _player is not None:
+                player = (await _player)._player
+            else:
+                player = await self.hypixel_client.player(self.username)
+        except Exception as e:
+            raise CommandException(f"Failed to fetch player: {e}")
+
+        rankname = get_rankname(player)
+
+        if player.last_login is None:
+            raise CommandException(
+                TextComponent(rankname)
+                .appends("has their online status hidden.")
+            )
+
+        online = player.last_logout is None or player.last_login > player.last_logout
+        if online:
+            return (
+                TextComponent(rankname)
+                .color("white")
+                .appends(TextComponent("is currently online.").color("green"))
+            )
+        else:
+            local_login = player.last_login.astimezone()
+            formatted = self._format_date_with_ordinal(local_login)
+            tz_name = local_login.strftime("%Z")
+            return (
+                TextComponent(rankname)
+                .color("white")
+                .appends("last logged in")
+                .appends(TextComponent(formatted).color("gold"))
+                .appends(TextComponent(f"({tz_name})").color("gray"))
+            )
+
     @command("sc", "statcheck")
     async def _command_statcheck(
         self: ProxhyPlugin,
