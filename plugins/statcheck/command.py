@@ -489,6 +489,8 @@ class StatcheckCommandPlugin:
                 current_player = await self.hypixel_client.player(self.username)
             api_key = _GAMEMODE_API_KEY.get(gamemode, gamemode.capitalize())
             current_stats = current_player._data.get("stats", {}).get(api_key, {})
+        except (hypixel.KeyRequired, hypixel.InvalidApiKey):
+            raise CommandException("Invalid Hypixel API key!")
         except Exception as e:
             raise CommandException(f"Failed to fetch current stats: {e}")
 
