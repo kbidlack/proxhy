@@ -1,10 +1,8 @@
 import asyncio
 import random
 import re
-import shelve
 import uuid as uuid_mod
 from dataclasses import dataclass
-from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
 import compass
@@ -26,8 +24,6 @@ from petty.protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from platformdirs import user_config_dir
-
 import auth
 from broadcasting.plugin import BroadcastPeerPlugin
 from broadcasting.proxy import BroadcastPeerProxy
@@ -39,6 +35,7 @@ from broadcasting.transform import (
 from gamestate.state import Vec3d
 from plugins.commands import CommandException, CommandGroup, Lazy, command
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
+from proxhy.player_list import PlayerList, PlayerListSystem
 from proxhy.p2p import StreamIntent
 from proxhy.utils import offline_uuid, short_node_id
 
@@ -62,7 +59,6 @@ class ConnectionRequest:
 
 
 class BroadcastPlugin:
-    BC_DATA_PATH: Path
     clients: list[BroadcastPeerPlugin]
 
     sent_broadcast_requests: set[str]
@@ -81,20 +77,6 @@ class BroadcastPlugin:
     compass_client: CompassClient
 
     def _init_broadcasting(self: ProxhyPlugin):
-        self.BC_DATA_PATH = Path(user_config_dir("proxhy")) / "broadcast.db"
-
-        with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
-            if not db.get("trusted"):
-                db["trusted"] = dict()  # uuid: name
-
-        self.WHITELIST_DATA_PATH = (
-            Path(user_config_dir("proxhy")) / "compass_whitelist.db"
-        )
-
-        with shelve.open(self.WHITELIST_DATA_PATH, writeback=True) as db:
-            if not db.get("players"):
-                db["players"] = set()
-
         self.clients: list[BroadcastPeerProxy] = []
         self.joining_broadcast: bool = False
 
@@ -125,8 +107,7 @@ class BroadcastPlugin:
 
     @property
     def whitelist(self: ProxhyPlugin) -> set[str]:
-        with shelve.open(self.WHITELIST_DATA_PATH) as db:
-            return db["players"]
+        return set(PlayerList("whitelist").names())
 
     def _setup_compass_commands(self: ProxhyPlugin):
         compass = CommandGroup("compass", help="Compass client commands.")
@@ -166,85 +147,15 @@ class BroadcastPlugin:
 
         # TODO: add /compass restart and /compass close (or deinit) if needed
 
-        whitelist = compass.group(
-            "whitelist", "wl", help="Manage your compass whitelist."
-        )
-
-        @whitelist.command("add")
-        async def _command_compass_whitelist_add(
-            self: ProxhyPlugin, player: MojangPlayer
-        ):
-            """Add a player to the compass whitelist."""
-            with shelve.open(self.WHITELIST_DATA_PATH, writeback=True) as db:
-                if player.name in db["players"]:
-                    raise CommandException(
-                        TextComponent(player.name)
-                        .color("gold")
-                        .appends("is already on the whitelist!")
-                    )
-                db["players"].add(player.name)
-
-            try:
-                await self._update_compass_client_settings()
-            except Exception:
-                pass  # TODO: log and/or send to player
-                # FOR ABOVE also see below func
-
-            return (
-                TextComponent("Added")
-                .color("green")
-                .appends(TextComponent(player.name).color("aqua"))
-                .appends("to the whitelist!")
-            )
-
-        @whitelist.command("remove")
-        async def _command_compass_whitelist_remove(
-            self: ProxhyPlugin, player: MojangPlayer
-        ):
-            """Remove a player from the compass whitelist."""
-            with shelve.open(self.WHITELIST_DATA_PATH, writeback=True) as db:
-                if player.name not in db["players"]:
-                    raise CommandException(
-                        TextComponent(player.name)
-                        .color("gold")
-                        .appends("is not on the whitelist!")
-                    )
-
-                db["players"].remove(player.name)
-
-            try:
-                await self._update_compass_client_settings()
-            except Exception:
-                pass  # TODO: log and/or send to player
-
-            return (
-                TextComponent("Removed")
-                .color("red")
-                .appends(TextComponent(player.name).color("gold"))
-                .appends("from the whitelist!")
-            )
-
-        @whitelist.command("list")
-        async def _command_compass_whitelist_list(self: ProxhyPlugin):
-            """List all players on the compass whitelist."""
-            with shelve.open(self.WHITELIST_DATA_PATH) as db:
-                players: set[str] = db["players"]
-
-                if not players:
-                    return TextComponent(
-                        "There are no players on the whitelist!"
-                    ).color("green")
-
-                self.downstream.chat(
-                    TextComponent("Players on the whitelist:").color("green")
-                )
-
-                msg = TextComponent("> ").color("green")
-                for i, name in enumerate(players):
-                    if i != 0:
-                        msg.append(TextComponent(", ").color("green"))
-                    msg.append(TextComponent(name).color("aqua"))
-                return msg
+        PlayerListSystem(
+            "whitelist", "wl",
+            label="the whitelist",
+            help="Manage your compass whitelist.",
+            key=lambda proxy: "whitelist",
+            add_type=MojangPlayer,
+            display=lambda player: f"§b{player.name}",
+            on_change=lambda proxy: proxy._update_compass_client_settings(),
+        ).register(self, onto=compass)
 
         self.command_registry.register(compass)
 
@@ -400,71 +311,15 @@ class BroadcastPlugin:
 
         self.command_registry.register(bc)
 
-        trust = bc.group("trust", help="Manage trusted players.")
-
-        @trust.command("add")
-        async def _command_broadcast_trust_add(
-            self: ProxhyPlugin, player: MojangPlayer
-        ):
-            """Add a trusted player."""
-            with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
-                if player.uuid in db["trusted"]:
-                    raise CommandException(
-                        TextComponent(player.name)
-                        .color("gold")
-                        .appends("is already in your trusted player list!")
-                    )
-                db["trusted"][player.uuid] = player.name
-
-            self.downstream.chat(
-                TextComponent("Added")
-                .color("green")
-                .appends(TextComponent(player.name).color("aqua"))
-                .appends("to trusted players!")
-            )
-
-        @trust.command("remove")
-        async def _command_broadcast_trust_remove(
-            self: ProxhyPlugin, player: MojangPlayer
-        ):
-            """Remove a trusted player."""
-            with shelve.open(self.BC_DATA_PATH, writeback=True) as db:
-                if player.uuid not in db["trusted"]:
-                    raise CommandException(
-                        TextComponent(player.name)
-                        .color("gold")
-                        .appends("is not in your trusted players list!")
-                    )
-                del db["trusted"][player.uuid]
-
-            self.downstream.chat(
-                TextComponent("Removed")
-                .color("red")
-                .appends(TextComponent(player.name).color("gold"))
-                .appends("from trusted players!")
-            )
-
-        @trust.command("list")
-        async def _command_broadcast_trust_list(self: ProxhyPlugin):
-            """List all trusted players."""
-            with shelve.open(self.BC_DATA_PATH) as db:
-                players = db["trusted"].values()
-
-                if not players:
-                    return TextComponent(
-                        "There are no players in your trusted list!"
-                    ).color("green")
-
-                self.downstream.chat(
-                    TextComponent("Players in broadcast trusted list:").color("green")
-                )
-
-                msg = TextComponent("> ").color("green")
-                for i, name in enumerate(players):
-                    if i != 0:
-                        msg.append(TextComponent(", ").color("green"))
-                    msg.append(TextComponent(name).color("aqua"))
-                return msg
+        PlayerListSystem(
+            "trust",
+            label="trusted players",
+            help="Manage trusted players.",
+            key=lambda proxy: "trusted",
+            add_type=MojangPlayer,
+            display=lambda player: f"§b{player.name}",
+            uuid=lambda player: player.uuid,
+        ).register(self, onto=bc)
 
     async def _get_player_node_id(
         self: ProxhyPlugin, player: Lazy[MojangPlayer]
@@ -980,10 +835,7 @@ class BroadcastPlugin:
             )
         elif intent == StreamIntent.BROADCAST_REQUEST:
             self.received_broadcast_requests[username] = request
-            with shelve.open(self.BC_DATA_PATH) as db:
-                trusted: set[str] = db["trusted"]
-
-            if uid in trusted:
+            if PlayerList("trusted").contains_uuid(uid):
                 self.downstream.chat(
                     TextComponent(request.from_player)
                     .color("aqua")

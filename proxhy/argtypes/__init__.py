@@ -1,7 +1,6 @@
 from .commands import HelpPath
 from .hypixel import Gamemode, Statistic, Submode
 from .players import (
-    AutoboopPlayer,
     BroadcastPlayer,
     HypixelPlayer,
     MojangPlayer,
@@ -22,7 +21,6 @@ __all__ = (
     "BroadcastPlayer",
     "MojangPlayer",
     "HypixelPlayer",
-    "AutoboopPlayer",
     # ./settings.py
     "SettingPath",
     "SettingValue",

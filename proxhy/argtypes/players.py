@@ -1,5 +1,3 @@
-import re
-import shelve
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
@@ -255,12 +253,3 @@ class HypixelPlayer(Player):
             )
 
 
-class AutoboopPlayer(HypixelPlayer):
-    @classmethod
-    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
-        with shelve.open(ctx.proxy.AB_DATA_PATH) as db:
-            user_players = db.get(ctx.proxy.username, {})
-            user_values = [
-                re.sub(r"§.", "", str(u.split(" ")[-1])) for u in user_players.values()
-            ]
-            return sorted(user_values)
