@@ -80,7 +80,8 @@ def get_rank(player: Player | dict):
         return f"§b[MVP{plus}+§b]"
     elif rank == "MVP++":
         plus = return_plus_color(player)
-        return f"§6[MVP{plus}++§6]"
+        bracket = return_monthly_color(player)
+        return f"{bracket}[MVP{plus}++{bracket}]"
     elif rank == "ADMIN" or rank == "OWNER":
         return f"§c[{rank}]"
     elif rank == "GAME MASTER":
@@ -108,6 +109,16 @@ def return_plus_color(player: Player | dict):
         if color:
             return color.chat_code
     return "§c"
+
+
+def return_monthly_color(player: Player | dict) -> str:
+    data = _resolve_player(player)
+    monthly_color_name = data.get("monthlyRankColor")
+    if monthly_color_name:
+        color = Color.from_type(monthly_color_name)
+        if color:
+            return color.chat_code
+    return "§6"
 
 
 def format_other(other):
