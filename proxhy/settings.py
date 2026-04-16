@@ -256,3 +256,16 @@ class ProxhySettings(SettingGroup):
         self.bedwars = BedwarsGroup(self._storage)
         self.compass = CompassGroup(self._storage)
         self.broadcast = BroadcastSettings(self._storage)
+
+        self.update_check: Setting[Literal["ON", "OFF"]] = create_setting(
+            key="proxhy.update_check",
+            display_name="Update Check",
+            description="Check for new Proxhy versions on login.",
+            item="minecraft:paper",
+            states={
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+            },
+            default_state="ON",
+            storage=self._storage,
+        )

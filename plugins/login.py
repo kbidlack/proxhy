@@ -557,7 +557,8 @@ class LoginPlugin:
 
             return
 
-        self.create_task(self._check_for_update())
+        if self.settings.update_check.get() == "ON":
+            self.create_task(self._check_for_update())
 
     async def _check_for_update(self: ProxhyPlugin):
         async with httpx.AsyncClient() as aclient:
