@@ -273,7 +273,7 @@ class StatCheckPlugin:
         client = None
         try:
             client = hypixel.Client(self.hypixel_api_key)
-            await client.player("gamerboy80")
+            await client.player_count()
             self._api_key_valid = True
         except Exception:
             self._api_key_valid = False
