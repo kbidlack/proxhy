@@ -437,6 +437,17 @@ class PlayerTransformer:
             elif packet_id in packets.BC_SPEC_ALLOW:
                 self._announce(packet_id, b"".join(data))
 
+        elif packet_id == 0x1A:  # Entity Status
+            entity_id = buff.unpack(Int)
+            entity_status = buff.unpack(Byte)
+
+            if entity_id == self.gamestate.player_entity_id:
+                self._announce(
+                    packet_id, Int.pack(self._player_eid) + Byte.pack(entity_status)
+                )
+            elif packet_id in packets.BC_SPEC_ALLOW:
+                self._announce(packet_id, b"".join(data))
+
         elif packet_id == 0x1B:  # Attach Entity
             entity_id = buff.unpack(Int)
             vehicle_id = buff.unpack(Int)
