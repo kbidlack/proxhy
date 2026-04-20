@@ -181,6 +181,7 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
         f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
     if args.dev:
+        logger.setLevel(logging.DEBUG)
         logger.info("DEV MODE ACTIVATED")
 
     return server

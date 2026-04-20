@@ -445,6 +445,18 @@ class PlayerTransformer:
                 self._announce(
                     packet_id, Int.pack(self._player_eid) + Byte.pack(entity_status)
                 )
+                if entity_status in {2, 3}:  # Living Entity hurt, Living Entity dead
+                    pos = self.gamestate.position
+                    s = "hurt" if entity_status == 2 else "die"
+                    self._announce(
+                        0x29,
+                        String.pack(f"game.player.{s}")
+                        + Int.pack(int(pos.x * 8))
+                        + Int.pack(int(pos.y * 8))
+                        + Int.pack(int(pos.z * 8))
+                        + Float.pack(1.0)
+                        + UnsignedByte.pack(63),
+                    )
             elif packet_id in packets.BC_SPEC_ALLOW:
                 self._announce(packet_id, b"".join(data))
 
