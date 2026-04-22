@@ -148,7 +148,8 @@ class BroadcastPlugin:
         # TODO: add /compass restart and /compass close (or deinit) if needed
 
         PlayerListSystem(
-            "whitelist", "wl",
+            "whitelist",
+            "wl",
             label="the whitelist",
             help="Manage your compass whitelist.",
             key=lambda proxy: "whitelist",

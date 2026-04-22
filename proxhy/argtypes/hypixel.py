@@ -182,9 +182,30 @@ class Gamemode(CommandArg):
 
     GAME_LOOKUP = _build_reverse_lookup(GAMES)
 
-    def __init__(self, mode_str: GAMETYPE_T):
-        self.mode_str = mode_str  # e.g. "bedwars" or "skywars"
+    _play_id_to_gametype: dict[str, GAMETYPE_T] | None = None
+
+    def __init__(self, mode_str: GAMETYPE_T, raw_play_id: str | None = None):
+        self.mode_str = mode_str
         self.display_name = self.GAMES[mode_str]["display_name"]
+        self.raw_play_id = raw_play_id
+
+    @classmethod
+    def _get_play_id_to_gametype(cls) -> dict[str, GAMETYPE_T]:
+        if cls._play_id_to_gametype is None:
+            mapping: dict[str, GAMETYPE_T] = {}
+
+            def traverse(gametype: GAMETYPE_T, node: SubNode) -> None:
+                if node.id is not None:
+                    mapping[node.id] = gametype
+                if node.children:
+                    for child in node.children.values():
+                        traverse(gametype, child)
+
+            for gametype, game_submodes in Submode.SUBMODES.items():
+                for node in game_submodes.values():
+                    traverse(gametype, node)
+            cls._play_id_to_gametype = mapping
+        return cls._play_id_to_gametype
 
     @classmethod
     async def convert(cls, ctx: CommandContext, value: str) -> Gamemode:
@@ -192,17 +213,23 @@ class Gamemode(CommandArg):
 
         if mode_str := cls.GAME_LOOKUP.get(s):
             return cls(mode_str=mode_str)
-        else:
-            raise CommandException(
-                TextComponent("Invalid or unsupported gamemode '")
-                .append(TextComponent(value).color("gold"))
-                .append("'!")
-            )
+        if "_" in s:
+            if gametype := cls._get_play_id_to_gametype().get(s):
+                return cls(mode_str=gametype, raw_play_id=s)
+        raise CommandException(
+            TextComponent("Invalid or unsupported gamemode '")
+            .append(TextComponent(value).color("gold"))
+            .append("'!")
+        )
 
     @classmethod
     async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         s = partial.lower().strip()
 
+        if "_" in s:
+            return sorted(
+                id for id in cls._get_play_id_to_gametype() if id.startswith(s)
+            )
         return [
             data["main_alias"]
             for data in cls.GAMES.values()
@@ -1224,7 +1251,9 @@ class Statistic(CommandArg):
             proxy_game = getattr(ctx.proxy, "game", None)
             current_gm = proxy_game.gametype if proxy_game else ""
             gamemodes = (
-                [current_gm] if current_gm in cls.STAT_LOOKUP else list(cls.STAT_LOOKUP.keys())
+                [current_gm]
+                if current_gm in cls.STAT_LOOKUP
+                else list(cls.STAT_LOOKUP.keys())
             )
 
         for gm in gamemodes:

@@ -18,7 +18,8 @@ class AutoboopPlugin:
 
     def _init_misc(self: ProxhyPlugin):
         self.autoboop_group = PlayerListSystem(
-            "autoboop", "ab",
+            "autoboop",
+            "ab",
             help="Autoboop commands.",
             key=lambda proxy: f"autoboop:{proxy.username}",
             add_type=HypixelPlayer,

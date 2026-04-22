@@ -251,5 +251,3 @@ class HypixelPlayer(Player):
                     TextComponent(str(e)).color("gold")
                 )
             )
-
-

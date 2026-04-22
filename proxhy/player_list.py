@@ -171,7 +171,8 @@ class PlayerListSystem:
                 except Exception:
                     pass
             return (
-                TextComponent("Added ").color("green")
+                TextComponent("Added ")
+                .color("green")
                 .append(TextComponent(display))
                 .appends(TextComponent(f"to {label}!").color("green"))
             )
@@ -197,7 +198,8 @@ class PlayerListSystem:
                 except Exception:
                     pass
             return (
-                TextComponent("Removed ").color("green")
+                TextComponent("Removed ")
+                .color("green")
                 .append(TextComponent(display))
                 .appends(TextComponent(f"from {label}!").color("green"))
             )

@@ -30,7 +30,9 @@ class MiscPlugin:
     @command("play")
     async def _command_play(self: ProxhyPlugin, mode: Gamemode, *submodes: Submode):
         """Convenient aliases for Hypixel's /play command. Ex. /play bedwars solo"""
-        if not submodes:
+        if mode.raw_play_id:
+            self.upstream.chat(f"/play {mode.raw_play_id}")
+        elif not submodes:
             if submode_options := Submode.SUBMODES.get(mode.mode_str):
                 options = ", ".join(sorted(submode_options.keys()))
                 raise CommandException(
