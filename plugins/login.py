@@ -424,6 +424,7 @@ class LoginPlugin:
             )
             self.downstream.chat(
                 TextComponent("Regenerating credentials; you will be redirected to")
+                .color("yellow")
                 .appends(TextComponent(self.CONNECT_HOST[0]).color("green"))
                 .appends(TextComponent("soon!").color("yellow"))
             )

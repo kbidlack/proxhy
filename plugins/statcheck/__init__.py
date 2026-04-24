@@ -699,6 +699,9 @@ class StatCheckPlugin:
             ):
                 return
 
+            if not self._api_key_valid:
+                return
+
             player_stats = asyncio.as_completed(
                 self._get_player(player) for player in self.players_without_stats
             )
@@ -778,6 +781,9 @@ class StatCheckPlugin:
                     continue
 
                 if expected_name and (expected_name != player.name):
+                    self.logger.debug(
+                        f"_update_stats: expected '{expected_name}', got '{player.name}'. assuming nick..."
+                    )
                     # assume nick -- TODO: should we assume this?
                     # no I am NOT chat gpt despite the em dash ):
                     player = Nick(player.name)
@@ -1301,9 +1307,10 @@ class StatCheckPlugin:
         self.game_error = None
         self.downstream.chat(TextComponent("Updated API Key!").color("green"))
 
-        await self._update_stats()
-        if not self.stats_highlighted:
-            await self.stat_highlights()
+        if self.game.started:
+            await self._update_stats()
+            if not self.stats_highlighted:
+                await self.stat_highlights()
 
     def match_kill_message(self: ProxhyPlugin, message: str) -> Optional[re.Match]:
         """Match a kill message against known patterns.
