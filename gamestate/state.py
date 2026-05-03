@@ -1635,6 +1635,13 @@ class GameState:
                 return player
         return None
 
+    def get_player_by_name_from_player_list(self, name: str) -> PlayerInfo | None:
+        for player in self.player_list.values():
+            if player.name == name:
+                return player
+
+        return None
+
     def real_players(self) -> set[str]:
         return {
             p.name
