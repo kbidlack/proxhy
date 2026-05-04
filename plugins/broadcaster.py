@@ -24,6 +24,7 @@ from petty.protocol.datatypes import (
     TextComponent,
     VarInt,
 )
+
 import auth
 from broadcasting.plugin import BroadcastPeerPlugin
 from broadcasting.proxy import BroadcastPeerProxy
@@ -35,8 +36,8 @@ from broadcasting.transform import (
 from gamestate.state import Vec3d
 from plugins.commands import CommandException, CommandGroup, Lazy, command
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
-from proxhy.player_list import PlayerList, PlayerListSystem
 from proxhy.p2p import StreamIntent
+from proxhy.player_list import PlayerList, PlayerListSystem
 from proxhy.utils import offline_uuid, short_node_id
 
 from .broadcastee.proxy import broadcastee_plugin_list
@@ -885,8 +886,6 @@ class BroadcastPlugin:
             .appends(TextComponent(f"{username}:").color("aqua"))
             .appends(TextComponent(msg).color("white"))
         )
-        for client in self.clients:
-            client.downstream.chat(formatted_msg)
         self.downstream.chat(formatted_msg)
 
     def _announce_to_all(self: ProxhyPlugin, packet_id: int, data: bytes):
