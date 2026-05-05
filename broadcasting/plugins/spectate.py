@@ -33,8 +33,6 @@ from plugins.window import Window
 from proxhy.argtypes import ServerPlayer
 from proxhy.utils import uuid_version
 from proxhypixel.formatting import (
-    SUPPORTED_MODES,
-    format_player_dict,
     get_rankname,
 )
 
@@ -675,14 +673,8 @@ class PlayerSpectateWindow(Window):
         self.health = self.proxy.proxy.get_health(self.entity.name)
 
         if self.player is not None:
-            if self.proxy.proxy.game.gametype in SUPPORTED_MODES:
-                self.fdict = format_player_dict(
-                    self.player,
-                    self.proxy.proxy.game.gametype,
-                )
-                self.display_name = self.proxy.proxy._build_player_display_name(
-                    self.entity.name, self.fdict
-                )
+            if gplayer := self.proxy.proxy.players_with_stats.get(self.entity.name):
+                self.display_name = self.proxy.proxy._build_player_display_name(gplayer)
             else:
                 self.display_name = get_rankname(self.player)
 

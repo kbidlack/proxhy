@@ -1,12 +1,19 @@
 import asyncio
 import re
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Callable,
+    Literal,
+    Optional,
+    TypeIs,
+    get_args,
+)
 
-import hypixel
 import keyring
 from hypixel import (
     ApiError,
@@ -112,31 +119,49 @@ GAME_START_MESSAGE_SETS = [  # block all the game start messages
 ]
 GAME_START_MESSAGES = [msg for msg_set in GAME_START_MESSAGE_SETS for msg in msg_set]
 
-# Regex patterns
-COLOR_CODE_RE = re.compile(r"§.")
+# --- regexes
 JOIN_RE = re.compile(
     r"^(?:\[[A-Za-z0-9+]+\]\s*)?"  # optional rank tag like [MVP++]
     r"(?P<ign>[A-Za-z0-9_]{3,16}) has joined (?P<context>.+)!$"
 )
+# TODO: should these really ignore case?
 COLOR_CODE = re.compile(r"(§[0-9a-fk-or])", re.IGNORECASE)
 TEAM_COLOR_CODE = re.compile(r"(§[0-9a-f])", re.IGNORECASE)
 TEAM_COLOR_NAME = re.compile(
     r"\b(?:green|yellow|aqua|white|pink|gray|red|blue)\d+\b", re.IGNORECASE
 )
+REMOVE_DIGITS = re.compile(r"\d+")
 
-# Team color mappings
-TEAM_NAME_TO_LETTER = {
-    "red": "R",
-    "blue": "B",
-    "green": "G",
-    "yellow": "Y",
-    "aqua": "A",
-    "white": "W",
-    "pink": "P",
-    "gray": "S",
+TeamName = Literal["Red", "Blue", "Green", "Yellow", "Aqua", "White", "Pink", "Gray"]
+TeamLetter = Literal["R", "B", "G", "Y", "A", "W", "P", "S"]
+TeamColorCode = Literal["§c", "§9", "§a", "§e", "§b", "§f", "§d", "§8"]
+
+
+def is_team_name(name: str) -> TypeIs[TeamName]:
+    return name in set(get_args(TeamName))
+
+
+def match_team_name(name: str) -> Optional[TeamName]:
+    team_name = None
+    m = TEAM_COLOR_NAME.fullmatch(name)
+    if m is not None:
+        team_name = REMOVE_DIGITS.sub("", m.group())
+
+    return team_name  # type: ignore
+
+
+TEAM_NAME_TO_LETTER: dict[TeamName, TeamLetter] = {
+    "Red": "R",
+    "Blue": "B",
+    "Green": "G",
+    "Yellow": "Y",
+    "Aqua": "A",
+    "White": "W",
+    "Pink": "P",
+    "Gray": "S",
 }
 
-TEAM_LETTER_TO_CODE = {
+TEAM_LETTER_TO_CODE: dict[TeamLetter, TeamColorCode] = {
     "R": "§c",
     "B": "§9",
     "G": "§a",
@@ -147,7 +172,7 @@ TEAM_LETTER_TO_CODE = {
     "S": "§8",
 }
 
-COLOR_CODE_TO_NAME = {
+COLOR_CODE_TO_NAME: dict[TeamColorCode, TeamName] = {
     "§c": "Red",
     "§9": "Blue",
     "§a": "Green",
@@ -155,104 +180,85 @@ COLOR_CODE_TO_NAME = {
     "§b": "Aqua",
     "§f": "White",
     "§d": "Pink",
-    "§7": "Gray",
     "§8": "Gray",
 }
 
 
 @dataclass
-class TeamColor:
-    letter: str
+class BedWarsTeam:
+    letter: TeamLetter
     code: str
-    name: str
+    name: TeamName
     prefix: str = field(init=False)
 
     def __post_init__(self):
         self.prefix = f"{self.code}§l{self.letter}"
 
     @classmethod
-    def from_letter(cls, letter: str):
-        letter = letter.upper()
+    def from_letter(cls, letter: TeamLetter):
         if letter not in TEAM_LETTER_TO_CODE:
             raise ValueError(f"Invalid team letter: {letter}")
 
         code = TEAM_LETTER_TO_CODE[letter]
-        name = COLOR_CODE_TO_NAME.get(code, "Unknown")
+        name = COLOR_CODE_TO_NAME[code]
 
         return cls(letter=letter, code=code, name=name)
 
     @classmethod
-    def from_name(cls, name: str):
-        key = name.lower()
-        if key not in TEAM_NAME_TO_LETTER:
-            raise ValueError(f"Invalid team name: {name}")
+    def from_name(cls, name: TeamName):
+        if name not in TEAM_NAME_TO_LETTER:
+            raise ValueError(f"Invalid team name: {name!r}")
 
-        letter = TEAM_NAME_TO_LETTER[key]
+        letter = TEAM_NAME_TO_LETTER[name]
         code = TEAM_LETTER_TO_CODE[letter]
-        display_name = COLOR_CODE_TO_NAME.get(code, name.capitalize())
+        name = COLOR_CODE_TO_NAME[code]
 
-        return cls(letter=letter, code=code, name=display_name)
-
-
-@dataclass
-class PlayerWithStats:
-    uuid: str
-    display_name: str
-    fplayer: dict[str, str | int | float] | Nick
-    team: TeamColor
+        return cls(letter=letter, code=code, name=name)
 
 
 class GamePlayerStatus(StrEnum):
     ALIVE = auto()
     RESPAWNING = auto()
-    FINALED = auto()
+    ELIMINATED = auto()
 
 
 @dataclass
 class Nick:
     name: str
-    uuid: str
+    uuid: uuid.UUID
 
 
 @dataclass
 class GamePlayer:
     username: str
-    uuid: str  # offline_uuid for respawning / finaled
-    team: TeamColor
+    uuid: uuid.UUID
+    team: BedWarsTeam
     status: GamePlayerStatus
+    respawn_time: int
 
-    display_name: Optional[str] = None
-    fplayer: Optional[dict[str, Any] | Nick] = None
-    offline_uuid: str = field(init=False)
+    offline_uuid: uuid.UUID = field(init=False)
 
     def __post_init__(self):
-        self.default_display_name = f"{self.team.prefix} {self.username}"
-        self.offline_uuid = str(offline_uuid(self.username))
+        self.offline_uuid = offline_uuid(self.username)
+
+
+@dataclass
+class GamePlayerWithStats(GamePlayer):
+    # requires fplayer, guarantees display_name
+    fplayer: dict[str, Any] | Nick
+    display_name: str = ""
 
 
 class StatCheckPlugin:
-    nick_team_colors: dict[str, str]
-    final_dead: dict[str, str]
-    dead: dict[str, str]
-    _cached_players: dict
-    game_players: dict[str, GamePlayer]
-    _hypixel_api_key: str
-    game_error: Optional[Exception]
-    stats_highlighted: bool
-    adjacent_teams_highlighted: bool
-    _api_key_valid: bool | None
-    update_stats_complete: asyncio.Event
-    hypixel_client: hypixel.Client
-    hypixel_api_key: str
-    _build_player_display_name: Callable[[str, dict | Nick], str]
-
     def _init_statcheck(self: ProxhyPlugin):
-        self._cached_players: dict = {}
-        # players from packet_player_list_item
-        self.game_players = {}  # username: player object (see above)
+        # players from packet_teams
+        self.game_players: dict[
+            str, GamePlayer
+        ] = {}  # username: player object (see above)
         self._hypixel_api_key = ""
 
-        self.game_error = None  # if error has been sent that game
+        self.game_error = None  # if invalid key error has been sent that game
+
         self.stats_highlighted = False
         self.adjacent_teams_highlighted = False
 
@@ -263,8 +269,6 @@ class StatCheckPlugin:
         )
         self._api_key_valid: bool | None = None
 
-        self.update_stats_complete = asyncio.Event()
-
         # _update_stats
         self.player_stats_task: Optional[asyncio.Task[None]] = None
         # list of tasks spawned by _update_player_stats
@@ -274,8 +278,37 @@ class StatCheckPlugin:
 
         self.who_players_statted = asyncio.Event()
 
+    @listen_server(0x01, blocking=True)
+    async def packet_join_game(self: ProxhyPlugin, _):
+        for player in (self.respawning | self.eliminated).values():
+            self.downstream.send_packet(
+                0x38,
+                VarInt.pack(4),
+                VarInt.pack(1),
+                UUID.pack(player.offline_uuid),
+            )
+
+        # flush player lists
+        self.game_players.clear()
+        self.who_players.clear()
+
+        self.who_players_statted.clear()
+        self.game_error = None
+        self.stats_highlighted = False
+        self.adjacent_teams_highlighted = False
+
+        if self.player_stats_task:
+            self.player_stats_task.cancel()
+        while not self.player_stats_queue.empty():
+            self.player_stats_queue.get_nowait()
+
+        for task in self.player_stats_tasks:
+            task.cancel()
+
+        self.player_stats_task = self.create_task(self._update_stats())
+
     @property
-    def dead(self: ProxhyPlugin) -> dict[str, GamePlayer]:
+    def respawning(self: ProxhyPlugin) -> dict[str, GamePlayer]:
         return {
             player.username: player
             for player in self.game_players.values()
@@ -283,11 +316,11 @@ class StatCheckPlugin:
         }
 
     @property
-    def final_dead(self: ProxhyPlugin) -> dict[str, GamePlayer]:
+    def eliminated(self: ProxhyPlugin) -> dict[str, GamePlayer]:
         return {
             player.username: player
             for player in self.game_players.values()
-            if player.status == GamePlayerStatus.FINALED
+            if player.status == GamePlayerStatus.ELIMINATED
         }
 
     @property
@@ -295,20 +328,18 @@ class StatCheckPlugin:
         all_players = self.real_players()
 
         if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
-            all_players |= set(self.final_dead.keys())
+            all_players |= set(self.eliminated.keys())
         if self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
-            all_players |= set(self.dead.keys())
+            all_players |= set(self.respawning.keys())
 
         return all_players
 
     @property
-    def players_with_stats(self: ProxhyPlugin) -> dict[str, PlayerWithStats]:
+    def players_with_stats(self: ProxhyPlugin) -> dict[str, GamePlayerWithStats]:
         return {
-            player.username: PlayerWithStats(
-                player.uuid, player.display_name, player.fplayer, player.team
-            )
+            player.username: player
             for player in self.game_players.values()
-            if player.fplayer is not None and player.display_name is not None
+            if isinstance(player, GamePlayerWithStats)
         }
 
     @property
@@ -335,26 +366,11 @@ class StatCheckPlugin:
 
         return self._api_key_valid
 
-    # Helper methods for common operations
-
-    def _send_tablist_update(
-        self: ProxhyPlugin, player_uuid: str, display_name: str, listed: bool = True
-    ) -> None:
-        """Send a packet to update a player's display name in the tab list."""
-        self.downstream.send_packet(
-            0x38,
-            VarInt.pack(3),
-            VarInt.pack(1),
-            UUID.pack(uuid.UUID(player_uuid)),
-            Boolean.pack(listed),
-            Chat.pack(display_name),
-        )
-
-    def _send_bulk_tablist_update(self: ProxhyPlugin, updates: list[tuple[str, str]]):
-        """Send a packet to update multiple players' display names in the tab list.
+    def _send_tablist_update(self: ProxhyPlugin, updates: dict[uuid.UUID, str]):
+        """Send a packet to update players' display names in the tab list.
 
         Args:
-            updates: List of (player_uuid, display_name) tuples
+            updates: Dict of {player_uuid: display_name}
         """
         if not updates:
             return
@@ -364,23 +380,18 @@ class StatCheckPlugin:
             VarInt.pack(3),
             VarInt.pack(len(updates)),
             *(
-                UUID.pack(uuid.UUID(str(player_uuid)))
-                + Boolean.pack(True)
-                + Chat.pack(display_name)
-                for player_uuid, display_name in updates
+                UUID.pack(player_uuid) + Boolean.pack(True) + Chat.pack(display_name)
+                for player_uuid, display_name in updates.items()
             ),
         )
 
-    def _build_player_display_name(self: ProxhyPlugin, player: GamePlayer) -> str:
+    def _build_player_display_name(
+        self: ProxhyPlugin, player: GamePlayerWithStats
+    ) -> str:
         fdict = player.fplayer
 
-        if fdict is None:
-            return player.default_display_name
-
-        team_color = player.team
-
         if isinstance(fdict, Nick):
-            return f"{team_color.prefix} §5[NICK] {player.username}"
+            return f"{player.team.prefix} §5[NICK] {player.username}"
 
         if (
             self.settings.bedwars.tablist.is_mode_specific.get() == "ON"
@@ -396,19 +407,15 @@ class StatCheckPlugin:
 
         display_name = " ".join(
             (
-                f"{fdict['star']}{team_color.code}",
+                f"{fdict['star']}{player.team.code}",
                 name,
                 f"§7| {fkdr}",
             )
         )
 
-        return f"{team_color.prefix} {display_name}"
+        return f"{player.team.prefix} {display_name}"
 
     def _get_dead_display_name(self: ProxhyPlugin, player: GamePlayer) -> str:
-        # TODO: merge with _build_player_display_name?
-        # that way logic can be consolidated, just build
-        # player display name for any player
-        # or could just make player.display_name this when finaled etc. idk
         """Get the grayed-out display name for a dead player.
 
         Args:
@@ -421,118 +428,96 @@ class StatCheckPlugin:
         color = "§7§l§o" if player.username == self.username else "§7§o"
 
         if (
-            player.display_name is not None
+            isinstance(player, GamePlayerWithStats)
             and self.settings.bedwars.tablist.show_stats.get() == "ON"
         ):
             display_name = player.display_name
         else:
             display_name = f"{player.team.prefix} {player.username}"
 
-        unformatted_name = re.sub(r"§[0-9a-fr]", "", display_name)
+        unformatted_name = COLOR_CODE.sub("", display_name)
         return color + unformatted_name
 
-    def _update_dead_players_in_tablist(self: ProxhyPlugin):
-        """Update all final dead players in the tab list with grayed-out display names."""
-        # TODO: this should update respawning players
-        for player in self.final_dead.values():
-            display_name = self._get_dead_display_name(player)
-            self._send_tablist_update(player.uuid, display_name)
+    def _get_respawning_display_name(self: ProxhyPlugin, player: GamePlayer) -> str:
+        return f"§6§l{player.respawn_time}s {self._get_dead_display_name(player)}"
 
-    @listen_server(0x01, blocking=True)
-    async def packet_join_game(self: ProxhyPlugin, _):
-        for player in (self.dead | self.final_dead).values():
-            self.downstream.send_packet(
-                0x38,
-                VarInt.pack(4),
-                VarInt.pack(1),
-                UUID.pack(uuid.UUID(player.uuid)),
-            )
-
-        # flush player lists
-        self.game_players.clear()
-        self.who_players.clear()
-
-        self.who_players_statted.clear()
-        self.game_error = None
-        self.stats_highlighted = False
-        self.adjacent_teams_highlighted = False
-
-        if self.player_stats_task:
-            self.player_stats_task.cancel()
-        while not self.player_stats_queue.empty():
-            self.player_stats_queue.get_nowait()
-
-        for task in self.player_stats_tasks:
-            task.cancel()
-
-        self.player_stats_task = self.create_task(self._update_stats())
-
-    def _rebuild_stats(self: ProxhyPlugin):
-        for player in self.game_players.values():
+    def _rebuild_display_names(self: ProxhyPlugin):
+        for player in self.players_with_stats.values():
             # if has stats, refresh display name
-            if player.fplayer is not None:
-                player.display_name = self._build_player_display_name(player)
+            player.display_name = self._build_player_display_name(player)
 
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
             # if we are showing stats, go ahead and ONLY update
             # those who have stats
-            updates = [
-                (player.uuid, player.display_name)
-                for player in self.game_players.values()
-                if player.display_name
-            ]
-            self._send_bulk_tablist_update(updates)
+            self._send_tablist_update(
+                {
+                    player.uuid: player.display_name
+                    for player in self.players_with_stats.values()
+                }
+            )
         else:
             # if we are not showing stats, remove display names
-            # from all players who have stats
+            # from all players who have stats;
+            # these are the only players whose
+            # display names we should have set
             self.downstream.send_packet(
                 0x38,
                 VarInt.pack(3),
-                VarInt.pack(len(self.game_players.values())),
-                # TODO: change to only players_with_stats
+                VarInt.pack(len(self.players_with_stats)),
                 *(
-                    UUID.pack(uuid.UUID(str(player.uuid))) + Boolean.pack(False)
-                    for player in self.game_players.values()
+                    UUID.pack(player.uuid) + Boolean.pack(False)
+                    for player in self.players_with_stats.values()
                 ),
             )
 
-        self._update_dead_players_in_tablist()
+            # finaled players
+            self._send_tablist_update(
+                {
+                    player.offline_uuid: self._get_dead_display_name(player)
+                    for player in self.eliminated.values()
+                }
+            )
+            # respawning players
+            self._send_tablist_update(
+                {
+                    player.offline_uuid: self._get_respawning_display_name(player)
+                    for player in self.respawning.values()
+                }
+            )
 
     @subscribe("setting:bedwars.tablist.show_stats")
     async def _statcheck_event_setting_bedwars_tablist_show_stats(
         self: ProxhyPlugin, _match, data: list
     ):
-        if not await self.validate_api_key():
-            self.downstream.chat(
-                TextComponent(
-                    "Invalid Hypixel API Key; will not be able to refresh stats in tab!"
-                ).color("red")
-            )
+        if data == ["OFF", "ON"]:
+            if not await self.validate_api_key():
+                self.downstream.chat(
+                    TextComponent(
+                        "Invalid Hypixel API Key; will not be able to refresh stats in tab!"
+                    ).color("red")
+                )
 
-        self._rebuild_stats()
+        self._rebuild_display_names()
 
     @subscribe("setting:bedwars.tablist.is_mode_specific")
     async def _statcheck_event_setting_bedwars_tablist_is_mode_specific(
         self: ProxhyPlugin, _match, data: list
     ) -> None:
-        self._rebuild_stats()
-
-    async def _reset_stats(self: ProxhyPlugin) -> None:
-        self._rebuild_stats()
+        self._rebuild_display_names()
 
     @subscribe("setting:bedwars.tablist.show_rankname")
     async def _statcheck_event_setting_bedwars_tablist_show_rankname(
         self: ProxhyPlugin, _match, data: list
     ) -> None:
         """Callback when show_rankname setting changes - rebuild display names."""
-        self._rebuild_stats()
+        self._rebuild_display_names()
 
     @subscribe("setting:bedwars.tablist.show_eliminated_players")
     async def _statcheck_event_setting_bedwars_tablist_show_eliminated_players(
         self: ProxhyPlugin, _match, data: list
     ) -> None:
         # remove self from final_dead
-        final_dead_no_self = self.final_dead.copy()
+        final_dead_no_self = self.eliminated.copy()
         if self.username in final_dead_no_self:
             # TODO: does not work with nicks
             del final_dead_no_self[self.username]
@@ -540,7 +525,7 @@ class StatCheckPlugin:
         if data == ["OFF", "ON"]:
             packet = VarInt.pack(0) + VarInt.pack(len(final_dead_no_self))
             for player in final_dead_no_self.values():
-                packet += UUID.pack(uuid.UUID(player.uuid))
+                packet += UUID.pack(player.offline_uuid)
                 packet += String.pack(player.username)
                 packet += VarInt.pack(0)  # properties
                 packet += VarInt.pack(3)  # gamemode; spectator
@@ -552,7 +537,7 @@ class StatCheckPlugin:
         elif data == ["ON", "OFF"]:
             packet = VarInt.pack(4) + VarInt.pack(len(final_dead_no_self))
             for player in final_dead_no_self.values():
-                packet += UUID.pack(uuid.UUID(player.uuid))
+                packet += UUID.pack(player.offline_uuid)
 
             self.downstream.send_packet(0x38, packet)
 
@@ -562,32 +547,26 @@ class StatCheckPlugin:
 
         name = buff.unpack(String)
         mode = buff.unpack(Byte)
-        if mode == 3 and TEAM_COLOR_NAME.match(name):
+        if mode == 3 and (team_name := match_team_name(name)) is not None:
             player_count = buff.unpack(VarInt)
             for _ in range(player_count):
                 username = buff.unpack(String)
-                team_name = re.sub(r"\d+", "", name)
                 player = self.gamestate.get_player_by_name_from_player_list(username)
                 if player is None:
-                    self.logger.warning(
-                        "packet_teams: "
-                        f"hypixel tried to add {username} "
-                        "but they were not found in gamestate"
-                    )
                     continue
                 elif player.name in self.game_players:
                     continue
 
                 player = GamePlayer(
                     username=username,
-                    uuid=player.uuid,
-                    team=TeamColor.from_name(team_name),
+                    uuid=uuid.UUID(player.uuid),
+                    team=BedWarsTeam.from_name(team_name),
                     status=GamePlayerStatus.ALIVE,
+                    respawn_time=0,
                 )
                 self.game_players[username] = player
+                self.logger.debug(f"packet_teams: put {player.username!r}")
                 self.player_stats_queue.put_nowait(player)
-
-        self.keep_player_stats_updated()
 
     @listen_server(0x38, blocking=True)
     async def packet_player_list_item(self: ProxhyPlugin, buff: Buffer):
@@ -658,12 +637,7 @@ class StatCheckPlugin:
                 player.username
             )
         except PlayerNotFound as err:  # assume nick
-            # I don't actually know if we can assume this is a string
-            # but I want the type checker to be friendly to me
-            # later when I casefold it
-            nick_username: str = err.player
-            nick_uuid = self.gamestate.players[nick_username].uuid
-            player_result = Nick(nick_username, nick_uuid)
+            player_result = Nick(err.player, player.uuid)
         except (
             InvalidApiKey,
             RateLimitError,
@@ -728,14 +702,26 @@ class StatCheckPlugin:
         else:
             fdict = format_player_dict(player_result, "bedwars")
 
-        player.fplayer = fdict
-        display_name = self._build_player_display_name(player)
-        player.display_name = display_name
+        player = GamePlayerWithStats(
+            player.username,
+            player.uuid,
+            player.team,
+            player.status,
+            player.respawn_time,
+            fdict,
+        )
+        player.display_name = (display_name := self._build_player_display_name(player))
+        self.game_players[player.username] = player
 
         if self.settings.bedwars.tablist.show_stats.get() == "ON":
-            if player.status in {GamePlayerStatus.FINALED, GamePlayerStatus.RESPAWNING}:
+            if player.status in {
+                GamePlayerStatus.ELIMINATED,
+                GamePlayerStatus.RESPAWNING,
+            }:
                 display_name = self._get_dead_display_name(player)
-            self._send_tablist_update(str(player.uuid), display_name)
+                self._send_tablist_update({player.offline_uuid: display_name})
+            else:
+                self._send_tablist_update({player.uuid: display_name})
 
         await self.emit("statcheck:update", player)
 
@@ -751,7 +737,10 @@ class StatCheckPlugin:
     async def highlight_adjacent_teams(self: ProxhyPlugin) -> None:
         """Displays a title card with stats of adjacent team(s)."""
 
-        await self.who_players_statted.wait()
+        try:
+            await asyncio.wait_for(self.who_players_statted.wait(), timeout=15)
+        except asyncio.TimeoutError:
+            return
 
         if self.game.map is None:
             self.logger.warning("highlight_adjacent_teams: could not determine map")
@@ -880,12 +869,10 @@ class StatCheckPlugin:
                     return
         self.downstream.reset_title()
         self.downstream.set_title(title=title, subtitle=subtitle)
-        # raise ValueError(
-        #   f'Expected "FIRST RUSH", "BOTH ADJACENT", or "OFF" state for setting bedwars.announce_first_rush; got {self.settings.bedwars.announce_first_rush.state} instead.'
-        # )
+
         self.adjacent_teams_highlighted = True
 
-    def _get_own_team_info(self: ProxhyPlugin) -> TeamColor:
+    def get_own_team_info(self: ProxhyPlugin) -> BedWarsTeam:
         """Get team name and color code for the current user."""
         sidebar_own_team = next(
             (team for team in self.gamestate.teams.values() if "YOU" in team.suffix),
@@ -897,15 +884,18 @@ class StatCheckPlugin:
             )
 
         match_ = re.search(r"§[a-f0-9](\w+)(?=§f:)", sidebar_own_team.prefix)
-        if match_:
-            team_name = match_.group(1)
-            return TeamColor.from_name(team_name)
-        else:
+        if match_ is not None and is_team_name(team_name := match_.group(1)):
+            return BedWarsTeam.from_name(team_name)
+        elif match_ is None:
             raise ValueError(
                 f"Could not determine own team color; regex did not match prefix {sidebar_own_team.prefix!r}"
             )
+        else:
+            raise ValueError(
+                f"Could not determine own team color; {team_name!r} is not a valid team!"
+            )
 
-    def get_adjacent_teams(self: ProxhyPlugin) -> tuple[str, str]:
+    def get_adjacent_teams(self: ProxhyPlugin) -> tuple[TeamName, TeamName]:
         """Get the (side_rush, alt_rush) teams for the current player.
 
         Returns:
@@ -914,7 +904,7 @@ class StatCheckPlugin:
         Raises:
             ValueError: If player is not on a team
         """
-        team = self._get_own_team_info()
+        team = self.get_own_team_info()
         # TODO will raise ValueError if player is not on a team; handle!
 
         side_rush = RUSH_MAPPINGS["default_mappings"]["side_rushes"][team.name.lower()]
@@ -942,15 +932,14 @@ class StatCheckPlugin:
 
     async def stat_highlights(self: ProxhyPlugin) -> None:
         """Display top 3 enemy players and nicked players."""
-        if self.settings.bedwars.display_top_stats.get() == "OFF":
-            return
+
         if self.game.mode == "bedwars_two_one_duels":
             return
         if not self.players_with_stats:
             return  # no stats
 
         try:
-            own_team_color = self._get_own_team_info().name
+            own_team_color = self.get_own_team_info().name
         except ValueError as e:
             self.logger.warning(
                 f"stat_highlights: could not determine own team color: {e}"
@@ -961,34 +950,14 @@ class StatCheckPlugin:
         enemy_nicks = []
 
         # Process each player
-        for player_name, player_data in self.players_with_stats.items():
-            display_name = player_data.display_name
-            # Skip the user's own nickname
-            if player_name == self.username:
+        for player in self.players_with_stats.values():
+            if player.username == self.username or own_team_color == player.team.name:
+                continue  # TODO: does not work with nicks
+
+            if isinstance(fdict := player.fplayer, Nick):
+                enemy_nicks.append(f"{player.team.code}{player.username}§f")
                 continue
 
-            # Get player's team
-            player_team = player_data.team
-
-            if not player_team:
-                continue
-
-            # Skip teammates
-            if own_team_color == re.sub(r"\d", "", player_team.name):
-                continue
-
-            # Handle nicked players
-            if "[NICK]" in display_name:
-                nick_team_color = self.nick_team_colors.get(player_name, "")
-                enemy_nicks.append(f"{nick_team_color}{player_name}§f")
-                continue
-
-            # Handle regular players with stats
-            fdict = player_data.fplayer
-            if isinstance(fdict, Nick):
-                continue
-
-            # Calculate ranking value
             if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
                 mode = self.game.mode[8:].lower()
                 fkdr = fdict[f"{mode}_fkdr"]
@@ -1011,11 +980,11 @@ class StatCheckPlugin:
 
             enemy_players.append(
                 {
-                    "name": player_name,
+                    "name": player.username,
                     "star_formatted": fdict["star"],
                     "fkdr_formatted": f_fkdr,
                     "rank_value": rank_value,
-                    "team_color": player_team.prefix,
+                    "team_color": player.team.prefix,
                 }
             )
 
@@ -1049,31 +1018,18 @@ class StatCheckPlugin:
         )
         self.stats_highlighted = True
 
-    def keep_player_stats_updated(self: ProxhyPlugin) -> None:
-        if self.settings.bedwars.tablist.show_stats.get() != "ON":
-            return
-
-        living_players = [
-            (player.uuid, player.display_name)
-            for player in self.game_players.values()
-            if player.status == GamePlayerStatus.ALIVE
-            and player.display_name is not None
-        ]
-
-        self._send_bulk_tablist_update(living_players)
-
     @subscribe(r"chat:server:.* has joined .*!")
     async def _statcheck_event_chat_server_player_joined(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
         self.downstream.send_packet(0x02, buff.getvalue())
+
         if self.settings.bedwars.api_key_reminder.get() == "ON":
             message = buff.unpack(Chat)
             m = JOIN_RE.match(message)
+            # TODO: doesn't work with nicks
             if m and m.group("ign").casefold() == self.username.casefold():
-                await self.validate_api_key()
-
-                if self._api_key_valid is False:  # only warn if explicitly invalid
+                if not await self.validate_api_key():
                     self.downstream.chat(
                         TextComponent("Invalid API key! ")
                         .color("red")
@@ -1100,7 +1056,7 @@ class StatCheckPlugin:
 
         self.who_players.update(message.removeprefix("ONLINE: ").split(", "))
 
-    def get_player_to_uuid_mapping(self: ProxhyPlugin) -> dict[str, str]:
+    def get_player_to_uuid_mapping(self: ProxhyPlugin) -> dict[str, uuid.UUID]:
         """Get a mapping of player names to UUIDs."""
         return {player.username: player.uuid for player in self.game_players.values()}
 
@@ -1115,15 +1071,24 @@ class StatCheckPlugin:
 
         status = GamePlayerStatus.RESPAWNING
         if "spectator" in message:
-            status = GamePlayerStatus.FINALED
+            status = GamePlayerStatus.ELIMINATED
 
         # refresh stats
         # TODO: does not work with nicks
-        self_team = self._get_own_team_info()
+        await asyncio.sleep(0.1)
+        self_team = self.get_own_team_info()
         self_game_player = GamePlayer(
-            self.username, self.uuid, self_team, status=status
+            self.username,
+            uuid.UUID(self.uuid),
+            self_team,
+            status=status,
+            respawn_time=0,  # we set to 10 later
         )
-        self.logger.debug("statcheck_event_chat_server_bedwars_rejoin: putting self")
+        self.game_players[self.username] = self_game_player
+
+        self.logger.debug(
+            f"statcheck_event_chat_server_bedwars_rejoin: putting self: {self_game_player!r}"
+        )
         self.player_stats_queue.put_nowait(self_game_player)
 
         self.upstream.send_packet(0x01, String.pack("/who"))
@@ -1131,8 +1096,10 @@ class StatCheckPlugin:
 
         self.game.started = True
 
-        if status == GamePlayerStatus.FINALED:
-            self._update_dead_players_in_tablist()
+        self._rebuild_display_names()
+
+        if "respawn" in message:
+            self.create_task(self.respawn_timer(self_game_player, reconnect=True))
 
     def in_bedwars_game(self: ProxhyPlugin):
         return self.game.gametype == "bedwars" and self.game.mode
@@ -1141,7 +1108,7 @@ class StatCheckPlugin:
     async def _statcheck_event_chat_server_game_start(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
-        if self.game.gametype != "bedwars" or self.stats_highlighted:
+        if self.game.gametype != "bedwars" or self.game.started:
             return self.downstream.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
@@ -1242,7 +1209,7 @@ class StatCheckPlugin:
             0x38,
             VarInt.pack(4),
             VarInt.pack(1),
-            UUID.pack(uuid.UUID(player.uuid)),
+            UUID.pack(player.uuid),
         )
 
         # spawn player for timer
@@ -1250,7 +1217,7 @@ class StatCheckPlugin:
             0x38,
             VarInt.pack(0),
             VarInt.pack(1),
-            UUID.pack(uuid.UUID(player.offline_uuid)),
+            UUID.pack(player.offline_uuid),
             String.pack(player.username),
             VarInt.pack(0),  # 0 properties
             VarInt.pack(3),  # gamemode
@@ -1262,18 +1229,27 @@ class StatCheckPlugin:
         timer_duration = 10 if reconnect else 5
 
         for s in range(timer_duration, 0, -1):
-            display_name = f"§6§l{s}s {self._get_dead_display_name(player)}"
-            self._send_tablist_update(player.offline_uuid, display_name)
+            player.respawn_time = s
+            self._send_tablist_update(
+                {player.offline_uuid: self._get_respawning_display_name(player)}
+            )
             await asyncio.sleep(1)
 
-        player.status = GamePlayerStatus.ALIVE
-
+        player.respawn_time = 0
         self.downstream.send_packet(
             0x38,
-            VarInt.pack(4),
+            VarInt.pack(4),  # remove player
             VarInt.pack(1),
-            UUID.pack(uuid.UUID(player.offline_uuid)),
+            UUID.pack(player.offline_uuid),
         )
+
+        await asyncio.sleep(0.5)  # TODO: should we really sleep this long?
+        if self.gamestate.get_player_by_name_from_player_list(player.username):
+            player.status = GamePlayerStatus.ALIVE
+        elif player.username in self.game_players:
+            self.downstream.chat(
+                f"{player.team.code}{player.username}§7 disconnected while respawning."
+            )
 
     @subscribe(r"chat:server:(.+?) reconnected\.$")
     async def _statcheck_event_chat_server_player_recon(
@@ -1286,15 +1262,13 @@ class StatCheckPlugin:
             return
 
         message = buff.unpack(Chat)
-        player = message.split(" ")[0]
+        username = message.split(" ")[0]
 
-        retries = 0
-        while player not in self.get_player_to_uuid_mapping():
-            if retries >= 50:
-                return  # give up after 5 seconds
-                # i don't *think* this should ever happen, but just in case
-            await asyncio.sleep(0.1)
-            retries += 1
+        if (player := self.game_players.get(username)) is None:
+            return self.logger.warning(
+                "_statcheck_event_chat_server_player_recon: "
+                f"{username} reconnected but was not found in self.game_players"
+            )
 
         self.create_task(self.respawn_timer(player, reconnect=True))
 
@@ -1302,10 +1276,11 @@ class StatCheckPlugin:
     async def _statcheck_event_chat_server_kill_msg(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
-        if not self.in_bedwars_game():
-            return self.downstream.send_packet(0x02, buff.getvalue())
-
         self.downstream.send_packet(0x02, buff.getvalue())
+
+        if not self.in_bedwars_game():
+            return
+
         message = buff.unpack(Chat)
 
         if message.startswith("BED DESTRUCTION >"):
@@ -1315,20 +1290,22 @@ class StatCheckPlugin:
         m = self.match_kill_message(message)
         if not m:
             return
+
+        # TODO: this sometimes throws KeyError, what to do?
         killed = self.game_players[m.group(1)]
         fk = message.endswith("FINAL KILL!")
 
         if message.endswith("disconnected."):
-            return  # TODO: what to do here?
+            return
 
         if fk:
-            killed.status = GamePlayerStatus.FINALED
+            killed.status = GamePlayerStatus.ELIMINATED
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
                 self.downstream.send_packet(
                     0x38,
                     VarInt.pack(0),  # spawn player
                     VarInt.pack(1),  # number of players
-                    UUID.pack(uuid.UUID(killed.offline_uuid)),
+                    UUID.pack(killed.offline_uuid),
                     String.pack(killed.username),
                     VarInt.pack(0),
                     VarInt.pack(3),  # gamemode; spectator
