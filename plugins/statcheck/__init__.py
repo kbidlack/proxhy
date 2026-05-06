@@ -1,7 +1,7 @@
 import asyncio
 import re
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from enum import StrEnum, auto
 from pathlib import Path
 from typing import (
@@ -565,7 +565,9 @@ class StatCheckPlugin:
                     respawn_time=0,
                 )
                 self.game_players[username] = player
-                self.logger.debug(f"packet_teams: put {player.username!r}")
+                self.logger.debug(
+                    f"packet_teams: put {player.username!r} on {player.team!r}, {name}, {self.gamestate.teams[name].prefix}"
+                )
                 self.player_stats_queue.put_nowait(player)
 
     @listen_server(0x38, blocking=True)
@@ -706,7 +708,14 @@ class StatCheckPlugin:
             player.username,
             player.uuid,
             player.team,
-            player.status,
+            # if player rejoined the game and they are eliminated, for example, sometimes
+            # the packet_teams add (to stat queue) comes before the chat message add.
+            # we only are able to determine if they are respawning/eliminated
+            # from the chat message. so we check game_players here to make sure they
+            # haven't been added as respawning/eliminated from the chat message
+            # later, which is the real source of truth re. status
+            # tl;dr the status of our current player object may be stale so we check again
+            self.game_players[player.username].status,
             player.respawn_time,
             fdict,
         )
@@ -1086,6 +1095,28 @@ class StatCheckPlugin:
         )
         self.game_players[self.username] = self_game_player
 
+        if "spectator" in message:
+            # remove self from tab and replace with offline uuid self
+            self.downstream.send_packet(
+                0x38,
+                VarInt.pack(4),
+                VarInt.pack(1),
+                UUID.pack(self_game_player.uuid),
+            )
+            # set self display name to dead
+            self.downstream.send_packet(
+                0x38,
+                VarInt.pack(0),  # spawn player
+                VarInt.pack(1),  # number of players
+                UUID.pack(self_game_player.offline_uuid),
+                String.pack(self_game_player.username),
+                VarInt.pack(0),
+                VarInt.pack(3),  # gamemode; spectator
+                VarInt.pack(0),  # ping
+                Boolean.pack(True),
+                Chat.pack(self._get_dead_display_name(self_game_player)),
+            )
+
         self.logger.debug(
             f"statcheck_event_chat_server_bedwars_rejoin: putting self: {self_game_player!r}"
         )
@@ -1108,34 +1139,15 @@ class StatCheckPlugin:
     async def _statcheck_event_chat_server_game_start(
         self: ProxhyPlugin, _match, buff: Buffer
     ):
-        if self.game.gametype != "bedwars" or self.game.started:
-            return self.downstream.send_packet(0x02, buff.getvalue())
+        self.downstream.send_packet(0x02, buff.getvalue())
 
         message = buff.unpack(Chat)
-        is_duels = self.game.mode == "bedwars_two_one_duels"
-        suppress = (
-            self.settings.bedwars.display_top_stats.get() != "OFF" and not is_duels
-        )
+
         if message in {msg_set[-2] for msg_set in GAME_START_MESSAGE_SETS}:  # runs once
-            self.upstream.send_packet(0x01, String.pack("/who"))
+            self.create_task(self.highlight_adjacent_teams())
+            self.upstream.chat("/who")
             self.received_who.clear()
             self.game.started = True
-
-            if suppress:
-                if (
-                    self.settings.bedwars.announce_first_rush.get() != "OFF"
-                    and self.game.mode.lower()
-                    in {"bedwars_eight_one", "bedwars_eight_two"}
-                    and not self.adjacent_teams_highlighted
-                ):
-                    self.create_task(self.highlight_adjacent_teams())
-
-                self.downstream.chat(
-                    TextComponent("Fetching top stats...").color("gold").bold()
-                )
-
-        if not suppress:
-            self.downstream.send_packet(0x02, buff.getvalue())
 
     @command("resetkey")
     async def _command_reset_key(self: ProxhyPlugin):
@@ -1301,6 +1313,14 @@ class StatCheckPlugin:
         if fk:
             killed.status = GamePlayerStatus.ELIMINATED
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
+                # TODO: does not work with nicks, also we technically don't need this check
+                if killed.username == self.username:
+                    self.downstream.send_packet(
+                        0x38,
+                        VarInt.pack(4),
+                        VarInt.pack(1),
+                        UUID.pack(killed.uuid),
+                    )
                 self.downstream.send_packet(
                     0x38,
                     VarInt.pack(0),  # spawn player
