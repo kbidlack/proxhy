@@ -141,6 +141,10 @@ def is_team_name(name: str) -> TypeIs[TeamName]:
     return name in set(get_args(TeamName))
 
 
+def is_team_letter(letter: str) -> TypeIs[TeamLetter]:
+    return letter in set(get_args(TeamLetter))
+
+
 def match_team_name(name: str) -> Optional[TeamName]:
     team_name = None
     m = TEAM_COLOR_NAME.fullmatch(name)
@@ -547,7 +551,7 @@ class StatCheckPlugin:
 
         name = buff.unpack(String)
         mode = buff.unpack(Byte)
-        if mode == 3 and (team_name := match_team_name(name)) is not None:
+        if mode == 3 and (team := self.gamestate.teams.get(name)) is not None:
             player_count = buff.unpack(VarInt)
             for _ in range(player_count):
                 username = buff.unpack(String)
@@ -557,10 +561,16 @@ class StatCheckPlugin:
                 elif player.name in self.game_players:
                     continue
 
+                team_letter = COLOR_CODE.sub("", team.prefix).strip()
+                if not is_team_letter(team_letter):
+                    return self.logger.debug(
+                        f"packet_teams: {team_letter} is not a valid team letter, skipping ({team.prefix})"
+                    )
+
                 player = GamePlayer(
                     username=username,
                     uuid=uuid.UUID(player.uuid),
-                    team=BedWarsTeam.from_name(team_name),
+                    team=BedWarsTeam.from_letter(team_letter),
                     status=GamePlayerStatus.ALIVE,
                     respawn_time=0,
                 )
