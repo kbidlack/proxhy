@@ -127,7 +127,7 @@ class BroadcastPeerLoginPlugin:
         self.state = State.PLAY
         self.username = buff.unpack(String)
 
-        self.uuid = str(offline_uuid(self.username))
+        self.uuid = offline_uuid(self.username)
         self.skin_properties = None
         profile_ready = asyncio.Event()
 
@@ -135,7 +135,7 @@ class BroadcastPeerLoginPlugin:
             try:
                 async with APIClient() as c:
                     async with asyncio.timeout(2):
-                        self.uuid = str(uuid.UUID(await c.get_uuid(self.username)))
+                        self.uuid = uuid.UUID(await c.get_uuid(self.username))
                         self.skin_properties = await c.get_skin_properties(self.uuid)
             except asyncio.TimeoutError:
                 self.proxy.downstream.chat(
@@ -277,7 +277,7 @@ class BroadcastPeerLoginPlugin:
             0x38,
             VarInt.pack(0),  # action: add player
             VarInt.pack(1),  # number of players
-            UUID.pack(uuid.UUID(self.uuid)),
+            UUID.pack(self.uuid),
             String.pack(self.username),
             properties_data,
             VarInt.pack(2),  # gamemode: adventure

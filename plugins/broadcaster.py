@@ -539,7 +539,7 @@ class BroadcastPlugin:
                 lambda _: self.create_task(self.initialize_cc())
             )
 
-        self._transformer.init_from_gamestate(self.uuid)
+        self._transformer.init_from_gamestate(str(self.uuid))
 
     async def initialize_broadcast_pyroh_server(self: ProxhyPlugin):
         self.endpoint = await pyroh.Endpoint.bind(alpns=[b"proxhy/1"])
@@ -559,11 +559,12 @@ class BroadcastPlugin:
         self.access_token, self.username, self.uuid = await auth.load_auth_info(
             self.username
         )
+        self.uuid = self.uuid
 
         self.compass_client = CompassClient(
             broker_node_id=BROKER_NODE_ID,
             username=self.username,
-            uuid=self.uuid,
+            uuid=str(self.uuid),
             access_token=self.access_token,
         )
 

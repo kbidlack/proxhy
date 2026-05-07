@@ -3,6 +3,7 @@ import hashlib
 import inspect
 import operator
 import pickle
+import uuid
 import uuid as _uuid
 from collections import namedtuple
 from datetime import datetime
@@ -77,7 +78,7 @@ class APIClient(Client):
         else:
             raise ApiError(response, "mojang")
 
-    async def get_skin_properties(self, uuid: str) -> list[dict]:
+    async def get_skin_properties(self, uuid_: uuid.UUID) -> list[dict]:
         """Returns the skin properties of a player from their UUID.
 
         |mojang|
@@ -106,7 +107,7 @@ class APIClient(Client):
             A list of property dicts with 'name', 'value', and optionally
             'signature' keys. Returns an empty list if player not found.
         """
-        return await self._get_skin_properties(uuid)
+        return await self._get_skin_properties(str(uuid_))
 
     async def _get_profile(self, name: str) -> PlayerInfo:
         if self._session.closed:

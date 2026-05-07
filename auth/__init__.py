@@ -23,6 +23,7 @@ Usage:
 """
 
 import time
+import uuid as uuid_mod
 from pathlib import Path
 from typing import Any
 
@@ -394,7 +395,7 @@ def token_needs_refresh(username: str) -> bool:
 
 async def load_auth_info(
     username: str = "", refresh_if_expired: bool = True
-) -> tuple[str, str, str]:
+) -> tuple[str, str, uuid_mod.UUID]:
     """
     Load cached auth info and refresh token if needed.
 
@@ -422,7 +423,7 @@ async def load_auth_info(
             username, refresh_token, uuid
         )
 
-    return access_token, username, uuid
+    return access_token, username, uuid_mod.UUID(uuid)
 
 
 async def _refresh_and_update_tokens(

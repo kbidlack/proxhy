@@ -27,7 +27,6 @@ class BroadcastPeerBasePlugin:
     flying: Literal[0, PlayerAbilityFlags.FLYING]
 
     def _init_broadcast_peer(self: BroadcastPeerPlugin):
-        self.uuid = ""
         self.spec_eid: Optional[int] = None
         self.flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING] = (
             PlayerAbilityFlags.ALLOW_FLYING
@@ -67,7 +66,7 @@ class BroadcastPeerBasePlugin:
             0x38,
             VarInt.pack(4),  # action: remove player
             VarInt.pack(1),  # number of players
-            UUID.pack(uuid.UUID(self.uuid)),
+            UUID.pack(self.uuid),
         )
 
     @command("tp", "teleport", usage=["<player>", "<x> <y> <z>"])

@@ -21,6 +21,27 @@ class DebugPlugin:
                     .append(TextComponent(str(value)).color("yellow"))
                 )
 
+    @command("nicked")
+    async def _command_nicked(self: ProxhyPlugin):
+        msg = (
+            TextComponent("Nicked:")
+            .color("yellow")
+            .appends(
+                TextComponent(f"{(nicked := self.nick is not None)}").color(
+                    "green" if nicked else "red"
+                )
+            )
+        )
+        if nicked:
+            msg = msg.appends(
+                TextComponent("(")
+                .color("yellow")
+                .append(TextComponent(self.nick).color("aqua"))
+                .append(TextComponent(")").color("yellow"))
+            )
+
+        return msg
+
     @command("rqgame")
     async def _command_rqgame(self: ProxhyPlugin):
         """Display requeue game info."""

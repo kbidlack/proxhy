@@ -20,6 +20,7 @@ class HypixelStatePlugin:
     entity_id: int
     get_health: Callable[[str], Optional[int | float]]
     real_players: Callable[[], set[str]]
+    nick: Optional[str]
 
     def _init_hypixelstate(self: ProxhyPlugin):
         self.client_type = ""
@@ -32,6 +33,12 @@ class HypixelStatePlugin:
 
         self.received_who = asyncio.Event()
         self.received_who.set()
+
+        self.nick = None
+
+    @property
+    def nick_or_username(self: ProxhyPlugin) -> str:
+        return self.nick or self.username
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self: ProxhyPlugin, buff: Buffer):

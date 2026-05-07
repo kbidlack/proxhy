@@ -52,7 +52,7 @@ class LoginPlugin:
     server_list_ping: dict
     access_token: str
     username: str
-    uuid: str
+    uuid: uuid.UUID
     secret: bytes
     secret_task: Optional[asyncio.Task]
     keep_alive_task: Optional[asyncio.Task]
@@ -84,7 +84,6 @@ class LoginPlugin:
         }
 
         self.access_token = ""
-        self.uuid = ""
         self.secret: bytes = b""
 
         self.secret_task: Optional[asyncio.Task] = None
@@ -101,7 +100,7 @@ class LoginPlugin:
         uuid_str = buff.unpack(String)
         username = buff.unpack(String)
         if not self.uuid:
-            self.uuid = uuid_str
+            self.uuid = uuid.UUID(uuid_str)
 
         if not self.logging_in:
             self.downstream.send_packet(
@@ -273,7 +272,7 @@ class LoginPlugin:
                 pass
 
             try:
-                access_token, username, uuid = await auth.complete_device_code_login(
+                access_token, username, uuid_ = await auth.complete_device_code_login(
                     device["device_code"],
                     interval=device.get("interval", 5),
                     expires_in=device.get("expires_in", 900),
@@ -314,7 +313,7 @@ class LoginPlugin:
                 return
 
             self.access_token = access_token
-            self.uuid = uuid
+            self.uuid = uuid.UUID(uuid_)
 
             success_msg = TextComponent(
                 f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
@@ -381,7 +380,7 @@ class LoginPlugin:
                 await self.close()
 
         self.downstream.send_packet(
-            0x02, String.pack(str(uuid.UUID(uuid_))), String.pack(self.username)
+            0x02, String.pack(str(uuid_)), String.pack(self.username)
         )
 
         self.downstream.send_packet(
@@ -522,14 +521,20 @@ class LoginPlugin:
         # generate shared secret
         secret = token_bytes(16)
 
-        if not (self.access_token or self.uuid):
+        has_uuid = True
+        try:
+            self.uuid
+        except AttributeError:
+            has_uuid = False
+
+        if not (self.access_token or has_uuid):
             self.access_token, self.username, self.uuid = await auth.load_auth_info(
                 self.username
             )
 
         payload = {
             "accessToken": self.access_token,
-            "selectedProfile": self.uuid,
+            "selectedProfile": str(self.uuid),
             "serverId": generate_verification_hash(server_id, secret, public_key),
         }
         async with httpx.AsyncClient(verify=False) as client:

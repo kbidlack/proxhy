@@ -44,6 +44,7 @@ from proxhy.utils import offline_uuid
 from proxhypixel.formatting import (
     format_player_dict,
 )
+from proxhypixel.models import Game
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
@@ -301,6 +302,8 @@ class StatCheckPlugin:
         self.stats_highlighted = False
         self.adjacent_teams_highlighted = False
 
+        self.game = Game()
+
         if self.player_stats_task:
             self.player_stats_task.cancel()
         while not self.player_stats_queue.empty():
@@ -429,7 +432,7 @@ class StatCheckPlugin:
             The formatted display name with gray color codes
         """
         # Use bold+italic for current user, just italic for others
-        color = "§7§l§o" if player.username == self.username else "§7§o"
+        color = "§7§l§o" if player.username == self.nick_or_username else "§7§o"
 
         if (
             isinstance(player, GamePlayerWithStats)
@@ -522,9 +525,8 @@ class StatCheckPlugin:
     ) -> None:
         # remove self from final_dead
         final_dead_no_self = self.eliminated.copy()
-        if self.username in final_dead_no_self:
-            # TODO: does not work with nicks
-            del final_dead_no_self[self.username]
+        if self.nick_or_username in final_dead_no_self:
+            del final_dead_no_self[self.nick_or_username]
 
         if data == ["OFF", "ON"]:
             packet = VarInt.pack(0) + VarInt.pack(len(final_dead_no_self))
@@ -563,9 +565,12 @@ class StatCheckPlugin:
 
                 team_letter = COLOR_CODE.sub("", team.prefix).strip()
                 if not is_team_letter(team_letter):
-                    return self.logger.debug(
-                        f"packet_teams: {team_letter} is not a valid team letter, skipping ({team.prefix})"
-                    )
+                    if self.in_bedwars_game():
+                        self.logger.debug(
+                            f"packet_teams: {team_letter} is not a valid team letter, skipping ({team.prefix})"
+                        )
+
+                    return
 
                 player = GamePlayer(
                     username=username,
@@ -970,8 +975,11 @@ class StatCheckPlugin:
 
         # Process each player
         for player in self.players_with_stats.values():
-            if player.username == self.username or own_team_color == player.team.name:
-                continue  # TODO: does not work with nicks
+            if (
+                player.username == self.nick_or_username
+                or own_team_color == player.team.name
+            ):
+                continue
 
             if isinstance(fdict := player.fplayer, Nick):
                 enemy_nicks.append(f"{player.team.code}{player.username}§f")
@@ -1046,8 +1054,7 @@ class StatCheckPlugin:
         if self.settings.bedwars.api_key_reminder.get() == "ON":
             message = buff.unpack(Chat)
             m = JOIN_RE.match(message)
-            # TODO: doesn't work with nicks
-            if m and m.group("ign").casefold() == self.username.casefold():
+            if m and m.group("ign").casefold() == self.nick_or_username.casefold():
                 if not await self.validate_api_key():
                     self.downstream.chat(
                         TextComponent("Invalid API key! ")
@@ -1093,17 +1100,16 @@ class StatCheckPlugin:
             status = GamePlayerStatus.ELIMINATED
 
         # refresh stats
-        # TODO: does not work with nicks
         await asyncio.sleep(0.1)
         self_team = self.get_own_team_info()
         self_game_player = GamePlayer(
-            self.username,
-            uuid.UUID(self.uuid),
+            self.nick_or_username,
+            self.uuid,
             self_team,
             status=status,
             respawn_time=0,  # we set to 10 later
         )
-        self.game_players[self.username] = self_game_player
+        self.game_players[self.nick_or_username] = self_game_player
 
         if "spectator" in message:
             # remove self from tab and replace with offline uuid self
@@ -1323,8 +1329,7 @@ class StatCheckPlugin:
         if fk:
             killed.status = GamePlayerStatus.ELIMINATED
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
-                # TODO: does not work with nicks, also we technically don't need this check
-                if killed.username == self.username:
+                if killed.username == self.nick_or_username:
                     self.downstream.send_packet(
                         0x38,
                         VarInt.pack(4),

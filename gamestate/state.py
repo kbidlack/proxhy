@@ -1642,6 +1642,15 @@ class GameState:
 
         return None
 
+    def get_player_by_uuid_from_player_list(
+        self, uuid: uuid_mod.UUID
+    ) -> PlayerInfo | None:
+        for player in self.player_list.values():
+            if player.uuid == uuid:
+                return player
+
+        return None
+
     def real_players(self) -> set[str]:
         return {
             p.name
