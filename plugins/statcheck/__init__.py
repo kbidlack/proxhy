@@ -586,7 +586,7 @@ class StatCheckPlugin:
                 self.player_stats_queue.put_nowait(player)
 
     @listen_server(0x38, blocking=True)
-    async def packet_player_list_item(self: ProxhyPlugin, buff: Buffer):
+    async def _packet_player_list_item(self: ProxhyPlugin, buff: Buffer):
         action = buff.unpack(VarInt)
         num_players = buff.unpack(VarInt)
 
@@ -601,6 +601,10 @@ class StatCheckPlugin:
 
                 if action == 0:  # add player
                     name = buff.unpack(String)
+
+                    if _uuid == self.uuid and name != self.username:
+                        self.nick = name
+
                     out.write(String.pack(name))
 
                     num_properties = buff.unpack(VarInt)
