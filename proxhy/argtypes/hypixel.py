@@ -283,6 +283,7 @@ class Submode(CommandArg):
             "blocking-dead": SubNode.leaf("arcade_day_one"),
             "creeper-attack": SubNode.leaf("arcade_creeper_defense"),
             "bounty-hunters": SubNode.leaf("arcade_bounty_hunters"),
+            "disasters": SubNode.leaf("arcade_disasters"),
         },
         "arena": {
             "1v1": SubNode.leaf("arena_1v1"),

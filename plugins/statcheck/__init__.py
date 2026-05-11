@@ -241,10 +241,12 @@ class GamePlayer:
     status: GamePlayerStatus
     respawn_time: int
 
+    respawn_timer_task: Optional[asyncio.Task] = field(init=False)
     offline_uuid: uuid.UUID = field(init=False)
 
     def __post_init__(self):
         self.offline_uuid = offline_uuid(self.username)
+        self.respawn_timer_task = None
 
 
 @dataclass
@@ -286,6 +288,9 @@ class StatCheckPlugin:
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self: ProxhyPlugin, _):
         for player in (self.respawning | self.eliminated).values():
+            if player.respawn_timer_task is not None:
+                player.respawn_timer_task.cancel()
+
             self.downstream.send_packet(
                 0x38,
                 VarInt.pack(4),
@@ -516,7 +521,6 @@ class StatCheckPlugin:
     async def _statcheck_event_setting_bedwars_tablist_show_rankname(
         self: ProxhyPlugin, _match, data: list
     ) -> None:
-        """Callback when show_rankname setting changes - rebuild display names."""
         self._rebuild_display_names()
 
     @subscribe("setting:bedwars.tablist.show_eliminated_players")
@@ -693,7 +697,7 @@ class StatCheckPlugin:
             self.logger.debug(err_message)
 
             if not isinstance(err, (InvalidApiKey, KeyRequired)):
-                self.downstream.chat(err_message[type(player)])
+                self.downstream.chat(err_message[type(err)])
 
             self.player_stats_queue.put_nowait(player)
 
@@ -1234,6 +1238,22 @@ class StatCheckPlugin:
         if not self.settings.bedwars.tablist.show_respawn_timer.get() == "ON":
             return
 
+        if player.respawn_timer_task is not None:
+            player.respawn_timer_task.cancel()
+            self.downstream.send_packet(
+                0x38,
+                VarInt.pack(4),
+                VarInt.pack(1),
+                UUID.pack(player.offline_uuid),
+            )
+
+        player.respawn_timer_task = self.create_task(
+            self._respawn_timer(player, reconnect)
+        )
+
+    async def _respawn_timer(
+        self: ProxhyPlugin, player: GamePlayer, reconnect: bool = False
+    ):
         # remove player from tablist
         # hypixel already does this for other players
         # but not for the user themselves
@@ -1268,12 +1288,13 @@ class StatCheckPlugin:
             await asyncio.sleep(1)
 
         player.respawn_time = 0
-        self.downstream.send_packet(
-            0x38,
-            VarInt.pack(4),  # remove player
-            VarInt.pack(1),
-            UUID.pack(player.offline_uuid),
-        )
+        if player.status != GamePlayerStatus.ELIMINATED:
+            self.downstream.send_packet(
+                0x38,
+                VarInt.pack(4),  # remove player
+                VarInt.pack(1),
+                UUID.pack(player.offline_uuid),
+            )
 
         await asyncio.sleep(0.5)  # TODO: should we really sleep this long?
         if self.gamestate.get_player_by_name_from_player_list(player.username):
