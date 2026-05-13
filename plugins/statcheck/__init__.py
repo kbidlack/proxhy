@@ -147,12 +147,15 @@ def is_team_letter(letter: str) -> TypeIs[TeamLetter]:
 
 
 def match_team_name(name: str) -> Optional[TeamName]:
-    team_name = None
     m = TEAM_COLOR_NAME.fullmatch(name)
     if m is not None:
-        team_name = REMOVE_DIGITS.sub("", m.group())
+        return REMOVE_DIGITS.sub("", m.group())  # type: ignore
 
-    return team_name  # type: ignore
+
+def match_player_color(username: str, msg: str) -> Optional[TeamColorCode]:
+    m = re.search(rf"(§.){username}", msg)
+    if m is not None:
+        return m.group(1)  # type: ignore
 
 
 TEAM_NAME_TO_LETTER: dict[TeamName, TeamLetter] = {
@@ -1334,7 +1337,8 @@ class StatCheckPlugin:
         if not self.in_bedwars_game():
             return
 
-        message = buff.unpack(Chat)
+        message = buff.clone().unpack(Chat)
+        fmted_message = Chat.unpack_component(buff).to_legacy()
 
         if message.startswith("BED DESTRUCTION >"):
             # some kill messages match bed destroy messages
@@ -1344,34 +1348,56 @@ class StatCheckPlugin:
         if not m:
             return
 
-        # TODO: this sometimes throws KeyError, what to do?
-        killed = self.game_players[m.group(1)]
         fk = message.endswith("FINAL KILL!")
+
+        username = m.group(1)
+        if username not in self.game_players:
+            color_code = match_player_color(username, fmted_message)
+            if color_code is None:
+                self.logger.warning(
+                    "_statcheck_event_chat_server_kill_msg: "
+                    f"failed to find color code for {username}"
+                )
+                return
+
+            self.game_players[username] = GamePlayer(
+                username,
+                offline_uuid(username),
+                BedWarsTeam.from_letter(
+                    BedWarsTeam.from_name(COLOR_CODE_TO_NAME[color_code])
+                ),
+                status=GamePlayerStatus.ELIMINATED
+                if fk
+                else GamePlayerStatus.RESPAWNING,
+                respawn_time=0,
+            )
+
+        gplayer = self.game_players[username]
 
         if message.endswith("disconnected."):
             return
 
         if fk:
-            killed.status = GamePlayerStatus.ELIMINATED
+            gplayer.status = GamePlayerStatus.ELIMINATED
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
-                if killed.username == self.nick_or_username:
+                if gplayer.username == self.nick_or_username:
                     self.downstream.send_packet(
                         0x38,
                         VarInt.pack(4),
                         VarInt.pack(1),
-                        UUID.pack(killed.uuid),
+                        UUID.pack(gplayer.uuid),
                     )
                 self.downstream.send_packet(
                     0x38,
                     VarInt.pack(0),  # spawn player
                     VarInt.pack(1),  # number of players
-                    UUID.pack(killed.offline_uuid),
-                    String.pack(killed.username),
+                    UUID.pack(gplayer.offline_uuid),
+                    String.pack(gplayer.username),
                     VarInt.pack(0),
                     VarInt.pack(3),  # gamemode; spectator
                     VarInt.pack(0),  # ping
                     Boolean.pack(True),
-                    Chat.pack(self._get_dead_display_name(killed)),
+                    Chat.pack(self._get_dead_display_name(gplayer)),
                 )
         else:
-            self.create_task(self.respawn_timer(killed))
+            self.create_task(self.respawn_timer(gplayer))

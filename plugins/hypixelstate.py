@@ -50,7 +50,7 @@ class HypixelStatePlugin:
 
     def _update_game(self: ProxhyPlugin, game: dict):
         self.game.update(game)
-        if game.get("mode"):
+        if game.get("mode") and game.get("gametype") != "REPLAY":
             return self.rq_game.update(game)
         else:
             return

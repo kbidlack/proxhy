@@ -218,7 +218,7 @@ class StatcheckCommandPlugin:
             skywars_stats = player._data.get("stats", {}).get("Skywars", {})
             duels_stats = player._data.get("stats", {}).get("Duels", {})
         except Exception as e:
-            print(f"Failed to log stats on {event}: {e}")  # TODO: log this
+            self.logger.debug(f"Failed to log stats on {event}: {e}")
             return
 
         log_entry = {
