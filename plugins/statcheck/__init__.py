@@ -290,10 +290,7 @@ class StatCheckPlugin:
 
     @listen_server(0x01, blocking=True)
     async def packet_join_game(self: ProxhyPlugin, _):
-        for player in (self.respawning | self.eliminated).values():
-            if player.respawn_timer_task is not None:
-                player.respawn_timer_task.cancel()
-
+        for player in self.game_players.values():
             self.downstream.send_packet(
                 0x38,
                 VarInt.pack(4),
