@@ -99,7 +99,10 @@ class LoginPlugin:
         # for localhost/offline mode when uuid isnt set during auth
         uuid_str = buff.unpack(String)
         username = buff.unpack(String)
-        if not self.uuid:
+        try:
+            if not self.uuid:
+                self.uuid = uuid.UUID(uuid_str)
+        except AttributeError:
             self.uuid = uuid.UUID(uuid_str)
 
         if not self.logging_in:

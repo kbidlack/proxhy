@@ -38,14 +38,14 @@ from plugins.commands import CommandException, CommandGroup, Lazy, command
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
 from proxhy.p2p import StreamIntent
 from proxhy.player_list import PlayerList, PlayerListSystem
-from proxhy.utils import offline_uuid, short_node_id
+from proxhy.utils import offline_uuid
 
 from .broadcastee.proxy import broadcastee_plugin_list
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
-BROKER_NODE_ID = "2d73555df138a62c4dfdfae2a22a6765e99997c0cd16ef5bbfceb28215e4cdcb"
+BROKER_URL = "http://163.192.4.69:8080/ticket"
 
 
 @dataclass
@@ -91,7 +91,7 @@ class BroadcastPlugin:
             announce_player_func=self._announce_player_entity,
         )
         self.compass_client = CompassClient(
-            broker_node_id=BROKER_NODE_ID,
+            broker_url=BROKER_URL,
             username="",
             uuid="",
             access_token="",
@@ -135,14 +135,12 @@ class BroadcastPlugin:
                 .appends(
                     TextComponent(str(self.compass_client.registered)).color("yellow")
                 )
+                .appends(TextComponent("Broker URL:").color("green"), separator="\n")
                 .appends(
-                    TextComponent("Broker Node ID:").color("green"), separator="\n"
-                )
-                .appends(
-                    TextComponent(self.compass_client.broker_node_id)
+                    TextComponent(self.compass_client.broker_url)
                     .color("yellow")
                     .hover_text(TextComponent("Click to copy").color("yellow"))
-                    .click_event("suggest_command", self.compass_client.broker_node_id)
+                    .click_event("suggest_command", self.compass_client.broker_url)
                 )
             )
 
@@ -186,34 +184,21 @@ class BroadcastPlugin:
                 msg.append(TextComponent(client.username).color("aqua"))
             return msg
 
-        @bc.command("joinid")
-        async def _command_broadcast_joinid(self: ProxhyPlugin, node_id: str):
-            """Join a broadcast by its Iroh node ID."""
-            reader, writer = await self._ask_peer(
-                name=short_node_id(node_id),
-                node_id=node_id,
-                reason=StreamIntent.BROADCAST_REQUEST,
-                command="request",
-                sent_msg="Requested to join",
-                expired_msg="The broadcast request to ",
-            )
-            await self._join_broadcast_with_streams(reader, writer, node_id)
-
         @bc.command("join")
         async def _command_broadcast_join(
             self: ProxhyPlugin, player: Lazy[MojangPlayer]
         ):
             """Send a request to join a player's broadcast."""
-            mplayer, node_id = await self._get_player_node_id(player)
+            mplayer, endpoint_addr = await self._get_player_endpoint_addr(player)
             reader, writer = await self._ask_peer(
                 name=mplayer.name,
-                node_id=node_id,
+                addr=endpoint_addr,
                 reason=StreamIntent.BROADCAST_REQUEST,
                 command="request",
                 sent_msg="Requested to join",
                 expired_msg="The broadcast request to ",
             )
-            await self._join_broadcast_with_streams(reader, writer, node_id)
+            await self._join_broadcast_with_streams(reader, writer, endpoint_addr.id)
 
         @bc.command("accept")
         async def _command_broadcast_accept(self: ProxhyPlugin, username: str):
@@ -272,10 +257,10 @@ class BroadcastPlugin:
             self: ProxhyPlugin, player: Lazy[MojangPlayer]
         ):
             """Send a broadcast invite to a player."""
-            mplayer, node_id = await self._get_player_node_id(player)
+            mplayer, endpoint_addr = await self._get_player_endpoint_addr(player)
             result = await self._ask_peer(
                 mplayer.name,
-                node_id,
+                addr=endpoint_addr,
                 reason=StreamIntent.BROADCAST_INVITE,
                 command="invite",
                 sent_msg="Invited",
@@ -323,9 +308,9 @@ class BroadcastPlugin:
             uuid=lambda player: player.uuid,
         ).register(self, onto=bc)
 
-    async def _get_player_node_id(
+    async def _get_player_endpoint_addr(
         self: ProxhyPlugin, player: Lazy[MojangPlayer]
-    ) -> tuple[MojangPlayer, str]:
+    ) -> tuple[MojangPlayer, pyroh.EndpointAddr]:
         if not self.compass_client.registered:
             raise CommandException("The compass client is not connected yet!")
 
@@ -354,12 +339,12 @@ class BroadcastPlugin:
         if not response.success:
             raise CommandException(response.details)
 
-        return player, response.details
+        return player, pyroh.EndpointAddr.from_ticket(response.details)
 
     async def _ask_peer(
         self: ProxhyPlugin,
         name: str,
-        node_id: str,
+        addr: pyroh.EndpointAddr,
         reason: StreamIntent,
         command: str,
         sent_msg: str,
@@ -426,7 +411,7 @@ class BroadcastPlugin:
 
         try:
             async with asyncio.timeout(5):
-                conn = await self.endpoint.connect(node_id, alpn=b"proxhy/1")
+                conn = await self.endpoint.connect(addr, alpn=b"proxhy/1")
                 reader, writer = await conn.open_bi()
                 writer.write(Byte.pack(reason))
                 writer.write(self.username.zfill(16).encode("utf-8"))
@@ -441,12 +426,6 @@ class BroadcastPlugin:
                 TextComponent("Failed to connect to")
                 .appends(TextComponent(name).color("gold"))
                 .append(f"! [OSError(errno={e.errno})]")
-            )
-        except ValueError:
-            raise CommandException(
-                TextComponent("Invalid node id! (").append(
-                    TextComponent(node_id).color("gold").append(")")
-                )
             )
 
         self._last_broadcast_request_time = asyncio.get_event_loop().time()
@@ -490,7 +469,7 @@ class BroadcastPlugin:
         self: ProxhyPlugin,
         reader: asyncio.StreamReader,
         writer: asyncio.StreamWriter,
-        identifier: str,  # e.g. node id or ip, will send in handshake
+        node_id: str,
     ):
         if self.joining_broadcast:
             raise CommandException(
@@ -523,7 +502,7 @@ class BroadcastPlugin:
 
             self.upstream.writer.write_eof()
 
-            await new_proxy.join(self.username, identifier)
+            await new_proxy.join(self.username, node_id)
         except CommandException:
             self.joining_broadcast = False
             raise
@@ -562,7 +541,7 @@ class BroadcastPlugin:
         self.uuid = self.uuid
 
         self.compass_client = CompassClient(
-            broker_node_id=BROKER_NODE_ID,
+            broker_url=BROKER_URL,
             username=self.username,
             uuid=str(self.uuid),
             access_token=self.access_token,

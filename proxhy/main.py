@@ -15,7 +15,7 @@ import auth
 from proxhy.proxhy import Proxhy
 
 if platform.system() == "Windows":
-    import winloop as loop_impl
+    import winloop as loop_impl  # ty: ignore[unresolved-import]
 else:
     import uvloop as loop_impl
 

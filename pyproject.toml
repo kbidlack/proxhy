@@ -16,9 +16,9 @@ dependencies = [
   "petty>=0.2.0",
   "platformdirs>=4.3",
   "pyjwt>=2.10",
-  "pyroh>=0.3.0",
+  "pyroh>=0.4.1",
   "uvloop>=0.22.1; platform_system != 'Windows'",
-  "winloop>=0.5.0"
+  "winloop>=0.5.0; platform_system == 'Windows'"
 ]
 
 [project.scripts]
@@ -35,5 +35,5 @@ where = ["."]
 "assets" = ["*.json", "*.png"]
 
 [tool.uv.sources]
-compass = { git = "https://github.com/kbidlack/compass.git", rev = "076df9ed1b9fe12333dd9f331f05f9a5e0518636" }
+compass = { git = "https://github.com/kbidlack/compass.git", rev = "e9fa9e6738d77e7556b69f7d8dcc7d74d4d07603" }
 petty = { git = "https://github.com/kbidlack/petty.git", rev = "ea200702955ee0fc5b7cd71cc832a7968bc98490" }
