@@ -373,7 +373,7 @@ class StatCheckPlugin:
         try:
             await self.hypixel_client.player_count()
             self._api_key_valid = True
-        except (InvalidApiKey, KeyRequired):
+        except InvalidApiKey, KeyRequired:
             self._api_key_valid = False
 
         return self._api_key_valid
@@ -939,10 +939,15 @@ class StatCheckPlugin:
         team = self.get_own_team_info()
         # TODO will raise ValueError if player is not on a team; handle!
 
-        side_rush = RUSH_MAPPINGS["default_mappings"]["side_rushes"][team.name.lower()]
-        alt_rush = RUSH_MAPPINGS["default_mappings"]["alt_rushes"][team.name.lower()]
+        if self.game.map is not None and self.game.map.name.lower() in RUSH_MAPPINGS:
+            key = self.game.map.name.lower()
+        else:
+            key = "_default"
 
-        return (side_rush, alt_rush)
+        main_rush = RUSH_MAPPINGS[key]["main"][team.name.lower()]
+        alt_rush = RUSH_MAPPINGS[key]["alt"][team.name.lower()]
+
+        return (main_rush, alt_rush)
 
     def get_players_on_team(self: ProxhyPlugin, color: str) -> list[str]:
         """Get a de-duplicated list of player names on the given team color.
@@ -1208,7 +1213,7 @@ class StatCheckPlugin:
             self.hypixel_client.add_key(key)
             # hypixel.Client.validate_keys does not work anymore
             await self.validate_api_key()
-        except (MalformedApiKey, InvalidApiKey):
+        except MalformedApiKey, InvalidApiKey:
             self.hypixel_client.remove_key(key)
             self.hypixel_client.add_key(self.hypixel_api_key)
             raise CommandException("Invalid API Key!")

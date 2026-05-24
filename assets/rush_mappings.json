@@ -1,6 +1,6 @@
 {
-  "default_mappings": {
-    "side_rushes": {
+  "_default": {
+    "main": {
       "red": "blue",
       "blue": "red",
       "green": "yellow",
@@ -10,7 +10,7 @@
       "pink": "gray",
       "gray": "pink"
     },
-    "alt_rushes": {
+    "alt": {
       "red": "gray",
       "gray": "red",
       "blue": "green",

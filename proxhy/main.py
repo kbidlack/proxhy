@@ -14,12 +14,12 @@ from platformdirs import user_log_path
 import auth
 from proxhy.proxhy import Proxhy
 
-if platform.system() == "Windows":
-    import winloop as loop_impl  # ty: ignore[unresolved-import]
-else:
-    import uvloop as loop_impl
+# if platform.system() == "Windows":
+#     import winloop as loop_impl  # ty: ignore[unresolved-import]
+# else:
+#     import uvloop as loop_impl
 
-loop_impl.install()
+# loop_impl.install()
 
 _log_dir = user_log_path("proxhy")
 _log_dir.mkdir(parents=True, exist_ok=True)
@@ -297,7 +297,7 @@ async def _main():
     try:
         try:
             loop.add_signal_handler(signal.SIGINT, _on_sigint)
-        except (NotImplementedError, AttributeError):
+        except NotImplementedError, AttributeError:
             # Windows / event loops without add_signal_handler
             signal.signal(
                 signal.SIGINT,
