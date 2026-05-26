@@ -8,7 +8,7 @@ from proxhy.argtypes.hypixel import GAMETYPE_T
 @dataclass
 class BedwarsMap:
     name: str
-    rush_direction: Optional[Literal["side", "alt"]] = None
+    rush_direction: Optional[Literal["main", "alt"]] = None
     max_height: Optional[int] = None
     min_height: Optional[int] = None
 

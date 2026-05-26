@@ -2,12 +2,12 @@
   "acropolis": {
     "max_height": 101,
     "min_height": 62,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "aetius": {
     "max_height": 95,
     "min_height": 68,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "airshow": {
     "max_height": 101,
@@ -17,17 +17,17 @@
   "alaric": {
     "max_height": 98,
     "min_height": 64,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "amazon": {
     "max_height": 94,
     "min_height": 53,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "ambush": {
     "max_height": 102,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "antenna": {
     "max_height": 89,
@@ -42,7 +42,7 @@
   "aqil": {
     "max_height": 91,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "aquarium": {
     "max_height": 111,
@@ -52,7 +52,7 @@
   "arcade": {
     "max_height": 91,
     "min_height": 62,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "archway": {
     "max_height": 87,
@@ -62,7 +62,7 @@
   "arid": {
     "max_height": 84,
     "min_height": 54,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "artemis": {
     "max_height": 97,
@@ -79,25 +79,30 @@
     "min_height": 59,
     "rush_direction": "alt"
   },
+  "atlas prime": {
+    "max_height": 95,
+    "min_height": 71,
+    "rush_direction": "main"
+  },
   "babylon": {
     "max_height": 107,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "beeeee": {
     "max_height": 102,
     "min_height": 75,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "bio-hazard": {
     "max_height": 96,
     "min_height": 62,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "blitzen": {
     "max_height": 111,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "blizzard bay": {
     "max_height": 93,
@@ -107,12 +112,12 @@
   "bloom": {
     "max_height": 100,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "blossom": {
     "max_height": 97,
     "min_height": 73,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "boardwalk": {
     "max_height": 93,
@@ -152,17 +157,17 @@
   "cascade": {
     "max_height": 88,
     "min_height": 59,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "casita": {
     "max_height": 94,
     "min_height": 61,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "catalyst": {
     "max_height": 102,
     "min_height": 64,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "cauldron": {
     "max_height": 100,
@@ -182,7 +187,7 @@
   "cliffside": {
     "max_height": 101,
     "min_height": 72,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "coastal": {
     "max_height": 90,
@@ -192,7 +197,7 @@
   "comet": {
     "max_height": 116,
     "min_height": 75,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "crimson": {
     "max_height": 106,
@@ -227,12 +232,12 @@
   "deadwood": {
     "max_height": 84,
     "min_height": 54,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "deposit": {
     "max_height": 82,
     "min_height": 56,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "dockyard": {
     "max_height": 98,
@@ -242,52 +247,57 @@
   "dragon light": {
     "max_height": 96,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "dragonstar": {
     "max_height": 101,
     "min_height": 65,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "dreamgrove": {
     "max_height": 116,
     "min_height": 80,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "duye": {
     "max_height": 95,
-    "min_height": null,
-    "rush_direction": "side"
+    "min_height": 67,
+    "rush_direction": "main"
   },
   "easter basket": {
     "max_height": 94,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "easter garden": {
     "max_height": 99,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "eastwood": {
     "max_height": 101,
     "min_height": 50,
-    "rush_direction": "side"
+    "rush_direction": "main"
+  },
+  "echo ruins": {
+    "max_height": 98,
+    "min_height": 67,
+    "rush_direction": "main"
   },
   "egg factory": {
     "max_height": 93,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "egg hunt": {
     "max_height": 101,
     "min_height": 52,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "egg run": {
     "max_height": 99,
     "min_height": 63,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "enchanted": {
     "max_height": 101,
@@ -297,7 +307,7 @@
   "entangle": {
     "max_height": 96,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "extinction": {
     "max_height": 96,
@@ -312,12 +322,12 @@
   "fireplace": {
     "max_height": 96,
     "min_height": 53,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "fort doon": {
     "max_height": 140,
     "min_height": 42,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "foxtrots": {
     "max_height": 95,
@@ -327,7 +337,7 @@
   "frogiton": {
     "max_height": 91,
     "min_height": 61,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "frost": {
     "max_height": 122,
@@ -337,12 +347,12 @@
   "frosted": {
     "max_height": 91,
     "min_height": 65,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "fruitbrawl": {
     "max_height": 101,
     "min_height": 63,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "gardens": {
     "max_height": 102,
@@ -352,12 +362,12 @@
   "gateway": {
     "max_height": 129,
     "min_height": 88,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "gelato": {
     "max_height": 81,
     "min_height": 58,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "ghoulish": {
     "max_height": 87,
@@ -372,12 +382,12 @@
   "glacier": {
     "max_height": 106,
     "min_height": 70,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "grave": {
     "max_height": null,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "graveship": {
     "max_height": 124,
@@ -392,12 +402,12 @@
   "hanging gardens": {
     "max_height": 108,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "harvest": {
     "max_height": 84,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "harvesting": {
     "max_height": 96,
@@ -407,17 +417,17 @@
   "hell temple": {
     "max_height": 115,
     "min_height": 69,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "highland peaks": {
     "max_height": 89,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "hollow": {
     "max_height": 89,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "holmgang": {
     "max_height": 98,
@@ -432,7 +442,7 @@
   "impere": {
     "max_height": 105,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "infinite": {
     "max_height": 89,
@@ -442,7 +452,7 @@
   "invasion": {
     "max_height": 116,
     "min_height": 75,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "invicta": {
     "max_height": null,
@@ -452,7 +462,7 @@
   "ironclad": {
     "max_height": 88,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "ivory castle": {
     "max_height": 111,
@@ -477,22 +487,22 @@
   "kubo": {
     "max_height": 92,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lectus": {
     "max_height": 91,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lighthouse": {
     "max_height": 111,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lightstone": {
     "max_height": 96,
     "min_height": 53,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lions temple": {
     "max_height": 104,
@@ -507,67 +517,67 @@
   "lost temple": {
     "max_height": 92,
     "min_height": 68,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lotice": {
     "max_height": 91,
     "min_height": 62,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lotus": {
     "max_height": 90,
     "min_height": 62,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "lunarhouse": {
     "max_height": 111,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "meadow": {
     "max_height": 81,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "meso": {
     "max_height": 96,
     "min_height": 64,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "mirage": {
     "max_height": 87,
     "min_height": 44,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "montipora": {
     "max_height": 99,
     "min_height": 64,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "mortuus": {
     "max_height": 91,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "mosdalr": {
     "max_height": 105,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "mystery": {
     "max_height": 93,
     "min_height": 62,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "nebuc": {
     "max_height": 106,
     "min_height": 73,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "nostalgia": {
     "max_height": 97,
     "min_height": 69,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "nutcracker": {
     "max_height": 99,
@@ -577,42 +587,47 @@
   "obelisk": {
     "max_height": 115,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "ominosity": {
     "max_height": 124,
     "min_height": 79,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "orbit": {
     "max_height": 97,
     "min_height": 57,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "orchestra": {
     "max_height": 107,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "orchid": {
     "max_height": 87,
     "min_height": 65,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "orientwood": {
     "max_height": 101,
     "min_height": 50,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "paladin": {
     "max_height": 99,
     "min_height": 63,
     "rush_direction": "alt"
   },
+  "pantheon": {
+    "max_height": 97,
+    "min_height": 60,
+    "rush_direction": "main"
+  },
   "paradox": {
     "max_height": 85,
     "min_height": 59,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "pavilion": {
     "max_height": 98,
@@ -642,17 +657,17 @@
   "playground": {
     "max_height": 101,
     "min_height": 53,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "polemus": {
     "max_height": null,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "polygon": {
     "max_height": 94,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "pool party": {
     "max_height": 87,
@@ -667,7 +682,7 @@
   "raze": {
     "max_height": 89,
     "min_height": 61,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "relic": {
     "max_height": 91,
@@ -677,12 +692,12 @@
   "retreat": {
     "max_height": null,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "rigged": {
     "max_height": null,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "rise": {
     "max_height": 97,
@@ -697,7 +712,7 @@
   "rooted": {
     "max_height": 96,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "ruins": {
     "max_height": null,
@@ -712,7 +727,7 @@
   "sanctum": {
     "max_height": 92,
     "min_height": 60,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "sandcastle": {
     "max_height": 103,
@@ -732,17 +747,17 @@
   "scorched sands": {
     "max_height": 93,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "seraph": {
     "max_height": 95,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "serenity": {
     "max_height": 94,
     "min_height": 65,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "shark attack": {
     "max_height": 95,
@@ -752,32 +767,32 @@
   "siege": {
     "max_height": 109,
     "min_height": 80,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "silver birch": {
     "max_height": 115,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "sky festival": {
     "max_height": 95,
     "min_height": 64,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "sky rise": {
     "max_height": 91,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "slumber": {
     "max_height": 94,
     "min_height": 66,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "snails": {
     "max_height": 91,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "snowkeep": {
     "max_height": 96,
@@ -792,17 +807,22 @@
   "solace": {
     "max_height": 101,
     "min_height": 64,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "speedway": {
     "max_height": 91,
     "min_height": 55,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "springtide": {
     "max_height": 87,
     "min_height": 58,
     "rush_direction": "alt"
+  },
+  "station": {
+    "max_height": 113,
+    "min_height": 63,
+    "rush_direction": "main"
   },
   "steampumpkin": {
     "max_height": 100,
@@ -827,7 +847,7 @@
   "sunflower": {
     "max_height": 96,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "swashbuckle": {
     "max_height": 86,
@@ -837,12 +857,12 @@
   "symphonic": {
     "max_height": 107,
     "min_height": 67,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "temple": {
     "max_height": 107,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "tengshe": {
     "max_height": 101,
@@ -857,27 +877,27 @@
   "terraced": {
     "max_height": 90,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "tigris": {
     "max_height": 107,
     "min_height": 68,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "tinselbury": {
     "max_height": 101,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "toro": {
     "max_height": 93,
     "min_height": 65,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "toy factory": {
     "max_height": null,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "treenan": {
     "max_height": 96,
@@ -892,12 +912,12 @@
   "turtle cove": {
     "max_height": 99,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "tuzi": {
     "max_height": 92,
     "min_height": 61,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "unchained": {
     "max_height": 91,
@@ -907,12 +927,12 @@
   "unturned": {
     "max_height": 93,
     "min_height": 54,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "urban plaza": {
     "max_height": 84,
     "min_height": 56,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "usagi": {
     "max_height": 97,
@@ -922,17 +942,17 @@
   "varyth": {
     "max_height": 105,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "vigilante": {
     "max_height": 88,
     "min_height": 63,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "waterfall": {
     "max_height": 101,
     "min_height": 58,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "whiskers": {
     "max_height": 88,
@@ -942,7 +962,7 @@
   "winterland": {
     "max_height": null,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "wrapped up": {
     "max_height": null,
@@ -952,12 +972,12 @@
   "yandi": {
     "max_height": 81,
     "min_height": null,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "yue": {
     "max_height": 102,
     "min_height": 73,
-    "rush_direction": "side"
+    "rush_direction": "main"
   },
   "zarzul": {
     "max_height": 115,

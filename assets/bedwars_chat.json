@@ -159,6 +159,7 @@
     "^(.+?) be killed with magic by (.+?)\\.( FINAL KILL!)?$",
     "^(.+?) be killed with metal by (.+?)'s Golem\\.( FINAL KILL!)?$",
     "^(.+?) was killed by (.+?)\\.( FINAL KILL!)?$",
+    "^(.+?) was killed by \\.( FINAL KILL!)?$",
     "^(.+?) fell into the void\\.( FINAL KILL!)?$",
     "^(.+?) disconnected\\.( FINAL KILL!)?$"
   ],

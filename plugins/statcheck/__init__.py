@@ -775,21 +775,21 @@ class StatCheckPlugin:
             return
 
         if self.game.map is None:
-            self.logger.warning("highlight_adjacent_teams: could not determine map")
+            self.logger.warning("highlight_adjacent_teams: unknown map")
             return
         try:
-            side_rush, alt_rush = self.get_adjacent_teams()
+            main_rush, alt_rush = self.get_adjacent_teams()
         except ValueError:  # player is not on a team
             return
-        side_players = self.get_players_on_team(side_rush)
+        main_players = self.get_players_on_team(main_rush)
         alt_players = self.get_players_on_team(alt_rush)
 
-        if self.game.map.rush_direction == "side":
-            first_rush, first_players = side_rush, side_players
+        if self.game.map.rush_direction == "main":
+            first_rush, first_players = main_rush, main_players
             other_adjacent_rush, other_adjacent_players = alt_rush, alt_players
         elif self.game.map.rush_direction == "alt":
             first_rush, first_players = alt_rush, alt_players
-            other_adjacent_rush, other_adjacent_players = side_rush, side_players
+            other_adjacent_rush, other_adjacent_players = main_rush, main_players
         else:
             self.logger.warning(
                 f"highlight_adjacent_teams: unexpected rush_direction {self.game.map.rush_direction!r}"
@@ -928,21 +928,13 @@ class StatCheckPlugin:
             )
 
     def get_adjacent_teams(self: ProxhyPlugin) -> tuple[TeamName, TeamName]:
-        """Get the (side_rush, alt_rush) teams for the current player.
-
-        Returns:
-            Tuple of (side_rush_color, alt_rush_color)
-
-        Raises:
-            ValueError: If player is not on a team
-        """
         team = self.get_own_team_info()
         # TODO will raise ValueError if player is not on a team; handle!
 
         if self.game.map is not None and self.game.map.name.lower() in RUSH_MAPPINGS:
             key = self.game.map.name.lower()
         else:
-            key = "_default"
+            key = "DEFAULT"
 
         main_rush = RUSH_MAPPINGS[key]["main"][team.name.lower()]
         alt_rush = RUSH_MAPPINGS[key]["alt"][team.name.lower()]
