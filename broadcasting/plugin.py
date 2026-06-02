@@ -15,7 +15,7 @@ if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
 
-class BroadcastPeerPlugin(
+class BroadcastPeerPlugin(  # type: ignore
     BroadcastPeerBasePlugin,
     BroadcastPeerCommandsPlugin,
     BroadcastPeerLoginPlugin,

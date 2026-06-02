@@ -1357,9 +1357,7 @@ class StatCheckPlugin:
             self.game_players[username] = GamePlayer(
                 username,
                 offline_uuid(username),
-                BedWarsTeam.from_letter(
-                    BedWarsTeam.from_name(COLOR_CODE_TO_NAME[color_code])
-                ),
+                BedWarsTeam.from_name(COLOR_CODE_TO_NAME[color_code]),
                 status=GamePlayerStatus.ELIMINATED
                 if fk
                 else GamePlayerStatus.RESPAWNING,

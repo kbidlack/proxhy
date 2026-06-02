@@ -19,7 +19,7 @@ from plugins.statcheck.command import StatcheckCommandPlugin
 from plugins.window import WindowPlugin
 
 
-class ProxhyPlugin(
+class ProxhyPlugin(  # type: ignore
     AutoboopPlugin,
     BroadcastPlugin,
     ChatPlugin,

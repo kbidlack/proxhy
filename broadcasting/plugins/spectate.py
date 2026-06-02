@@ -327,7 +327,7 @@ class BroadcastPeerSpectatePlugin:
 
 
 class PlayerSpectateWindow(Window):
-    proxy: BroadcastPeerPlugin
+    proxy: BroadcastPeerPlugin  # type: ignore
     entity: Player
 
     def __init__(self, proxy: BroadcastPeerPlugin, entity: Player):

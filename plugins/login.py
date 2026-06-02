@@ -370,7 +370,9 @@ class LoginPlugin:
                 await self.close()
 
         self.downstream.send_packet(
-            0x02, String.pack(str(uuid_)), String.pack(self.username)
+            0x02,
+            String.pack(str(uuid_)),  # type: ignore
+            String.pack(self.username),
         )
 
         self.downstream.send_packet(

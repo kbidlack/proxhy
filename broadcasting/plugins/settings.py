@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 
 class BroadcastPeerSettingsPlugin(SettingsPlugin):
-    settings: BroadcastSettings
+    settings: BroadcastSettings  # type: ignore
 
     def _init_settings(self: BroadcastPeerPlugin):
         pass  # override automatic creation of ProxhySettings

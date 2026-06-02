@@ -1,6 +1,7 @@
 # nearly 500 lines of fake code
 # credit for most of the busywork goes to someone other than me
 from collections import defaultdict
+from typing import cast
 
 from hypixel import Player
 from hypixel.color import Color
@@ -126,7 +127,7 @@ def format_other(other):
 
 
 # BEDWARS
-def format_bw_fkdr(fkdr):
+def format_bw_fkdr(fkdr: float):
     if fkdr < 1:
         return "§7" + str(fkdr)
     elif fkdr < 2.5:
@@ -147,7 +148,7 @@ def format_bw_fkdr(fkdr):
         return "§0" + str(fkdr)
 
 
-def format_bw_wins(wins):
+def format_bw_wins(wins: int):
     if wins < 250:
         return "§7" + str(wins)
     elif wins < 1000:
@@ -168,7 +169,7 @@ def format_bw_wins(wins):
         return "§0" + str(wins)
 
 
-def format_bw_finals(finals):
+def format_bw_finals(finals: int):
     if finals < 250:
         return "§7" + str(finals)
     elif finals < 1000:
@@ -189,7 +190,7 @@ def format_bw_finals(finals):
         return "§0" + str(finals)
 
 
-def format_bw_wlr(wlr):
+def format_bw_wlr(wlr: float):
     if wlr < 0.5:
         return "§7" + str(wlr)
     elif wlr < 1:
@@ -210,7 +211,7 @@ def format_bw_wlr(wlr):
         return "§0" + str(wlr)
 
 
-def format_bw_star(level):
+def format_bw_star(level: float):
     # Thanks a ton to Tiget on the hypixel forums for creating a list of all the prestige colors up to 3000
     # ^ I can't find this post but here's one with up to 2000:
     # https://hypixel.net/threads/tool-bedwars-prestige-colors-in-minecraft-color-code-and-hex-code-high-effort-post.3841719/
@@ -220,8 +221,8 @@ def format_bw_star(level):
     if level < 1000:
         stars = f"{colors[int(level // 100)]}[{level}✫]"
     elif level < 1100:
-        level = str(level)
-        stars += f"§c[§6{level[0]}§e{level[1]}§a{level[2]}§b{level[3]}§d✫§5]"
+        slevel = str(level)
+        stars += f"§c[§6{slevel[0]}§e{slevel[1]}§a{slevel[2]}§b{slevel[3]}§d✫§5]"
     elif level < 1200:
         stars += f"§7[§f{level}§7✪]"
     elif level < 1300:
@@ -241,98 +242,98 @@ def format_bw_star(level):
     elif level < 2000:
         stars += f"§7[§5{level}§8✪§7]"
     elif level < 2100:
-        level = str(level)
-        stars += f"§8[§7{level[0]}§f{level[1:3]}§7{level[3]}✪§8]"
+        slevel = str(level)
+        stars += f"§8[§7{slevel[0]}§f{slevel[1:3]}§7{slevel[3]}✪§8]"
     elif level < 2200:
-        level = str(level)
-        stars += f"§f[{level[0]}§e{level[1:3]}§6{level[3]}⚝]"
+        slevel = str(level)
+        stars += f"§f[{slevel[0]}§e{slevel[1:3]}§6{slevel[3]}⚝]"
     elif level < 2300:
-        level = str(level)
-        stars += f"§6[{level[0]}§f{level[1:3]}§b{level[3]}§3⚝]"
+        slevel = str(level)
+        stars += f"§6[{slevel[0]}§f{slevel[1:3]}§b{slevel[3]}§3⚝]"
     elif level < 2400:
-        level = str(level)
-        stars += f"§5[{level[0]}§d{level[1:3]}§6{level[3]}§e⚝]"
+        slevel = str(level)
+        stars += f"§5[{slevel[0]}§d{slevel[1:3]}§6{slevel[3]}§e⚝]"
     elif level < 2500:
-        level = str(level)
-        stars += f"§b[{level[0]}§f{level[1:3]}§7{level[3]}⚝§8]"
+        slevel = str(level)
+        stars += f"§b[{slevel[0]}§f{slevel[1:3]}§7{slevel[3]}⚝§8]"
     elif level < 2600:
-        level = str(level)
-        stars += f"§f[{level[0]}§a{level[1:3]}§2{level[3]}⚝]"
+        slevel = str(level)
+        stars += f"§f[{slevel[0]}§a{slevel[1:3]}§2{slevel[3]}⚝]"
     elif level < 2700:
-        level = str(level)
-        stars += f"§4[{level[0]}§c{level[1:3]}§d{level[3]}⚝§5]"
+        slevel = str(level)
+        stars += f"§4[{slevel[0]}§c{slevel[1:3]}§d{slevel[3]}⚝§5]"
     elif level < 2800:
-        level = str(level)
-        stars += f"§e[{level[0]}§f{level[1:3]}§8{level[3]}⚝]"
+        slevel = str(level)
+        stars += f"§e[{slevel[0]}§f{slevel[1:3]}§8{slevel[3]}⚝]"
     elif level < 2900:
-        level = str(level)
-        stars += f"§a[{level[0]}§2{level[1:3]}§6{level[3]}⚝§e]"
+        slevel = str(level)
+        stars += f"§a[{slevel[0]}§2{slevel[1:3]}§6{slevel[3]}⚝§e]"
     elif level < 3000:
-        level = str(level)
-        stars += f"§b[{level[0]}§3{level[1:3]}§9{level[3]}⚝§1]"
+        slevel = str(level)
+        stars += f"§b[{slevel[0]}§3{slevel[1:3]}§9{slevel[3]}⚝§1]"
     elif level < 3100:
-        level = str(level)
-        stars += f"§e[{level[0]}§6{level[1:3]}§c{level[3]}⚝§4]"
+        slevel = str(level)
+        stars += f"§e[{slevel[0]}§6{slevel[1:3]}§c{slevel[3]}⚝§4]"
     elif level < 3200:  # oh my god all of these were so bad to make someone save
-        level = str(level)
-        stars += f"§9[{level[0]}§3{level[1:3]}§6{level[3]}✥§3]"
+        slevel = str(level)
+        stars += f"§9[{slevel[0]}§3{slevel[1:3]}§6{slevel[3]}✥§3]"
     elif level < 3300:
-        level = str(level)
-        stars += f"§c[§4{level[0]}§7{level[1:3]}§4{level[3]}§c✥]"
+        slevel = str(level)
+        stars += f"§c[§4{slevel[0]}§7{slevel[1:3]}§4{slevel[3]}§c✥]"
     elif level < 3400:
-        level = str(level)
-        stars += f"§9[{level[0:2]}§d{level[2]}§c{level[3]}✥§4]"
+        slevel = str(level)
+        stars += f"§9[{slevel[0:2]}§d{slevel[2]}§c{slevel[3]}✥§4]"
     elif level < 3500:
-        level = str(level)
-        stars += f"§2[§a{level[0]}§d{level[1:3]}§c{level[3]}✥§2]"
+        slevel = str(level)
+        stars += f"§2[§a{slevel[0]}§d{slevel[1:3]}§c{slevel[3]}✥§2]"
     elif level < 3600:
-        level = str(level)
-        stars += f"§c[{level[0]}§4{level[1:3]}§2{level[3]}§a✥]"
+        slevel = str(level)
+        stars += f"§c[{slevel[0]}§4{slevel[1:3]}§2{slevel[3]}§a✥]"
     elif level < 3700:
-        level = str(level)
-        stars += f"§a[{level[0:2]}§b{level[2]}§9{level[3]}✥§1]"
+        slevel = str(level)
+        stars += f"§a[{slevel[0:2]}§b{slevel[2]}§9{slevel[3]}✥§1]"
     elif level < 3800:
-        level = str(level)
-        stars += f"§4[{level[0]}§c{level[1:3]}§c{level[3]}§3✥]"
+        slevel = str(level)
+        stars += f"§4[{slevel[0]}§c{slevel[1:3]}§c{slevel[3]}§3✥]"
     elif level < 3900:
-        level = str(level)
-        stars += f"§1[{level[0]}§9{level[1]}§5{level[2:4]}§d✥§1]"
+        slevel = str(level)
+        stars += f"§1[{slevel[0]}§9{slevel[1]}§5{slevel[2:4]}§d✥§1]"
     elif level < 4000:
-        level = str(level)
-        stars += f"§c[{level[0]}§a{level[1:3]}§3{level[3]}§9✥]"
+        slevel = str(level)
+        stars += f"§c[{slevel[0]}§a{slevel[1:3]}§3{slevel[3]}§9✥]"
     elif level < 4100:
-        level = str(level)
-        stars += f"§5[{level[0]}§c{level[1:3]}§6{level[3]}✥§e]"
+        slevel = str(level)
+        stars += f"§5[{slevel[0]}§c{slevel[1:3]}§6{slevel[3]}✥§e]"
     elif level < 4200:
-        level = str(level)
-        stars += f"§e[{level[0]}§6{level[1]}§c{level[2]}§d{level[3]}✥§5]"
+        slevel = str(level)
+        stars += f"§e[{slevel[0]}§6{slevel[1]}§c{slevel[2]}§d{slevel[3]}✥§5]"
     elif level < 4300:
-        level = str(level)
-        stars += f"§1[§9{level[0]}§3{level[1]}§b{level[2]}§f{level[3]}§7✥]"
+        slevel = str(level)
+        stars += f"§1[§9{slevel[0]}§3{slevel[1]}§b{slevel[2]}§f{slevel[3]}§7✥]"
     elif level < 4400:
-        level = str(level)
-        stars += f"§0[§5{level[0]}§8{level[1:3]}§5{level[3]}✥§0]"
+        slevel = str(level)
+        stars += f"§0[§5{slevel[0]}§8{slevel[1:3]}§5{slevel[3]}✥§0]"
     elif level < 4500:
-        level = str(level)
-        stars += f"§2[{level[0]}§a{level[1]}§e{level[2]}§6{level[3]}§5✥§d]"
+        slevel = str(level)
+        stars += f"§2[{slevel[0]}§a{slevel[1]}§e{slevel[2]}§6{slevel[3]}§5✥§d]"
     elif level < 4600:
-        level = str(level)
-        stars += f"§f[{level[0]}§b{level[1:3]}§3{level[3]}✥]"
+        slevel = str(level)
+        stars += f"§f[{slevel[0]}§b{slevel[1:3]}§3{slevel[3]}✥]"
     elif level < 4700:
-        level = str(level)
-        stars += f"§3[§b{level[0]}§e{level[1:3]}§6{level[3]}§d✥§5]"
+        slevel = str(level)
+        stars += f"§3[§b{slevel[0]}§e{slevel[1:3]}§6{slevel[3]}§d✥§5]"
     elif level < 4800:
-        level = str(level)
-        stars += f"§f[§4{level[0]}§c{level[1:3]}§9{level[3]}§1✥§9]"
+        slevel = str(level)
+        stars += f"§f[§4{slevel[0]}§c{slevel[1:3]}§9{slevel[3]}§1✥§9]"
     elif level < 4900:
-        level = str(level)
-        stars += f"§5[{level[0]}§c{level[1]}§6{level[2]}§e{level[3]}§b✥§3]"
+        slevel = str(level)
+        stars += f"§5[{slevel[0]}§c{slevel[1]}§6{slevel[2]}§e{slevel[3]}§b✥§3]"
     elif level < 5000:
-        level = str(level)
-        stars += f"§2[§a{level[0]}§f{level[1:3]}§a{level[3]}✥§2]"
+        slevel = str(level)
+        stars += f"§2[§a{slevel[0]}§f{slevel[1:3]}§a{slevel[3]}✥§2]"
     else:
-        level = str(level)
-        stars += f"§4[{level[0]}§5{level[1]}§9{level[2:4]}§1✥§0]"
+        slevel = str(level)
+        stars += f"§4[{slevel[0]}§5{slevel[1]}§9{slevel[2:4]}§1✥§0]"
 
     return stars
 
@@ -432,7 +433,7 @@ def format_player_dict(player: Player | dict, gamemode: GAMETYPE_T):
     data = _resolve_player(player)
     if gamemode == "bedwars":
         bedwars_data = data.get("stats", {}).get("Bedwars", {})
-        fdict = dict(format_bedwars_dict(bedwars_data))
+        fdict: dict[str, str | float | int] = dict(format_bedwars_dict(bedwars_data))
         level = bedwars_data.get("bedwars_level", 1)
         finals = bedwars_data.get("final_kills_bedwars", 0)
         final_deaths = bedwars_data.get("final_deaths_bedwars", 0)
@@ -527,7 +528,7 @@ def format_skywars_dict(_data: dict):
     }
 
     base_keys = list(_map_dict.keys())
-    data: defaultdict[str, int | float] = defaultdict(int, _data.copy())
+    data: defaultdict[str, int | float | str] = defaultdict(int, _data.copy())
 
     modes = [
         "",
@@ -551,10 +552,10 @@ def format_skywars_dict(_data: dict):
         for key in base_keys:
             _map_dict[f"{key}{suffix}"] = _map_dict[key]
 
-        kills = data[f"kills{suffix}"]
-        deaths = data[f"deaths{suffix}"]
-        wins = data[f"wins{suffix}"]
-        losses = data[f"losses{suffix}"]
+        kills = cast(int, data[f"kills{suffix}"])
+        deaths = cast(int, data[f"deaths{suffix}"])
+        wins = cast(int, data[f"wins{suffix}"])
+        losses = cast(int, data[f"losses{suffix}"])
 
         data[f"kdr{suffix}"] = safe_div(kills, deaths)
         data[f"wlr{suffix}"] = safe_div(wins, losses)
@@ -677,6 +678,6 @@ def format_bedwars_dict(_data: dict):
 
     for key in data:
         if func := _map_dict.get(key):
-            data[key] = func(data[key])
+            data[key] = func(data[key])  # type: ignore
 
     return data

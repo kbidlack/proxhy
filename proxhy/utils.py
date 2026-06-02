@@ -216,7 +216,7 @@ def safe_div(a: int | float, b: int | float) -> float:
 
 def offline_uuid(username: str) -> _uuid.UUID:
     digest = hashlib.md5(f"OfflinePlayer:{username}".encode()).digest()
-    return _uuid.UUID(bytes=bytes(digest), version=3)
+    return _uuid.UUID(bytes=digest, version=3)
 
 
 def uuid_version(value: str) -> Optional[int]:

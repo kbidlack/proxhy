@@ -1,6 +1,6 @@
 import math
 from textwrap import fill
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from petty.nbt import dumps, from_dict
 from petty.protocol.datatypes import (
@@ -18,6 +18,8 @@ from ._settings import Setting, SettingGroup, SettingsStorage, create_setting
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
+
+S = TypeVar("S", bound=SettingGroup)
 
 
 class SettingsPlugin:
@@ -66,7 +68,7 @@ class SettingsPlugin:
 
 
 class SettingsMenu(Window):
-    proxy: ProxhyPlugin
+    proxy: ProxhyPlugin  # type: ignore
 
     def __init__(
         self,
@@ -84,9 +86,9 @@ class SettingsMenu(Window):
         self.proxy = proxy
         self.settings = self.proxy.settings
         self.subsetting_path = subsetting_path
-        self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
+        self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(  # type: ignore
             subsetting_path
-        )  # type: ignore
+        )
 
         self.DISABLED_STATES = {"off", "none", "disabled"}
         self.menu_slots: dict[int, str] = {}

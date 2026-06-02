@@ -253,7 +253,7 @@ class BroadcastPlugin:
             )
             if result is None:
                 raise CommandException(
-                    TextComponent(player.name)
+                    TextComponent(mplayer.name)
                     .color("gold")
                     .appends("denied your invite!")
                 )
@@ -299,32 +299,32 @@ class BroadcastPlugin:
         if not self.compass_client.registered:
             raise CommandException("The compass client is not connected yet!")
 
-        player = await player
+        mplayer = await player
 
         try:
             async with asyncio.timeout(1):
-                response = await self.compass_client.request(player.name)
+                response = await self.compass_client.request(mplayer.name)
         except IOError as e:
             raise CommandException(
                 TextComponent("Unable to connect to ")
-                .append(TextComponent(player.name).color("blue"))
+                .append(TextComponent(mplayer.name).color("blue"))
                 .appends(f"): [IOError(errno={e.errno})]")
             )
         except compass.RequestFailure as e:
             raise CommandException(e.details)
         except asyncio.TimeoutError:
             raise CommandException(
-                f"Timed out while trying to connect to {player.name}"
+                f"Timed out while trying to connect to {mplayer.name}"
             )
         except Exception as e:
             raise CommandException(
-                f"An unknown error occurred while trying to connect to {player.name}! ({e})"
+                f"An unknown error occurred while trying to connect to {mplayer.name}! ({e})"
             )
 
         if not response.success:
             raise CommandException(response.details)
 
-        return player, pyroh.EndpointAddr.from_ticket(response.details)
+        return mplayer, pyroh.EndpointAddr.from_ticket(response.details)
 
     async def _ask_peer(
         self: ProxhyPlugin,

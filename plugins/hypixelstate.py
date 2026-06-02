@@ -85,7 +85,7 @@ class HypixelStatePlugin:
                 health = float(score.value)
 
         if player_name.casefold() == self.username.casefold():
-            health = float(self.gamestate.health)
+            health = self.gamestate.health
 
         if health is not None:
             return round(health, 1)

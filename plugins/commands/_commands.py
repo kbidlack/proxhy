@@ -236,7 +236,7 @@ class CommandArg(ABC):
         ...
 
     @classmethod
-    async def suggest[S: str](cls, ctx: CommandContext, partial: str) -> list[S]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """
         Provide tab completion suggestions for this type.
 
@@ -257,6 +257,9 @@ class CommandArg(ABC):
 
 class Parameter:
     """Represents a command parameter with its metadata."""
+
+    options: Optional[tuple]
+    union_types: tuple | None
 
     def __init__(self, param: inspect.Parameter, type_hint: Any = None):
         self.name = param.name

@@ -66,9 +66,8 @@ class StatcheckCommandPlugin:
     ) -> SCSupportedGamemode:
         if mode is not None:
             return mode
-        gametype = self.game.gametype
-        if gametype in SCSupportedGamemode.SUPPORTED:
-            return SCSupportedGamemode(gametype)
+        if self.game.gametype in SCSupportedGamemode.SUPPORTED:
+            return SCSupportedGamemode(self.game.gametype)  # type: ignore ???
         return SCSupportedGamemode("bedwars")
 
     @command("lastlogin", "ll")
@@ -363,12 +362,12 @@ class StatcheckCommandPlugin:
         self, kills: float, deaths: float, wins: float, losses: float
     ) -> tuple[float, float]:
         try:
-            fkdr = kills / deaths if deaths > 0 else float(kills)
+            fkdr = kills / deaths if deaths > 0 else kills
         except Exception:
             fkdr = 0.0
 
         try:
-            wlr = wins / losses if losses > 0 else float(wins)
+            wlr = wins / losses if losses > 0 else wins
         except Exception:
             wlr = 0.0
 

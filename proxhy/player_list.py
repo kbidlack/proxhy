@@ -1,16 +1,16 @@
 import shelve
 from pathlib import Path
-from typing import Any, Callable, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Callable
 
-from platformdirs import user_config_dir
 from petty.protocol.datatypes import TextComponent
+from platformdirs import user_config_dir
 
-from plugins.commands._commands import CommandArg, CommandException
 from plugins.commands import CommandGroup
+from plugins.commands._commands import CommandArg, CommandException
 
 if TYPE_CHECKING:
-    from proxhy.plugin import ProxhyPlugin
     from plugins.commands._commands import CommandContext
+    from proxhy.plugin import ProxhyPlugin
 
 
 class PlayerList:

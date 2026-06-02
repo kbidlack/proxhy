@@ -1065,7 +1065,7 @@ class GameState:
         self.open_window = Window(
             window_id=window_id,
             window_type=window_type,
-            title=str(title) if title else "",
+            title=title,
             slot_count=slot_count,
             entity_id=entity_id,
         )
@@ -1121,19 +1121,10 @@ class GameState:
     def _handle_update_sign(self, buff: Buffer) -> None:
         """Handle Update Sign packet (0x33)."""
         pos: Pos = buff.unpack(Position)
-        line1 = buff.unpack(Chat)
-        line2 = buff.unpack(Chat)
-        line3 = buff.unpack(Chat)
-        line4 = buff.unpack(Chat)
 
         self.signs[(pos.x, pos.y, pos.z)] = Sign(
             position=Vec3i(pos.x, pos.y, pos.z),
-            lines=[
-                str(line1) if line1 else "",
-                str(line2) if line2 else "",
-                str(line3) if line3 else "",
-                str(line4) if line4 else "",
-            ],
+            lines=[buff.unpack(Chat) for _ in range(4)],
         )
 
     def _handle_map(self, buff: Buffer) -> None:
@@ -1232,7 +1223,7 @@ class GameState:
                     properties=properties,
                     gamemode=gamemode,
                     ping=ping,
-                    display_name=str(display_name) if display_name else None,
+                    display_name=display_name or None,
                 )
 
                 # Also store properties on the Player entity if it exists
@@ -1255,9 +1246,7 @@ class GameState:
                 has_display_name = buff.unpack(Boolean)
                 display_name = buff.unpack(Chat) if has_display_name else None
                 if uuid in self.player_list:
-                    self.player_list[uuid].display_name = (
-                        str(display_name) if display_name else None
-                    )
+                    self.player_list[uuid].display_name = display_name or None
 
             elif action == PlayerListAction.REMOVE_PLAYER:
                 if uuid in self.player_list:
@@ -1497,13 +1486,11 @@ class GameState:
         action = buff.unpack(VarInt)
 
         if action == TitleAction.SET_TITLE:
-            title_text = buff.unpack(Chat)
-            self.title.title = str(title_text) if title_text else ""
+            self.title.title = buff.unpack(Chat)
             self.title.visible = True
 
         elif action == TitleAction.SET_SUBTITLE:
-            subtitle_text = buff.unpack(Chat)
-            self.title.subtitle = str(subtitle_text) if subtitle_text else ""
+            self.title.subtitle = buff.unpack(Chat)
 
         elif action == TitleAction.SET_TIMES:
             self.title.fade_in = buff.unpack(Int)

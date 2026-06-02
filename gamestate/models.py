@@ -231,7 +231,7 @@ class Chunk:
 
     x: int = 0
     z: int = 0
-    sections: list[ChunkSection | None] = field(default_factory=lambda: [None] * 16)
+    sections: list[ChunkSection | None] = field(default_factory=lambda: [None] * 16)  # type: ignore[bad-assignment]
     biomes: bytearray = field(default_factory=lambda: bytearray(256))
     has_sky_light: bool = True
 
