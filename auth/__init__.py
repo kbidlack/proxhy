@@ -362,7 +362,7 @@ def user_exists(username: str) -> bool:
     """Check if user has stored credentials."""
     data_dir = _get_data_dir()
     user_file = data_dir / f"{username}.enc"
-    return user_file.exists()
+    return user_file.exists() and (safe_get("proxhy", username) is not None)
 
 
 def token_needs_refresh(username: str) -> bool:
