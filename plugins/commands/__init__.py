@@ -1,6 +1,6 @@
 import asyncio
 import re
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Union
+from typing import TYPE_CHECKING
 
 from petty.events import listen_client, listen_server, subscribe
 from petty.protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
@@ -43,10 +43,6 @@ class CommandsPlugin:
     Commands are registered per-instance, allowing different proxy instances
     to have different command configurations.
     """
-
-    command_registry: CommandRegistry
-    suggestions: asyncio.Queue[list[str]]
-    run_proxhy_command: Callable[[str], Coroutine[Any, Any, None]]
 
     def _init_0_commands(self: ProxhyPlugin):  # 0 so it runs first (alphabetically)
         self.command_registry = CommandRegistry()
@@ -228,9 +224,7 @@ class CommandsPlugin:
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 
-        command: Union[Command, CommandGroup, None] = self.command_registry.get(
-            cmd_name
-        )
+        command: Command | CommandGroup | None = self.command_registry.get(cmd_name)
 
         if command:
             try:

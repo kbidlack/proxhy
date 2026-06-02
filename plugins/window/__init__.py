@@ -22,8 +22,6 @@ if TYPE_CHECKING:
 
 
 class WindowPlugin:
-    windows: dict[int, "Window"]
-
     def _init_window(self: ProxhyPlugin):
         self.windows: dict[int, Window] = {}
 

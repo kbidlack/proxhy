@@ -4,7 +4,6 @@ from typing import TYPE_CHECKING
 from petty.events import subscribe
 from petty.protocol.datatypes import Buffer, Chat
 
-from plugins.commands import CommandGroup
 from proxhy.argtypes import HypixelPlayer
 from proxhy.player_list import PlayerList, PlayerListSystem
 from proxhypixel.formatting import get_rankname
@@ -14,8 +13,6 @@ if TYPE_CHECKING:
 
 
 class AutoboopPlugin:
-    autoboop_group: CommandGroup
-
     def _init_misc(self: ProxhyPlugin):
         self.autoboop_group = PlayerListSystem(
             "autoboop",

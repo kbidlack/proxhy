@@ -62,21 +62,6 @@ class ConnectionRequest:
 class BroadcastPlugin:
     clients: list[BroadcastPeerPlugin]
 
-    sent_broadcast_requests: set[str]
-    sent_broadcast_invites: set[str]
-
-    received_broadcast_requests: dict[str, ConnectionRequest]
-    received_broadcast_invites: dict[str, ConnectionRequest]
-
-    compass_client: Optional[CompassClient]
-    broadcast_pyroh_server: pyroh.Server
-    broadcast_server_task: asyncio.Task
-    broadcast_chat_toggled: bool
-    _transformer: PlayerTransformer
-
-    endpoint: Optional[pyroh.Endpoint]
-    compass_client: CompassClient
-
     def _init_broadcasting(self: ProxhyPlugin):
         self.clients: list[BroadcastPeerProxy] = []
         self.joining_broadcast: bool = False

@@ -1,5 +1,4 @@
 import asyncio
-import uuid
 from typing import TYPE_CHECKING, Literal, Optional
 
 from petty.events import subscribe

@@ -47,8 +47,6 @@ class ServerListPing(TypedDict):
 
 class BroadcastPeerLoginPlugin:
     writer: StreamWriter
-    username: str
-    compression_ready: asyncio.Event
     server_list_ping: ServerListPing
 
     def _init_login(self: BroadcastPeerPlugin):

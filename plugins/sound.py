@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Callable, Coroutine
+from typing import TYPE_CHECKING
 
 from petty.protocol.datatypes import Float, Int, String, UnsignedByte
 
@@ -8,10 +8,6 @@ if TYPE_CHECKING:
 
 
 class SoundPlugin:
-    note_to_pitch: Callable[[int], int]
-    _samsung_ringtone: Callable[[], Coroutine[None, None, None]]
-    _iphone_ringtone: Callable[[], Coroutine[None, None, None]]
-
     def note_to_pitch(self, note: int) -> int:
         """
         Convert Minecraft note-block semitone index to 1.8.9 pitch byte.

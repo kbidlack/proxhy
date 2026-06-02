@@ -1,6 +1,6 @@
 import asyncio
 import random
-from typing import TYPE_CHECKING, Callable, Literal, Optional, TypedDict
+from typing import TYPE_CHECKING, Literal, Optional, TypedDict
 
 import hypixel
 import numpy as np
@@ -61,9 +61,6 @@ def compute_look(camera_pos: Vec3d, object_pos: Vec3d):
 
 
 class BroadcastPeerSpectatePlugin:
-    flight_speed: int | float
-    _send_abilities: Callable
-
     def _init_broadcast_peer_spectate(self: BroadcastPeerPlugin):
         self.watching = False
         self._cam: Vec3d | None = None  # camera offset from player

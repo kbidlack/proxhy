@@ -37,7 +37,7 @@ def ensure_open[F: Callable[..., object]](open: bool = True) -> Callable[[F], F]
                 return func(self, *args, **kwargs)
             return lambda: None
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper  # type: ignore
 
     return decorator
 

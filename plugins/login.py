@@ -45,19 +45,6 @@ if TYPE_CHECKING:
 
 
 class LoginPlugin:
-    logged_in: bool
-    logging_in: bool
-    regenerating_credentials: bool
-    device_code_task: Optional[asyncio.Task]
-    server_list_ping: dict
-    access_token: str
-    username: str
-    uuid: uuid.UUID
-    secret: bytes
-    secret_task: Optional[asyncio.Task]
-    keep_alive_task: Optional[asyncio.Task]
-    transferring_to_server: bool
-
     def _init_login(self: ProxhyPlugin):
         self.logged_in = False
         self.logging_in = False

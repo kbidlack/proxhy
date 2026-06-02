@@ -120,9 +120,9 @@ class SettingsMenu(Window):
             TextComponent("Changed ")
             .append(TextComponent(s_display).color("yellow"))
             .appends("from")
-            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))  # type: ignore[arg-type]
+            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))  # type: ignore
             .appends("to")
-            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))  # type: ignore[arg-type]
+            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))  # type: ignore
             .append("!")
         )
 

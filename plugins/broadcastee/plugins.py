@@ -8,7 +8,6 @@ from petty.net import ServerStream, State
 from petty.protocol.datatypes import Buffer, Short, String, VarInt
 
 from plugins.commands import CommandsPlugin, command
-from proxhy.settings import ProxhySettings
 
 if TYPE_CHECKING:
     from plugins.broadcastee.plugin import BroadcasteePlugin
@@ -51,8 +50,6 @@ class BroadcasteeClosePlugin:
 
 
 class BroadcasteeSettingsPlugin:
-    settings: ProxhySettings
-
     @listen_server(0x3F)
     async def packet_client_plugin_message(self: BroadcasteePlugin, buff: Buffer):
         channel = buff.unpack(String)  # e.g. PROXHY|Events for proxhy events channel

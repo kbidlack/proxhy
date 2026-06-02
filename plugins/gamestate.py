@@ -41,7 +41,6 @@ class ExpiringSet[T: Hashable]:
 
 class GameStatePlugin:
     gamestate: GameState
-    in_combat_with: ExpiringSet[int]  # set[eid]
 
     def _init_0_gamestate(self: ProxhyPlugin):  # since other plugins require we put 0
         self.gamestate = GameState()

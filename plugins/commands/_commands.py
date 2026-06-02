@@ -56,7 +56,7 @@ class Lazy[T]:
         if not self._resolved:
             self._value = await self._coro_factory()
             self._resolved = True
-        return self._value  # type: ignore[return-value]
+        return self._value  # type: ignore
 
 
 # =============================================================================

@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING, Optional
 
 import orjson
 from petty.events import listen_client, listen_server, subscribe
@@ -12,16 +12,6 @@ if TYPE_CHECKING:
 
 
 class HypixelStatePlugin:
-    client_type: str
-    game: Game
-    rq_game: Game
-    received_locraw: asyncio.Event
-    received_who: asyncio.Event
-    entity_id: int
-    get_health: Callable[[str], Optional[int | float]]
-    real_players: Callable[[], set[str]]
-    nick: Optional[str]
-
     def _init_hypixelstate(self: ProxhyPlugin):
         self.client_type = ""
 
