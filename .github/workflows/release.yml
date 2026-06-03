@@ -203,6 +203,12 @@ jobs:
         with:
           merge-multiple: true
 
+      - name: Alias to static filenames
+        run: |
+          cp proxhy-macos-${{ github.ref_name }}.zip proxhy-macos-latest.zip
+          cp proxhy-windows-${{ github.ref_name }}.zip proxhy-windows-latest.zip
+          cp proxhy-linux-${{ github.ref_name }}.tar.gz proxhy-linux-latest.tar.gz
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
@@ -211,3 +217,6 @@ jobs:
             proxhy-macos-${{ github.ref_name }}.zip
             proxhy-windows-${{ github.ref_name }}.zip
             proxhy-linux-${{ github.ref_name }}.tar.gz
+            proxhy-macos-latest.zip
+            proxhy-windows-latest.zip
+            proxhy-linux-latest.tar.gz
