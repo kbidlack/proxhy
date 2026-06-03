@@ -371,7 +371,7 @@ class LoginPlugin:
 
         self.downstream.send_packet(
             0x02,
-            String.pack(str(uuid_)),  # type: ignore
+            String.pack(str(uuid.UUID(uuid_))),  # type: ignore
             String.pack(self.username),
         )
 

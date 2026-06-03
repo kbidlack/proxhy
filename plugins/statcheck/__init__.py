@@ -1293,7 +1293,9 @@ class StatCheckPlugin:
                 UUID.pack(player.offline_uuid),
             )
 
-        await asyncio.sleep(0.5)  # TODO: should we really sleep this long?
+        await asyncio.sleep(
+            0.5  # 0.5s works for most scenarios, but we could even sleep longer;
+        )  # occasionally a lag spike will cause this to incorrectly fire
         if self.gamestate.get_player_by_name_from_player_list(player.username):
             player.status = GamePlayerStatus.ALIVE
         elif player.username in self.game_players:
@@ -1371,6 +1373,10 @@ class StatCheckPlugin:
 
         if fk:
             gplayer.status = GamePlayerStatus.ELIMINATED
+
+            if gplayer.respawn_timer_task is not None:
+                gplayer.respawn_timer_task.cancel()
+
             if self.settings.bedwars.tablist.show_eliminated_players.get() == "ON":
                 if gplayer.username == self.nick_or_username:
                     self.downstream.send_packet(
