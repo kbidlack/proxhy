@@ -20,6 +20,13 @@ A Hypixel proxy.
 
 > On first launch, proxhy will download and set up Python 3.14 automatically (~50MB, one-time).
 
+> [!NOTE]  
+> macOS will say the app is "damaged" because it's unsigned. To fix (after moving `Proxhy.app` to `/Applications`):
+
+1. Open Terminal
+2. Run: `xattr -cr /Applications/Proxhy.app`
+3. Open Proxhy normally
+
 ## Installation without GUI
 
 You can also install and run Proxhy without a GUI.
