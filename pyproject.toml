@@ -47,9 +47,9 @@ where = ["."]
 "assets" = ["*.json", "*.png"]
 
 [tool.uv.workspace]
-members = ["auth", "petty", "compass"]
+members = ["mcauth", "petty", "compass"]
 
 [tool.uv.sources]
-auth = { workspace = true }
+mcauth = { workspace = true }
 petty = { workspace = true }
 compass = { workspace = true }
