@@ -7,12 +7,7 @@ import sys
 import pyroh
 from aiohttp import web
 
-from .server import CompassServer
-
-parser = argparse.ArgumentParser(prog="compass")
-parser.add_argument("-k", "--keyfile")
-parser.add_argument("-p", "--http-port", type=int, default=None)
-args = parser.parse_args()
+from compass.server import CompassServer
 
 routes = web.RouteTableDef()
 
@@ -27,6 +22,11 @@ async def wait_for_ctrl_c():
 
 
 async def main():
+    parser = argparse.ArgumentParser(prog="compass")
+    parser.add_argument("-k", "--keyfile")
+    parser.add_argument("-p", "--http-port", type=int, default=None)
+    args = parser.parse_args()
+
     server = CompassServer()
 
     if args.keyfile is None:
@@ -93,5 +93,9 @@ async def main():
         await runner.cleanup()
 
 
-if __name__ == "__main__":
+def run():
     sys.exit(asyncio.run(main()))
+
+
+if __name__ == "__main__":
+    run()

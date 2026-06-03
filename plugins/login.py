@@ -12,8 +12,8 @@ import httpx
 import hypixel
 import orjson
 
-import auth
-from auth.errors import AuthException
+import mcauth as auth
+from mcauth.errors import AuthException
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
 from petty.protocol.crypt import (

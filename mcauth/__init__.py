@@ -5,7 +5,7 @@ This module provides authentication for Minecraft using Microsoft accounts
 via Azure AD OAuth2.
 
 Usage:
-    import auth
+    import mcauth
 
     # Configure your Azure client ID (required once at startup)
     auth.set_client_id("your-azure-client-id")
@@ -33,8 +33,8 @@ import orjson
 from cryptography.fernet import Fernet
 from platformdirs import user_data_dir
 
-import auth.ms as ms
-from auth.errors import AuthException, InvalidCredentials, NotPremium
+import mcauth.ms as ms
+from mcauth.errors import AuthException, InvalidCredentials, NotPremium
 
 # Re-export for convenience
 __all__ = [

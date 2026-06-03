@@ -10,7 +10,7 @@ from datetime import datetime
 
 from platformdirs import user_log_path
 
-import auth
+import mcauth as auth
 from petty.endpoints import Proxy
 from proxhy.proxhy import Proxhy
 
