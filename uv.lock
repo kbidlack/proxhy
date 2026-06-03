@@ -398,6 +398,12 @@ wheels = [
 ]
 
 [[package]]
+name = "mcauth"
+version = "1.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/df/ac/74e423ef7157c9df2b05e05e9db56cc44e3dee758b238a8fa3669c71bd9e/mcauth-1.0.tar.gz", hash = "sha256:458e5677185d2e2b3bb5eb5586e10e9dd683e14860c855b9032e9b5f88ccb9e8", size = 3720, upload-time = "2011-05-31T00:23:13.919Z" }
+
+[[package]]
 name = "more-itertools"
 version = "11.1.0"
 source = { registry = "https://pypi.org/simple" }
@@ -604,36 +610,42 @@ name = "proxhy"
 version = "2026.6.3.post2"
 source = { editable = "." }
 dependencies = [
+    { name = "compass" },
     { name = "cryptography" },
     { name = "httpx" },
     { name = "hypixel-py" },
     { name = "keyring" },
+    { name = "mcauth" },
     { name = "numba" },
     { name = "numpy" },
     { name = "orjson" },
     { name = "packaging" },
+    { name = "petty" },
     { name = "platformdirs" },
     { name = "pyjwt" },
     { name = "pyroh" },
     { name = "uvloop", marker = "sys_platform != 'win32'" },
-    { name = "winloop" },
+    { name = "winloop", marker = "sys_platform == 'win32'" },
 ]
 
 [package.metadata]
 requires-dist = [
+    { name = "compass", editable = "compass" },
     { name = "cryptography", specifier = ">=48.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypixel-py", specifier = ">=0.4.2" },
     { name = "keyring", specifier = ">=25.6" },
+    { name = "mcauth" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.3" },
     { name = "orjson", specifier = ">=3.11.7" },
     { name = "packaging", specifier = ">=26.2" },
+    { name = "petty", editable = "petty" },
     { name = "platformdirs", specifier = ">=4.3" },
     { name = "pyjwt", specifier = ">=2.10" },
     { name = "pyroh", specifier = ">=0.4.1" },
     { name = "uvloop", marker = "sys_platform != 'win32'", specifier = ">=0.22.1" },
-    { name = "winloop", specifier = ">=0.6.0" },
+    { name = "winloop", marker = "sys_platform == 'win32'", specifier = ">=0.6.0" },
 ]
 
 [[package]]
