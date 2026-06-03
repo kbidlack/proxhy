@@ -3,99 +3,197 @@ import datetime
 import os
 import re
 from pathlib import Path
-from typing import Any, Callable, Coroutine, Optional
+from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
 import hypixel
 import orjson
+from petty.events import subscribe
+from petty.protocol.datatypes import TextComponent
 
-from core.events import subscribe
-from plugins.commands import CommandException, Lazy, command
-from protocol.datatypes import TextComponent
+from plugins.commands import CommandContext, CommandException, Lazy, command
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat
-from proxhy.plugin import ProxhyPlugin
 from proxhy.utils import APIClient
 from proxhypixel.formatting import (
     format_bedwars_dict,
     format_bw_star,
+    format_skywars_dict,
     get_rankname,
 )
 from proxhypixel.mappings import (
     BEDWARS_DREAM_MAPPING_SIMPLE,
     BEDWARS_MAPPING_SIMPLE,
     BEDWARS_NON_DREAM_MAPPING,
+    SKYWARS_MODE_MAPPING,
+    SKYWARS_MODE_MAPPING_EXTRA,
+    SKYWARS_MODE_MAPPING_FULL,
 )
 
-
-class StatcheckCommandPluginState:
-    log_path: Path
-    log_stats: Callable[[str], Coroutine[Any, Any, None]]
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
-class StatcheckCommandPlugin(ProxhyPlugin):
-    SUPPORTED_GAMEMODES = {"bedwars"}
+class SCSupportedGamemode(Gamemode):
+    SUPPORTED: set[GAMETYPE_T] = {"bedwars", "skywars"}
 
-    def _check_gamemode(self, gamemode: Gamemode):
-        if gamemode.mode_str not in self.SUPPORTED_GAMEMODES:
+    @classmethod
+    async def convert(cls, ctx: CommandContext, value: str) -> SCSupportedGamemode:
+        gamemode = await super().convert(ctx, value)
+        if gamemode.mode_str not in cls.SUPPORTED:
             raise CommandException(
                 TextComponent(gamemode.display_name)
                 .color("gold")
                 .appends("is not a supported gamemode!")
             )
+        return cls(gamemode.mode_str)
+
+    @classmethod
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
+        s = partial.lower().strip()
+        return [
+            cls.GAMES[mode]["main_alias"]
+            for mode in cls.SUPPORTED
+            if cls.GAMES[mode]["main_alias"].startswith(s)
+        ]
+
+
+class StatcheckCommandPlugin:
+    log_path: Path
+    log_stats: Callable[[str], Coroutine[Any, Any, None]]
+
+    def _resolve_mode(
+        self: ProxhyPlugin, mode: Optional[SCSupportedGamemode]
+    ) -> SCSupportedGamemode:
+        if mode is not None:
+            return mode
+        if self.game.gametype in SCSupportedGamemode.SUPPORTED:
+            return SCSupportedGamemode(self.game.gametype)  # type: ignore ???
+        return SCSupportedGamemode("bedwars")
+
+    @command("lastlogin", "ll")
+    async def _command_lastlogin(
+        self: ProxhyPlugin,
+        _player: Optional[Lazy[HypixelPlayer]] = None,
+    ):
+        """Check when a player last logged in to Hypixel."""
+        try:
+            if _player is not None:
+                player = (await _player)._player
+            else:
+                player = await self.hypixel_client.player(self.username)
+        except Exception as e:
+            raise CommandException(f"Failed to fetch player: {e}")
+
+        rankname = get_rankname(player)
+
+        if player.last_login is None:
+            raise CommandException(
+                TextComponent(rankname).appends("has their online status hidden.")
+            )
+
+        online = player.last_logout is None or player.last_login > player.last_logout
+        if online:
+            return (
+                TextComponent(rankname)
+                .color("white")
+                .appends(TextComponent("is currently online.").color("green"))
+            )
+        else:
+            local_login = player.last_login.astimezone()
+            formatted = self._format_date_with_ordinal(local_login)
+            tz_name = local_login.strftime("%Z")
+            return (
+                TextComponent(rankname)
+                .color("white")
+                .appends("last logged in")
+                .appends(TextComponent(formatted).color("gold"))
+                .appends(TextComponent(f"({tz_name})").color("gray"))
+            )
 
     @command("sc", "statcheck")
     async def _command_statcheck(
-        self,
+        self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Gamemode = Gamemode("bedwars"),
+        mode: Optional[SCSupportedGamemode] = None,
+        window: Optional[float] = None,
         *stats: Statistic,
     ):
         """Check player stats."""
-        self._check_gamemode(mode)
         player = await _player if _player else None
-        return await self._sc_internal(player=player, mode=mode, stat_names=stats)
+        return await self._sc_internal(
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=window,
+            stat_names=stats,
+        )
 
     @command("scw", "scweekly")
     async def _command_scweekly(
-        self,
+        self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Gamemode = Gamemode("bedwars"),
-        window: float = 7.0,
+        mode: Optional[SCSupportedGamemode] = None,
         *stats: Statistic,
     ):
-        """Check a player's weekly (or timed) stats."""
-        self._check_gamemode(mode)
+        """Check player stats for the past 7 days."""
         player = await _player if _player else None
-        return await self._sc_internal(player, window, mode, stat_names=stats)
+        return await self._sc_internal(
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=7.0,
+            stat_names=stats,
+        )
+
+    @command("scwfull", "scweeklyfull")
+    async def _command_scweeklyfull(
+        self: ProxhyPlugin,
+        _player: Optional[Lazy[HypixelPlayer]] = None,
+        mode: Optional[SCSupportedGamemode] = None,
+        *stats: Statistic,
+    ):
+        """Check player stats for the past 7 days with all modes."""
+        player = await _player if _player else None
+        return await self._sc_internal(
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=7.0,
+            stat_names=stats,
+            display_abridged=False,
+        )
 
     @command("scfull")
     async def _command_scfull(
-        self,
+        self: ProxhyPlugin,
         _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Gamemode = Gamemode("bedwars"),
+        mode: Optional[SCSupportedGamemode] = None,
+        window: Optional[float] = None,
         *stats: Statistic,
     ):
         """Check player stats with all modes."""
-        self._check_gamemode(mode)
         player = await _player if _player else None
         return await self._sc_internal(
-            player=player, mode=mode, stat_names=stats, display_abridged=False
+            player=player,
+            mode=self._resolve_mode(mode),
+            window=window,
+            stat_names=stats,
+            display_abridged=False,
         )
 
     @subscribe("login_success")
-    async def _statcheck_event_login_success(self, _match, _data):
-        asyncio.create_task(self._login_success_helper())
+    async def _statcheck_event_login_success(self: ProxhyPlugin, _match, _data):
+        self.create_task(self._login_success_helper())
 
-    async def _login_success_helper(self):
-        self.hypixel_client = hypixel.Client(self.hypixel_api_key)
-        asyncio.create_task(self.migrate_log_stats())
-        asyncio.create_task(self.log_stats("login"))
+    async def _login_success_helper(self: ProxhyPlugin):
+        self.hypixel_client = hypixel.Client(
+            self.hypixel_api_key, cache_h=False, cache_m=False
+        )
+        self.create_task(self.migrate_log_stats())
+        self.create_task(self.log_stats("login"))
 
     @subscribe("close")
-    async def _statcheck_event_close(self, _match, _data):
-        asyncio.create_task(self._close_statcheck_helper())
+    async def _statcheck_event_close(self: ProxhyPlugin, _match, _data):
+        self.create_task(self._close_statcheck_helper())
 
-    async def _close_statcheck_helper(self):
+    async def _close_statcheck_helper(self: ProxhyPlugin):
         try:
             if self.hypixel_client:
                 try:
@@ -109,7 +207,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         except AttributeError:
             pass  # TODO: log
 
-    async def log_stats(self, event: str) -> None:
+    async def log_stats(self: ProxhyPlugin, event: str) -> None:
         if self.dev_mode:
             return
 
@@ -119,7 +217,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             skywars_stats = player._data.get("stats", {}).get("Skywars", {})
             duels_stats = player._data.get("stats", {}).get("Duels", {})
         except Exception as e:
-            print(f"Failed to log stats on {event}: {e}")  # TODO: log this
+            self.logger.debug(f"Failed to log stats on {event}: {e}")
             return
 
         log_entry = {
@@ -159,7 +257,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
     def _is_uuid(value: str) -> bool:
         return bool(re.fullmatch(r"[0-9a-f]{32}", value, re.IGNORECASE))
 
-    async def migrate_log_stats(self) -> None:
+    async def migrate_log_stats(self: ProxhyPlugin) -> None:
         """Migrate stat log entries that use player names to use UUIDs instead."""
         if not os.path.exists(self.log_path):
             return
@@ -222,7 +320,7 @@ class StatcheckCommandPlugin(ProxhyPlugin):
                 try:
                     entry = orjson.loads(line.strip())
                     if entry.get("player", "").casefold() == uuid and entry.get(
-                        "bedwars"
+                        gamemode
                     ):
                         entry["dt"] = datetime.datetime.fromisoformat(
                             entry["timestamp"]
@@ -264,18 +362,18 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         self, kills: float, deaths: float, wins: float, losses: float
     ) -> tuple[float, float]:
         try:
-            fkdr = kills / deaths if deaths > 0 else float(kills)
+            fkdr = kills / deaths if deaths > 0 else kills
         except Exception:
             fkdr = 0.0
 
         try:
-            wlr = wins / losses if losses > 0 else float(wins)
+            wlr = wins / losses if losses > 0 else wins
         except Exception:
             wlr = 0.0
 
         return round(fkdr, 2), round(wlr, 2)
 
-    def _format_date_with_ordinal(self, dt: datetime.datetime) -> str:
+    def _format_date_with_ordinal(self: ProxhyPlugin, dt: datetime.datetime) -> str:
         """Format a datetime as 'Month Dayth, Year (H:MM AM/PM)'.
 
         Args:
@@ -368,38 +466,46 @@ class StatcheckCommandPlugin(ProxhyPlugin):
         return self._calculate_ratios(diff_fk, diff_fd, diff_wins, diff_losses)
 
     async def _sc_internal(
-        self,
+        self: ProxhyPlugin,
         player: Optional[HypixelPlayer] = None,
-        window: float = -1.0,
-        mode: Gamemode = Gamemode("bedwars"),
+        window: Optional[float] = None,
+        mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         stat_names: tuple[Statistic, ...] = tuple(),
         display_abridged=True,
     ):
         gamemode = mode.mode_str
 
         # resolve player
+        _GAMEMODE_API_KEY = {
+            "bedwars": "Bedwars",
+            "skywars": "SkyWars",
+        }
+
         try:
             if player is not None:
                 current_player = player._player
             else:
                 current_player = await self.hypixel_client.player(self.username)
-            current_stats = current_player._data.get("stats", {}).get(
-                gamemode.capitalize(), {}
-            )
+            api_key = _GAMEMODE_API_KEY.get(gamemode, gamemode.capitalize())
+            current_stats = current_player._data.get("stats", {}).get(api_key, {})
+        except (hypixel.KeyRequired, hypixel.InvalidApiKey):
+            raise CommandException("Invalid Hypixel API key!")
         except Exception as e:
             raise CommandException(f"Failed to fetch current stats: {e}")
 
         stats = tuple(s.stat for s in stat_names)
 
-        optional_window = window if window != -1.0 else None
-
         if gamemode == "bedwars":
             return await self._sc_bedwars(
-                current_player, current_stats, optional_window, stats, display_abridged
+                current_player, current_stats, window, stats, display_abridged
+            )
+        elif gamemode == "skywars":
+            return await self._sc_skywars(
+                current_player, current_stats, window, stats, display_abridged
             )
 
     async def _sc_bedwars(
-        self,
+        self: ProxhyPlugin,
         player: hypixel.Player,
         current_stats: dict,
         window: Optional[float],
@@ -432,8 +538,12 @@ class StatcheckCommandPlugin(ProxhyPlugin):
                     required_keys.append(f"{prefix}{s.json_key}")
 
         rankname = get_rankname(player)
+        online = player.last_login and (
+            player.last_logout is None or player.last_login > player.last_logout
+        )
+        online_suffix = " §a(ONLINE)" if online else ""
 
-        if window:
+        if window is not None:
             old_stats, chosen_date = self._find_closest_stat_log(
                 player.uuid, window, "bedwars"
             )
@@ -444,13 +554,14 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             hover_text = f"Recent stats for {rankname}\nCalculated using data from {formatted_date}\n"
         else:
             fdict = format_bedwars_dict(current_stats)
-            hover_text = f"Lifetime Stats for {rankname}§f:\n"
+            hover_text = f"Lifetime Stats for {rankname}§f:{online_suffix}\n"
             old_stats = {}
 
         modes = (
             BEDWARS_NON_DREAM_MAPPING if display_abridged else BEDWARS_MAPPING_SIMPLE
         )
 
+        mode_stats = [s for s in stats if not s.overall_only]
         mode_lines = []
         dreams_linebreak_added = False
 
@@ -465,16 +576,16 @@ class StatcheckCommandPlugin(ProxhyPlugin):
 
             mode_line = f"\n§c§l[{mode_.upper()}] "
 
-            for stat in stats:
+            for stat in mode_stats:
                 stat_json_key = f"{mode_key}_{stat.json_key}"
                 stat_value = fdict.get(stat_json_key, 0)
                 mode_line += f"§r§f{stat.name}: §r{stat_value} "
 
             mode_lines.append(mode_line)
 
-        if mode_lines:
+        if mode_stats and mode_lines:
             hover_text += "".join(mode_lines)
-        if display_abridged:
+        if mode_stats and display_abridged:
             hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
 
         # TODO: reduce code duplication here
@@ -483,4 +594,84 @@ class StatcheckCommandPlugin(ProxhyPlugin):
             stat_value = fdict.get(stat.json_key, 0)
             stat_message += f"§r§f{stat.name}: §r{stat_value} "
 
-        return TextComponent.from_legacy(stat_message).hover_text(hover_text)
+        tc = TextComponent.from_legacy(stat_message)
+        if mode_stats:
+            tc = tc.hover_text(hover_text)
+        return tc
+
+    async def _sc_skywars(
+        self: ProxhyPlugin,
+        player: hypixel.Player,
+        current_stats: dict,
+        window: Optional[float],
+        stats: tuple[Stat, ...],
+        display_abridged=True,
+    ):
+        if not stats:
+            STATS = Statistic.STATS["skywars"]
+            stats = (STATS["kills"], STATS["kdr"], STATS["wins"], STATS["wlr"])
+
+        SW_RATIO_DEPENDENCIES = {
+            "kdr": ("kills", "deaths"),
+            "wlr": ("wins", "losses"),
+        }
+
+        required_keys: list[str] = []
+        for mode_suffix in [""] + list(SKYWARS_MODE_MAPPING_FULL.values()):
+            suffix = f"_{mode_suffix}" if mode_suffix else ""
+            for s in stats:
+                if s.json_key in SW_RATIO_DEPENDENCIES:
+                    for dep in SW_RATIO_DEPENDENCIES[s.json_key]:
+                        required_keys.append(f"{dep}{suffix}")
+                else:
+                    required_keys.append(f"{s.json_key}{suffix}")
+
+        rankname = get_rankname(player)
+        online = player.last_login and (
+            player.last_logout is None or player.last_login > player.last_logout
+        )
+        online_suffix = " §a(ONLINE)" if online else ""
+
+        if window is not None:
+            old_stats, chosen_date = self._find_closest_stat_log(
+                player.uuid, window, "skywars"
+            )
+            diffs = self._calculate_stat_deltas(current_stats, old_stats, required_keys)
+            fdict = format_skywars_dict(diffs)
+            formatted_date = self._format_date_with_ordinal(chosen_date)
+            hover_text = f"Recent stats for {rankname}\nCalculated using data from {formatted_date}\n"
+        else:
+            fdict = format_skywars_dict(current_stats)
+            hover_text = f"Lifetime Stats for {rankname}§f:{online_suffix}\n"
+
+        mode_stats = [s for s in stats if not s.overall_only]
+
+        def _mode_line(mode_: str, mode_key: str) -> str:
+            line = f"\n§c§l[{mode_.upper()}] "
+            for stat in mode_stats:
+                stat_value = fdict.get(f"{stat.json_key}_{mode_key}", 0)
+                line += f"§r§f{stat.name}: §r{stat_value} "
+            return line
+
+        if mode_stats:
+            hover_text += "".join(
+                _mode_line(m, k) for m, k in SKYWARS_MODE_MAPPING.items()
+            )
+            if display_abridged:
+                hover_text += "\n\n§7§oTo see all modes, use §l/scfull§r§7§o."
+            else:
+                hover_text += "\n"
+                hover_text += "".join(
+                    _mode_line(m, k) for m, k in SKYWARS_MODE_MAPPING_EXTRA.items()
+                )
+
+        star = (current_stats.get("levelFormattedWithBrackets") or "").rstrip()
+        stat_message = f"{star} {rankname}: "
+        for stat in stats:
+            stat_value = fdict.get(stat.json_key, 0)
+            stat_message += f"§r§f{stat.name}: §r{stat_value} "
+
+        tc = TextComponent.from_legacy(stat_message)
+        if mode_stats:
+            tc = tc.hover_text(hover_text)
+        return tc

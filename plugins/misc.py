@@ -1,51 +1,71 @@
+from importlib.metadata import version
+from typing import TYPE_CHECKING
+
+from petty.nbt import dumps, from_dict
+from petty.protocol.datatypes import Item, SlotData, String, TextComponent
+
 from plugins.commands import CommandException, command
-from protocol.datatypes import Item, SlotData, String, TextComponent
-from protocol.nbt import dumps, from_dict
 from proxhy.argtypes import Gamemode, Submode
-from proxhy.plugin import ProxhyPlugin
+from proxhy.utils import zero_pad_calver
 
 from .window import Window, get_trigger
 
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
-class MiscPluginState:
-    pass
 
+class MiscPlugin:
+    @command("version")
+    async def _command_version(self: ProxhyPlugin):
+        """Get the currently running version of Proxhy."""
+        return TextComponent(zero_pad_calver(version("proxhy"))).color("yellow")
 
-class MiscPlugin(ProxhyPlugin):
     @command("rq")
-    async def _command_requeue(self):
+    async def _command_requeue(self: ProxhyPlugin):
         """Requeue the last played game."""
         if not self.rq_game.mode:
             raise CommandException("No game to requeue!")
-        self.server.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
+        self.upstream.send_packet(0x01, String.pack(f"/play {self.rq_game.mode}"))
 
     @command("play")
-    async def _command_play(self, mode: Gamemode, *submodes: Submode):
+    async def _command_play(self: ProxhyPlugin, mode: Gamemode, *submodes: Submode):
         """Convenient aliases for Hypixel's /play command. Ex. /play bedwars solo"""
-        if not submodes:
-            if Submode.SUBMODES.get(mode.mode_str):
-                raise CommandException("Please specify a submode!")
+        if mode.raw_play_id:
+            self.upstream.chat(f"/play {mode.raw_play_id}")
+        elif not submodes:
+            if submode_options := Submode.SUBMODES.get(mode.mode_str):
+                options = ", ".join(sorted(submode_options.keys()))
+                raise CommandException(
+                    TextComponent("Please specify a submode! Options: ").append(
+                        TextComponent(options).color("dark_aqua")
+                    )
+                )
             # no submodes for this game, play directly
-            self.server.chat(f"/play {mode.mode_str}")
+            self.upstream.chat(f"/play {mode.mode_str}")
         elif submodes[-1].play_id is None:
-            raise CommandException("Please specify a complete submode!")
+            options = ", ".join(sorted((submodes[-1].node.children or {}).keys()))
+            raise CommandException(
+                TextComponent("Please specify a complete submode! Options: ").append(
+                    TextComponent(options).color("dark_aqua")
+                )
+            )
         else:
-            self.server.chat(f"/play {submodes[-1].play_id}")
+            self.upstream.chat(f"/play {submodes[-1].play_id}")
 
     @command("pos")
-    async def _command_pos(self):
+    async def _command_pos(self: ProxhyPlugin):
         """Get your current position."""
-        self.client.chat(
+        self.downstream.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 
     @command("garlicbread")  # Mmm, garlic bread.
-    async def _command_garlicbread(self):  # Mmm, garlic bread.
+    async def _command_garlicbread(self: ProxhyPlugin):  # Mmm, garlic bread.
         """Mmm, garlic bread."""  # Mmm, garlic bread.
         return TextComponent("Mmm, garlic bread.").color("yellow")  # Mmm, garlic bread.
 
     @command("fribidiskigma")
-    async def _command_fribidiskigma(self):
+    async def _command_fribidiskigma(self: ProxhyPlugin):
         """Example window usage demo."""
 
         async def grass_callback(
@@ -57,7 +77,7 @@ class MiscPlugin(ProxhyPlugin):
             clicked_item: SlotData,
         ):
             if clicked_item.item is not None:
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent("You clicked ")
                     .color("green")
                     .append(TextComponent(clicked_item.item.display_name).color("blue"))

@@ -39,3 +39,23 @@ BEDWARS_DREAM_MAPPING_FULL: dict[str, str] = {
 
 BEDWARS_MAPPING_FULL = BEDWARS_NON_DREAM_MAPPING | BEDWARS_DREAM_MAPPING_FULL
 BEDWARS_MAPPING_SIMPLE = BEDWARS_NON_DREAM_MAPPING | BEDWARS_DREAM_MAPPING_SIMPLE
+
+
+SKYWARS_MODE_MAPPING: dict[str, str] = {
+    "Solo Normal": "solo_normal",
+    "Solo Insane": "solo_insane",
+    "Team Normal": "team_normal",
+    "Team Insane": "team_insane",
+}
+
+SKYWARS_MODE_MAPPING_EXTRA: dict[str, str] = {
+    "Mega": "mega_normal",
+    "Mega Doubles": "mega_doubles",
+    "Ranked": "ranked_normal",
+    "Solo Crazy Insane (Tournament)": "crazytourney_normal",
+    "Teams Tournament": "tourney_teams_tourney",
+}
+
+SKYWARS_MODE_MAPPING_FULL: dict[str, str] = (
+    SKYWARS_MODE_MAPPING | SKYWARS_MODE_MAPPING_EXTRA
+)

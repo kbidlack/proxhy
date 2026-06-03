@@ -4,26 +4,8 @@
 # and packet handling stuff from proxy, just for a client connection
 
 
-from core.proxy import Proxy
-from plugins.chat import ChatPlugin
-from plugins.gamestate import GameStatePlugin
-from plugins.window import WindowPlugin
-
-from .plugins.base import BroadcastPeerBasePlugin
-from .plugins.commands import BroadcastPeerCommandsPlugin
-from .plugins.login import BroadcastPeerLoginPlugin
-from .plugins.settings import BroadcastPeerSettingsPlugin
-from .plugins.spectate import BroadcastPeerSpectatePlugin
+from .plugin import BroadcastPeerPlugin
 
 
-class BroadcastPeerProxy(
-    ChatPlugin,
-    WindowPlugin,
-    GameStatePlugin,
-    BroadcastPeerLoginPlugin,
-    BroadcastPeerBasePlugin,
-    BroadcastPeerCommandsPlugin,
-    BroadcastPeerSettingsPlugin,
-    BroadcastPeerSpectatePlugin,
-    Proxy,
-): ...
+class BroadcastPeerProxy(BroadcastPeerPlugin):
+    pass

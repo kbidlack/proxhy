@@ -2,12 +2,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict
 
 import orjson
-
-from protocol.datatypes import Item
+from petty.protocol.datatypes import Item
 
 if TYPE_CHECKING:
-    from protocol.datatypes import Color_T
-    from protocol.datatypes import ItemName as Item_T
+    from petty.protocol.datatypes import Color_T
+    from petty.protocol.datatypes import ItemName as Item_T
 
 type SettingState = tuple[Item, "Color_T"]
 
@@ -81,6 +80,9 @@ class Setting[S: str]:
         next_index = (current_index + 1) % len(state_keys)
         self.set(state_keys[next_index])
         return current_state, state_keys[next_index]
+
+    def __bool__(self) -> bool:
+        return self.get().lower() not in {"off", "false"}
 
 
 class SettingGroup:

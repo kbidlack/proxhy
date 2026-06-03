@@ -1,29 +1,30 @@
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from platformdirs import user_config_dir
-
-from broadcasting.plugin import BroadcastPeerPlugin
-from broadcasting.settings import BroadcastSettings
-from core.events import listen_client, subscribe
-from plugins.settings import Setting, SettingsPlugin, SettingsStorage
-from protocol.datatypes import (
+from petty.events import listen_client, subscribe
+from petty.protocol.datatypes import (
     Buffer,
     String,
 )
+from platformdirs import user_config_dir
+
+from broadcasting.settings import BroadcastSettings
+from plugins.settings import Setting, SettingsPlugin, SettingsStorage
+
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
 
 
-class BroadcastPeerSettingsPluginState:
-    settings: BroadcastSettings
+class BroadcastPeerSettingsPlugin(SettingsPlugin):
+    settings: BroadcastSettings  # type: ignore
 
-
-class BroadcastPeerSettingsPlugin(BroadcastPeerPlugin, SettingsPlugin):
-    settings: BroadcastSettings
-
-    def _init_settings(self):
+    def _init_settings(self: BroadcastPeerPlugin):
         pass  # override automatic creation of ProxhySettings
 
     @subscribe("login_success")
-    async def _broadcast_peer_settings_event_login_success(self, _match, _data):
+    async def _broadcast_peer_settings_event_login_success(
+        self: BroadcastPeerPlugin, _match, _data
+    ):
         config_dir = (
             Path(user_config_dir("proxhy", ensure_exists=True))
             / "broadcast_peer_settings"
@@ -35,7 +36,7 @@ class BroadcastPeerSettingsPlugin(BroadcastPeerPlugin, SettingsPlugin):
         self._send_abilities()
 
     @listen_client(0x17)
-    async def packet_client_plugin_message(self, buff: Buffer):
+    async def packet_client_plugin_message(self: BroadcastPeerPlugin, buff: Buffer):
         channel = buff.unpack(
             String
         )  # e.g. PROXHY|Settings for proxhy settings channel
@@ -44,7 +45,9 @@ class BroadcastPeerSettingsPlugin(BroadcastPeerPlugin, SettingsPlugin):
         await self.emit(f"plugin:{channel}", data)
 
     @subscribe(r"plugin:PROXHY\|Settings")
-    async def _settings_event_plugin_message(self, _match, buff: Buffer):
+    async def _settings_event_plugin_message(
+        self: BroadcastPeerPlugin, _match, buff: Buffer
+    ):
         setting_path, old_value, new_value = (buff.unpack(String) for _ in range(3))
 
         # TODO: log these failures if they happen

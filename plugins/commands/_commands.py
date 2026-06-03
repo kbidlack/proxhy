@@ -1,3 +1,4 @@
+import annotationlib
 import inspect
 import types
 from abc import ABC, abstractmethod
@@ -14,7 +15,8 @@ from typing import (
     get_type_hints,
 )
 
-from protocol.datatypes import TextComponent
+from petty.protocol.datatypes import TextComponent
+
 from proxhy.errors import ProxhyException
 
 
@@ -54,7 +56,7 @@ class Lazy[T]:
         if not self._resolved:
             self._value = await self._coro_factory()
             self._resolved = True
-        return self._value  # type: ignore[return-value]
+        return self._value  # type: ignore
 
 
 # =============================================================================
@@ -144,7 +146,17 @@ class CommandContext:
         """
         if isinstance(self.args, LazyArgs):
             for i in range(len(self.args)):
-                if self.args._parameters[i].type_hint == type_:
+                hint = self.args._parameters[i].type_hint
+                # match exact type or any non-None union member that is a subclass
+                hint_types: tuple[Any, ...] = (
+                    _get_union_args(hint) if _is_union_type(hint) else (hint,)
+                )
+                matches = any(
+                    isinstance(t, type) and issubclass(t, type_)
+                    for t in hint_types
+                    if t is not type(None)
+                )
+                if matches:
                     try:
                         arg = await self.args.get(i)
                         return arg
@@ -191,7 +203,7 @@ class CommandArg(ABC):
                 self.uuid = uuid
 
             @classmethod
-            async def convert(cls, ctx: CommandContext, value: str) -> "Player":
+            async def convert(cls, ctx: CommandContext, value: str) -> Player:
                 # Fetch player data and return a Player instance
                 # ctx.proxy gives access to the proxy instance
                 # ctx.args gives access to previously converted arguments
@@ -224,7 +236,7 @@ class CommandArg(ABC):
         ...
 
     @classmethod
-    async def suggest[S: str](cls, ctx: CommandContext, partial: str) -> list[S]:
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         """
         Provide tab completion suggestions for this type.
 
@@ -245,6 +257,9 @@ class CommandArg(ABC):
 
 class Parameter:
     """Represents a command parameter with its metadata."""
+
+    options: Optional[tuple]
+    union_types: tuple | None
 
     def __init__(self, param: inspect.Parameter, type_hint: Any = None):
         self.name = param.name
@@ -438,14 +453,34 @@ class Command:
         self.usage = usage
         self.parent: CommandGroup | None = None
 
-        # Get type hints for proper annotation resolution
+        # Get type hints for proper annotation resolution.
+        # Commands defined in files with `from __future__ import annotations` AND
+        # `self: ProxhyPlugin` (only available under TYPE_CHECKING) will cause
+        # get_type_hints to raise a NameError because Python 3.14's __annotate__
+        # runs in the function's own globals before any localns can be injected.
+        # We use annotationlib.Format.FORWARDREF which evaluates what it can and
+        # leaves unresolvable names as ForwardRef objects rather than crashing.
+        # We then drop any ForwardRef values (which will only ever be `self`).
+        hints: dict[str, Any] = {}
         try:
-            hints = get_type_hints(function)
+            raw = annotationlib.get_annotations(
+                function, format=annotationlib.Format.FORWARDREF
+            )
+            hints = {
+                k: v
+                for k, v in raw.items()
+                if not isinstance(v, annotationlib.ForwardRef)
+            }
         except Exception:
-            hints = {}
+            try:
+                hints = get_type_hints(function)
+            except Exception:
+                hints = {}
 
-        # Parse parameters (skip 'self')
-        sig = inspect.signature(function)
+        # Parse parameters (skip 'self') using STRING format so Python 3.14 does
+        # not try to eagerly evaluate annotations (which would also fail for
+        # TYPE_CHECKING-only names like ProxhyPlugin).
+        sig = inspect.signature(function, annotation_format=annotationlib.Format.STRING)
         params = list(sig.parameters.values())[1:]  # Skip self
         self.parameters = [Parameter(p, hints.get(p.name)) for p in params]
         self.required_parameters = [p for p in self.parameters if p.required]
@@ -543,15 +578,16 @@ class Command:
             command_name=self.name,
         )
 
+        arg_index = 0
         for i, param in enumerate(self.parameters):
             ctx.param_index = i
             if param.infinite:
-                # Handle *args - convert remaining arguments
-                remaining = args[i:]
+                # Handle *args - consume all remaining arguments
+                remaining = args[arg_index:]
                 for j, arg in enumerate(remaining):
                     ctx.param_index = i + j
                     if param.is_lazy:
-                        idx = i + j
+                        idx = arg_index + j
                         lazy = Lazy(
                             lambda p=param, a=arg, ix=idx: self._lazy_convert(
                                 ctx, p, a, ix
@@ -563,18 +599,30 @@ class Command:
                         converted = await param.convert(ctx, arg)
                         converted_args.append(converted)
                 break
-            elif i < len(args):
-                if param.is_lazy:
-                    lazy = Lazy(
-                        lambda p=param, a=args[i], ix=i: self._lazy_convert(
-                            ctx, p, a, ix
-                        ),
-                        value=args[i],
-                    )
-                    converted_args.append(lazy)
+            elif arg_index < len(args):
+                if not param.required and not param.is_lazy:
+                    # Optional non-lazy: try conversion; fall through on failure
+                    try:
+                        converted = await param.convert(ctx, args[arg_index])
+                        converted_args.append(converted)
+                        arg_index += 1
+                    except (ValueError, CommandException):
+                        converted_args.append(param.default)
+                        # arg_index intentionally not advanced
                 else:
-                    converted = await param.convert(ctx, args[i])
-                    converted_args.append(converted)
+                    # Required or lazy: always consume the arg
+                    if param.is_lazy:
+                        lazy = Lazy(
+                            lambda p=param,
+                            a=args[arg_index],
+                            ix=arg_index: self._lazy_convert(ctx, p, a, ix),
+                            value=args[arg_index],
+                        )
+                        converted_args.append(lazy)
+                    else:
+                        converted = await param.convert(ctx, args[arg_index])
+                        converted_args.append(converted)
+                    arg_index += 1
 
         return await self.function(proxy, *converted_args)
 
@@ -590,6 +638,32 @@ class Command:
         finally:
             ctx.param_index = old_param_index
 
+    async def _simulate_cursor(self, proxy: Any, args: list[str]) -> int:
+        """
+        Simulate cursor advancement to find which param index the next arg maps to.
+
+        Mirrors the fallthrough logic in __call__: optional non-lazy params that
+        fail conversion are skipped without advancing the arg cursor.
+        """
+        ctx = CommandContext(proxy=proxy, raw_args=args, command_name=self.name)
+        arg_index = 0
+        for param_index, param in enumerate(self.parameters):
+            if arg_index >= len(args):
+                return param_index
+            if param.infinite:
+                return param_index
+            if not param.required and not param.is_lazy:
+                try:
+                    await param.convert(ctx, args[arg_index])
+                    arg_index += 1
+                except (ValueError, CommandException):
+                    pass  # fallthrough: don't advance
+            else:
+                arg_index += 1
+        if self.parameters and self.parameters[-1].infinite:
+            return len(self.parameters) - 1
+        return len(self.parameters)
+
     async def get_suggestions(
         self, proxy: Any, args: list[str], partial: str
     ) -> list[str]:
@@ -604,29 +678,40 @@ class Command:
         Returns:
             List of suggestion strings
         """
-        arg_index = len(args)
+        param_index = await self._simulate_cursor(proxy, args)
 
-        if arg_index >= len(self.parameters):
-            # Check if last param is infinite
-            if self.parameters and self.parameters[-1].infinite:
-                param = self.parameters[-1]
-            else:
-                return []
-        else:
-            param = self.parameters[arg_index]
-
-        # Build context with lazily converted arguments for suggestions
+        # Build shared context once
         ctx = CommandContext(
             proxy=proxy,
             raw_args=args + [partial],
-            param_index=arg_index,
+            param_index=param_index,
             command_name=self.name,
         )
-        # Set up lazy args - conversions happen only when accessed
         ctx.args = LazyArgs(ctx, args, self.parameters)
 
-        # Delegate to Parameter.get_suggestions
-        return await param.get_suggestions(ctx, partial)
+        # Starting from param_index, cascade through optional non-lazy params that
+        # return no suggestions (e.g. float window) so that subsequent params like
+        # *stats still get a chance to suggest.
+        while param_index < len(self.parameters):
+            param = self.parameters[param_index]
+            ctx.param_index = param_index
+            suggestions = await param.get_suggestions(ctx, partial)
+            if suggestions:
+                return suggestions
+            # Only cascade if this param can fall through at runtime
+            if not param.required and not param.is_lazy and not param.infinite:
+                param_index += 1
+            else:
+                break
+
+        # param_index exhausted — check if last param is infinite
+        if param_index >= len(self.parameters):
+            if self.parameters and self.parameters[-1].infinite:
+                param = self.parameters[-1]
+                ctx.param_index = len(self.parameters) - 1
+                return await param.get_suggestions(ctx, partial)
+
+        return []
 
 
 # =============================================================================

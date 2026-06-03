@@ -23,6 +23,7 @@ Usage:
 """
 
 import time
+import uuid as uuid_mod
 from pathlib import Path
 from typing import Any
 
@@ -361,7 +362,7 @@ def user_exists(username: str) -> bool:
     """Check if user has stored credentials."""
     data_dir = _get_data_dir()
     user_file = data_dir / f"{username}.enc"
-    return user_file.exists()
+    return user_file.exists() and (safe_get("proxhy", username) is not None)
 
 
 def token_needs_refresh(username: str) -> bool:
@@ -392,7 +393,9 @@ def token_needs_refresh(username: str) -> bool:
         return True
 
 
-async def load_auth_info(username: str = "") -> tuple[str, str, str]:
+async def load_auth_info(
+    username: str = "", refresh_if_expired: bool = True
+) -> tuple[str, str, uuid_mod.UUID]:
     """
     Load cached auth info and refresh token if needed.
 
@@ -415,12 +418,12 @@ async def load_auth_info(username: str = "") -> tuple[str, str, str]:
 
     access_token, refresh_token, uuid = parts
 
-    if token_needs_refresh(username):
+    if token_needs_refresh(username) and refresh_if_expired:
         access_token, refresh_token = await _refresh_and_update_tokens(
             username, refresh_token, uuid
         )
 
-    return access_token, username, uuid
+    return access_token, username, uuid_mod.UUID(uuid)
 
 
 async def _refresh_and_update_tokens(

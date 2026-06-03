@@ -2,7 +2,6 @@ import random
 from copy import deepcopy
 from functools import wraps
 from typing import (
-    TYPE_CHECKING,
     Awaitable,
     Callable,
     Literal,
@@ -12,7 +11,8 @@ from typing import (
     overload,
 )
 
-from protocol.datatypes import (
+from petty.net import ClientStream
+from petty.protocol.datatypes import (
     Byte,
     Chat,
     Int,
@@ -23,12 +23,9 @@ from protocol.datatypes import (
     UnsignedByte,
 )
 
-if TYPE_CHECKING:
-    from core.net import Client
 
-
-class _HasClientAndWindows(Protocol):
-    client: Client
+class _HasDownstreamAndWindows(Protocol):
+    downstream: ClientStream
     windows: dict[int, "Window"]
 
 
@@ -40,7 +37,7 @@ def ensure_open[F: Callable[..., object]](open: bool = True) -> Callable[[F], F]
                 return func(self, *args, **kwargs)
             return lambda: None
 
-        return wrapper  # type: ignore[return-value]
+        return wrapper  # type: ignore
 
     return decorator
 
@@ -81,7 +78,7 @@ class Slots(list[SlotType]):
 class Window:
     def __init__(
         self,
-        proxy: _HasClientAndWindows,
+        proxy: _HasDownstreamAndWindows,
         window_title: str = "Chest",
         window_type: WindowType = "minecraft:chest",
         num_slots: int = 27,
@@ -119,7 +116,7 @@ class Window:
         self.data[slot] = (slot_data, callback, locked)
 
         if self._open:
-            self.proxy.client.send_packet(
+            self.proxy.downstream.send_packet(
                 0x2F, Byte.pack(self.window_id), Short.pack(slot), Slot.pack(slot_data)
             )
 
@@ -143,7 +140,7 @@ class Window:
         self.proxy.windows.update({self.window_id: self})
         self._open = True
 
-        self.proxy.client.send_packet(
+        self.proxy.downstream.send_packet(
             0x2D,
             UnsignedByte.pack(self.window_id),
             String.pack(self.window_type),
@@ -156,12 +153,12 @@ class Window:
     @ensure_open()
     def close(self):
         self._open = False
-        self.proxy.client.send_packet(0x2E, UnsignedByte.pack(self.window_id))
+        self.proxy.downstream.send_packet(0x2E, UnsignedByte.pack(self.window_id))
         del self.proxy.windows[self.window_id]
 
     @ensure_open()
     def update(self):
-        self.proxy.client.send_packet(
+        self.proxy.downstream.send_packet(
             0x30,
             UnsignedByte.pack(self.window_id),
             Short.pack(self.num_slots),

@@ -1,7 +1,8 @@
+from typing import TYPE_CHECKING
+
 from .commands import HelpPath
 from .hypixel import Gamemode, Statistic, Submode
 from .players import (
-    AutoboopPlayer,
     BroadcastPlayer,
     HypixelPlayer,
     MojangPlayer,
@@ -9,6 +10,10 @@ from .players import (
     ServerPlayer,
 )
 from .settings import SettingPath, SettingValue
+
+if TYPE_CHECKING:
+    from ._argtypes import _resolve_in_proxy_chain
+
 
 __all__ = (
     "_resolve_in_proxy_chain",
@@ -22,7 +27,6 @@ __all__ = (
     "BroadcastPlayer",
     "MojangPlayer",
     "HypixelPlayer",
-    "AutoboopPlayer",
     # ./settings.py
     "SettingPath",
     "SettingValue",

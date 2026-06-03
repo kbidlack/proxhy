@@ -1,7 +1,8 @@
 from typing import Literal
 
+from petty.protocol.datatypes import Item
+
 from plugins.settings import Setting, SettingGroup, SettingsStorage, create_setting
-from protocol.datatypes import Item
 
 
 class BroadcastSettings(SettingGroup):

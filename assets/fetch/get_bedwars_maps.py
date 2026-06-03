@@ -1,11 +1,19 @@
+# /// script
+# requires-python = ">=3.14"
+# dependencies = [
+#     "bs4>=0.0.2",
+#     "requests>=2.34.2",
+#     "tqdm>=4.67.3",
+# ]
+# ///
 import json
 import re
 import time
 from urllib.parse import urljoin
 
-import requests  # ty: ignore[unresolved-import]
-from bs4 import BeautifulSoup, Tag  # ty: ignore[unresolved-import]
-from tqdm import tqdm  # ty: ignore[unresolved-import]
+import requests
+from bs4 import BeautifulSoup, Tag
+from tqdm import tqdm
 
 BASE = "https://hypixel.fandom.com"
 CATEGORY_URL = "https://hypixel.fandom.com/wiki/Category:Bed_Wars_maps"

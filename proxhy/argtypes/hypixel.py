@@ -1,11 +1,12 @@
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, TypedDict
 
+from petty.protocol.datatypes import TextComponent
+
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,
 )
-from protocol.datatypes import TextComponent
 
 if TYPE_CHECKING:
     from plugins.commands._commands import (
@@ -181,9 +182,30 @@ class Gamemode(CommandArg):
 
     GAME_LOOKUP = _build_reverse_lookup(GAMES)
 
-    def __init__(self, mode_str: GAMETYPE_T):
-        self.mode_str = mode_str  # e.g. "bedwars" or "skywars"
+    _play_id_to_gametype: dict[str, GAMETYPE_T] | None = None
+
+    def __init__(self, mode_str: GAMETYPE_T, raw_play_id: str | None = None):
+        self.mode_str = mode_str
         self.display_name = self.GAMES[mode_str]["display_name"]
+        self.raw_play_id = raw_play_id
+
+    @classmethod
+    def _get_play_id_to_gametype(cls) -> dict[str, GAMETYPE_T]:
+        if cls._play_id_to_gametype is None:
+            mapping: dict[str, GAMETYPE_T] = {}
+
+            def traverse(gametype: GAMETYPE_T, node: SubNode) -> None:
+                if node.id is not None:
+                    mapping[node.id] = gametype
+                if node.children:
+                    for child in node.children.values():
+                        traverse(gametype, child)
+
+            for gametype, game_submodes in Submode.SUBMODES.items():
+                for node in game_submodes.values():
+                    traverse(gametype, node)
+            cls._play_id_to_gametype = mapping
+        return cls._play_id_to_gametype
 
     @classmethod
     async def convert(cls, ctx: CommandContext, value: str) -> Gamemode:
@@ -191,17 +213,23 @@ class Gamemode(CommandArg):
 
         if mode_str := cls.GAME_LOOKUP.get(s):
             return cls(mode_str=mode_str)
-        else:
-            raise CommandException(
-                TextComponent("Invalid or unsupported gamemode '")
-                .append(TextComponent(value).color("gold"))
-                .append("'!")
-            )
+        if "_" in s:
+            if gametype := cls._get_play_id_to_gametype().get(s):
+                return cls(mode_str=gametype, raw_play_id=s)
+        raise CommandException(
+            TextComponent("Invalid or unsupported gamemode '")
+            .append(TextComponent(value).color("gold"))
+            .append("'!")
+        )
 
     @classmethod
     async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
         s = partial.lower().strip()
 
+        if "_" in s:
+            return sorted(
+                id for id in cls._get_play_id_to_gametype() if id.startswith(s)
+            )
         return [
             data["main_alias"]
             for data in cls.GAMES.values()
@@ -255,6 +283,7 @@ class Submode(CommandArg):
             "blocking-dead": SubNode.leaf("arcade_day_one"),
             "creeper-attack": SubNode.leaf("arcade_creeper_defense"),
             "bounty-hunters": SubNode.leaf("arcade_bounty_hunters"),
+            "disasters": SubNode.leaf("arcade_disasters"),
         },
         "arena": {
             "1v1": SubNode.leaf("arena_1v1"),
@@ -582,6 +611,7 @@ class Stat:
     json_key: str
     main: str
     aliases: list[str]
+    overall_only: bool = False
 
 
 class Statistic(CommandArg):
@@ -943,6 +973,21 @@ class Statistic(CommandArg):
                 main="winstreak",
                 aliases=["ws"],
             ),
+            # overall only
+            "coins": Stat(
+                name="Coins",
+                json_key="coins",
+                main="coins",
+                aliases=[],
+                overall_only=True,
+            ),
+            "experience": Stat(
+                name="Experience",
+                json_key="Experience",
+                main="experience",
+                aliases=["xp", "exp"],
+                overall_only=True,
+            ),
             # seasonal
             "presents": Stat(
                 name="Presents Collected",
@@ -950,7 +995,227 @@ class Statistic(CommandArg):
                 main="presents",
                 aliases=[],
             ),
-        }
+        },
+        "skywars": {
+            # derived
+            "kdr": Stat(name="KDR", json_key="kdr", main="kdr", aliases=["k/d"]),
+            "wlr": Stat(name="WLR", json_key="wlr", main="wlr", aliases=["w/l"]),
+            # combat
+            "kills": Stat(name="Kills", json_key="kills", main="kills", aliases=[]),
+            "deaths": Stat(
+                name="Deaths", json_key="deaths", main="deaths", aliases=["dies"]
+            ),
+            "assists": Stat(
+                name="Assists", json_key="assists", main="assists", aliases=[]
+            ),
+            "melee_kills": Stat(
+                name="Melee Kills",
+                json_key="melee_kills",
+                main="melee_kills",
+                aliases=["melees"],
+            ),
+            "void_kills": Stat(
+                name="Void Kills",
+                json_key="void_kills",
+                main="void_kills",
+                aliases=[],
+            ),
+            "bow_kills": Stat(
+                name="Bow Kills",
+                json_key="bow_kills",
+                main="bow_kills",
+                aliases=["bows"],
+            ),
+            "fall_kills": Stat(
+                name="Fall Kills", json_key="fall_kills", main="fall_kills", aliases=[]
+            ),
+            "mob_kills": Stat(
+                name="Mob Kills", json_key="mob_kills", main="mob_kills", aliases=[]
+            ),
+            "arrows_hit": Stat(
+                name="Arrows Hit", json_key="arrows_hit", main="arrows_hit", aliases=[]
+            ),
+            "arrows_shot": Stat(
+                name="Arrows Shot",
+                json_key="arrows_shot",
+                main="arrows_shot",
+                aliases=[],
+            ),
+            "killstreak": Stat(
+                name="Killstreak",
+                json_key="killstreak",
+                main="killstreak",
+                aliases=["ks"],
+            ),
+            "survived_players": Stat(
+                name="Survived",
+                json_key="survived_players",
+                main="survived",
+                aliases=[],
+            ),
+            # wins
+            "wins": Stat(name="Wins", json_key="wins", main="wins", aliases=[]),
+            "losses": Stat(name="Losses", json_key="losses", main="losses", aliases=[]),
+            "winstreak": Stat(
+                name="Winstreak", json_key="winstreak", main="winstreak", aliases=["ws"]
+            ),
+            # game info
+            "games": Stat(name="Games", json_key="games", main="games", aliases=[]),
+            "chests_opened": Stat(
+                name="Chests Opened",
+                json_key="chests_opened",
+                main="chests_opened",
+                aliases=["chests"],
+            ),
+            "time_played": Stat(
+                name="Time Played",
+                json_key="time_played",
+                main="time_played",
+                aliases=[],
+            ),
+            "quits": Stat(
+                name="Quits", json_key="quits", main="quits", aliases=["leaves"]
+            ),
+            # records
+            "most_kills_game": Stat(
+                name="Most Kills (Game)",
+                json_key="most_kills_game",
+                main="most_kills_game",
+                aliases=["best_game"],
+            ),
+            "fastest_win": Stat(
+                name="Fastest Win",
+                json_key="fastest_win",
+                main="fastest_win",
+                aliases=[],
+            ),
+            "longest_bow_shot": Stat(
+                name="Longest Bow Shot",
+                json_key="longest_bow_shot",
+                main="longest_bow_shot",
+                aliases=[],
+            ),
+            "longest_bow_kill": Stat(
+                name="Longest Bow Kill",
+                json_key="longest_bow_kill",
+                main="longest_bow_kill",
+                aliases=[],
+            ),
+            # overall only
+            "highest_winstreak": Stat(
+                name="Highest Winstreak",
+                json_key="highestWinstreak",
+                main="highest_winstreak",
+                aliases=["hws"],
+                overall_only=True,
+            ),
+            "highest_killstreak": Stat(
+                name="Highest Killstreak",
+                json_key="highestKillstreak",
+                main="highest_killstreak",
+                aliases=["hks"],
+                overall_only=True,
+            ),
+            "games_played": Stat(
+                name="Games Played (All)",
+                json_key="games_played_skywars",
+                main="games_played",
+                aliases=["plays"],
+                overall_only=True,
+            ),
+            "blocks_broken": Stat(
+                name="Blocks Broken",
+                json_key="blocks_broken",
+                main="blocks_broken",
+                aliases=[],
+                overall_only=True,
+            ),
+            "blocks_placed": Stat(
+                name="Blocks Placed",
+                json_key="blocks_placed",
+                main="blocks_placed",
+                aliases=[],
+                overall_only=True,
+            ),
+            "egg_thrown": Stat(
+                name="Eggs Thrown",
+                json_key="egg_thrown",
+                main="egg_thrown",
+                aliases=["eggs"],
+                overall_only=True,
+            ),
+            "enderpearls_thrown": Stat(
+                name="Enderpearls Thrown",
+                json_key="enderpearls_thrown",
+                main="enderpearls_thrown",
+                aliases=["pearls"],
+                overall_only=True,
+            ),
+            "items_enchanted": Stat(
+                name="Items Enchanted",
+                json_key="items_enchanted",
+                main="items_enchanted",
+                aliases=["enchants"],
+                overall_only=True,
+            ),
+            "refill_chest_destroy": Stat(
+                name="Refill Chests Destroyed",
+                json_key="refill_chest_destroy",
+                main="refill_chest_destroy",
+                aliases=["refills"],
+                overall_only=True,
+            ),
+            "souls_gathered": Stat(
+                name="Souls Gathered",
+                json_key="souls_gathered",
+                main="souls_gathered",
+                aliases=[],
+                overall_only=True,
+            ),
+            "soul_well": Stat(
+                name="Soul Well Uses",
+                json_key="soul_well",
+                main="soul_well",
+                aliases=[],
+                overall_only=True,
+            ),
+            "challenge_wins": Stat(
+                name="Challenge Wins",
+                json_key="challenge_wins",
+                main="challenge_wins",
+                aliases=["challenges"],
+                overall_only=True,
+            ),
+            "shard": Stat(
+                name="Shards",
+                json_key="shard",
+                main="shard",
+                aliases=["shards"],
+                overall_only=True,
+            ),
+            # cosmetics / collectibles
+            "souls": Stat(
+                name="Souls",
+                json_key="souls",
+                main="souls",
+                aliases=[],
+                overall_only=True,
+            ),
+            "heads": Stat(
+                name="Heads",
+                json_key="heads",
+                main="heads",
+                aliases=[],
+                overall_only=True,
+            ),
+            "coins": Stat(
+                name="Coins",
+                json_key="coins",
+                main="coins",
+                aliases=[],
+                overall_only=True,
+            ),
+        },
     }
 
     @staticmethod
@@ -981,9 +1246,16 @@ class Statistic(CommandArg):
         s = value.lower().strip()
         gamemode = await ctx.get_arg(Gamemode)
 
-        gamemodes = (
-            [gamemode.mode_str] if gamemode is not None else list(Gamemode.GAMES.keys())
-        )
+        if gamemode is not None:
+            gamemodes = [gamemode.mode_str]
+        else:
+            proxy_game = getattr(ctx.proxy, "game", None)
+            current_gm = proxy_game.gametype if proxy_game else ""
+            gamemodes = (
+                [current_gm]
+                if current_gm in cls.STAT_LOOKUP
+                else list(cls.STAT_LOOKUP.keys())
+            )
 
         for gm in gamemodes:
             if stat := cls.STAT_LOOKUP[gm].get(s):
@@ -1003,9 +1275,14 @@ class Statistic(CommandArg):
         if gamemode is not None:
             statistics = list(cls.STATS[gamemode.mode_str].keys())
         else:
-            statistics: list[str] = []
-            for gm in Gamemode.GAMES:
-                statistics.extend(cls.STATS[gm].keys())
+            proxy_game = getattr(ctx.proxy, "game", None)
+            current_gm = proxy_game.gametype if proxy_game else ""
+            if current_gm in cls.STATS:
+                statistics = list(cls.STATS[current_gm].keys())
+            else:
+                statistics: list[str] = []
+                for gm in cls.STATS:
+                    statistics.extend(cls.STATS[gm].keys())
 
         matches = [stat for stat in statistics if stat.startswith(s)]
         matches.sort(key=len)

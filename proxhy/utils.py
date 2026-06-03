@@ -2,9 +2,12 @@ import asyncio
 import hashlib
 import inspect
 import operator
+import pickle
+import uuid
 import uuid as _uuid
 from collections import namedtuple
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 from hypixel import (
@@ -16,6 +19,7 @@ from hypixel import (
     utils,
 )
 from hypixel.client import JSON_DECODER, Client
+from platformdirs import user_cache_dir
 
 PlayerInfo = namedtuple("PlayerInfo", ("name", "uuid"))
 
@@ -24,6 +28,9 @@ class APIClient(Client):
     # literally just adds a profile function
     # because i don't wnat to have to query twice
     # to get uuid & name
+
+    async def __aenter__(self) -> APIClient:
+        return await super().__aenter__()
 
     async def _get_skin_properties_helper(self, uuid: str):
         """Helper to fetch skin properties from Mojang session server."""
@@ -71,7 +78,7 @@ class APIClient(Client):
         else:
             raise ApiError(response, "mojang")
 
-    async def get_skin_properties(self, uuid: str) -> list[dict]:
+    async def get_skin_properties(self, uuid_: uuid.UUID) -> list[dict]:
         """Returns the skin properties of a player from their UUID.
 
         |mojang|
@@ -100,7 +107,7 @@ class APIClient(Client):
             A list of property dicts with 'name', 'value', and optionally
             'signature' keys. Returns an empty list if player not found.
         """
-        return await self._get_skin_properties(uuid)
+        return await self._get_skin_properties(str(uuid_))
 
     async def _get_profile(self, name: str) -> PlayerInfo:
         if self._session.closed:
@@ -172,6 +179,33 @@ class APIClient(Client):
         return await self._get_profile(name)
 
 
+user_cache_file = Path(user_cache_dir("proxhy")) / "cache.pkl"
+
+
+class Cache:
+    def __init__(self, path: str = str(user_cache_file)):
+        self._path = Path(path)
+        self._lock = asyncio.Lock()
+        if self._path.exists():
+            with self._path.open("rb") as f:
+                self._data = pickle.load(f)
+        else:
+            self._data = {}
+
+    async def __aenter__(self):
+        await self._lock.acquire()
+        return self._data
+
+    async def __aexit__(self, exc_type, exc, tb):
+        try:
+            if exc_type is None:
+                self._path.parent.mkdir(parents=True, exist_ok=True)
+                with self._path.open("wb") as f:
+                    pickle.dump(self._data, f)
+        finally:
+            self._lock.release()
+
+
 # https://github.com/duhby/hypixel.py/blob/84fa52731d38a5939da70cac8753c967d0b70e3f/hypixel/models/player/utils.py#L144
 def safe_div(a: int | float, b: int | float) -> float:
     if not b:
@@ -182,7 +216,7 @@ def safe_div(a: int | float, b: int | float) -> float:
 
 def offline_uuid(username: str) -> _uuid.UUID:
     digest = hashlib.md5(f"OfflinePlayer:{username}".encode()).digest()
-    return _uuid.UUID(bytes=bytes(digest), version=3)
+    return _uuid.UUID(bytes=digest, version=3)
 
 
 def uuid_version(value: str) -> Optional[int]:
@@ -201,3 +235,9 @@ def zero_pad_calver(ver: str):
     """Pad a Proxhy version (CalVer) with 0s; e.g. 2026.2.19 -> 2026.02.19)"""
     dv = datetime.strptime(ver, "%Y.%m.%d")
     return dv.strftime("%Y.%m.%d")
+
+
+def short_node_id(node_id: str, prefix=8, suffix=8) -> str:
+    if len(node_id) <= prefix + suffix:
+        return node_id  # nothing to shorten
+    return f"{node_id[:prefix]}…{node_id[-suffix:]}"

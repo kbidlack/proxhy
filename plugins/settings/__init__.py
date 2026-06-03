@@ -1,39 +1,42 @@
 import math
 from textwrap import fill
-from typing import Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
-from plugins.commands import command
-from plugins.window import Window
-from protocol.datatypes import (
+from petty.nbt import dumps, from_dict
+from petty.protocol.datatypes import (
     Item,
     SlotData,
     TextComponent,
 )
-from protocol.nbt import dumps, from_dict
+
+from plugins.commands import command
+from plugins.window import Window
 from proxhy.argtypes import SettingPath, SettingValue
-from proxhy.plugin import ProxhyPlugin
 from proxhy.settings import ProxhySettings
 
 from ._settings import Setting, SettingGroup, SettingsStorage, create_setting
 
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
-class SettingsPluginState:
+S = TypeVar("S", bound=SettingGroup)
+
+
+class SettingsPlugin:
     settings: ProxhySettings
 
-
-class SettingsPlugin(ProxhyPlugin):
-    def _init_settings(self):
+    def _init_settings(self: ProxhyPlugin):
         self.settings = ProxhySettings()
 
     @command("s")
-    async def _command_settings(self):
+    async def _command_settings(self: ProxhyPlugin):
         """Open the settings GUI."""
         self.settings_window = SettingsMenu(self)
         self.settings_window.open()
 
     @command("setting", "set")
     async def _command_setting(
-        self,
+        self: ProxhyPlugin,
         setting: SettingPath,
         value: SettingValue,
     ):
@@ -51,7 +54,7 @@ class SettingsPlugin(ProxhyPlugin):
         _, new_color = setting.setting.states[new_state]
 
         # Send confirmation message
-        self.client.chat(
+        self.downstream.chat(
             TextComponent("Changed ")
             .append(TextComponent(setting.setting.display_name).color("yellow"))
             .appends("from")
@@ -65,7 +68,7 @@ class SettingsPlugin(ProxhyPlugin):
 
 
 class SettingsMenu(Window):
-    proxy: ProxhyPlugin
+    proxy: ProxhyPlugin  # type: ignore
 
     def __init__(
         self,
@@ -83,7 +86,7 @@ class SettingsMenu(Window):
         self.proxy = proxy
         self.settings = self.proxy.settings
         self.subsetting_path = subsetting_path
-        self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(
+        self.subsetting_group: SettingGroup = self.settings.get_setting_by_path(  # type: ignore
             subsetting_path
         )
 
@@ -119,9 +122,9 @@ class SettingsMenu(Window):
             TextComponent("Changed ")
             .append(TextComponent(s_display).color("yellow"))
             .appends("from")
-            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))  # type: ignore[arg-type]
+            .appends(TextComponent(old_state.upper()).bold().color(old_state_color))  # type: ignore
             .appends("to")
-            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))  # type: ignore[arg-type]
+            .appends(TextComponent(new_state.upper()).bold().color(new_state_color))  # type: ignore
             .append("!")
         )
 
@@ -291,7 +294,7 @@ class SettingsMenu(Window):
             prev_color,
             next_color,
         )
-        self.proxy.client.chat(msg)
+        self.proxy.downstream.chat(msg)
         await self.proxy.emit(f"setting:{s_raw._key}", [prev_state, next_state])
 
     def open_group_callback(
@@ -339,7 +342,6 @@ __all__ = (
     "SettingsStorage",
     "create_setting",
     # .
-    "SettingsPluginState",
     "SettingsPlugin",
     "SettingsMenu",
 )

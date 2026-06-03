@@ -1,19 +1,27 @@
 import re
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
 
-from broadcasting.plugin import BroadcastPeerPlugin
-from core.events import subscribe
-from plugins.commands import Command, CommandException, CommandGroup, CommandsPlugin
-from protocol.datatypes import (
+from petty.events import subscribe
+from petty.protocol.datatypes import (
     Buffer,
     String,
     TextComponent,
     VarInt,
 )
 
+from plugins.commands import (
+    Command,
+    CommandException,
+    CommandGroup,
+    CommandsPlugin,
+)
 
-class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
-    async def _run_command(self, message: str):
+if TYPE_CHECKING:
+    from broadcasting.plugin import BroadcastPeerPlugin
+
+
+class BroadcastPeerCommandsPlugin(CommandsPlugin):
+    async def _run_command(self: BroadcastPeerPlugin, message: str):
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 
@@ -43,7 +51,7 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                 if error_msg.data.get("clickEvent") is None:
                     error_msg = error_msg.click_event("suggest_command", message)
 
-                self.client.chat(error_msg)
+                self.downstream.chat(error_msg)
             else:
                 if output:
                     if segments[0].startswith("//"):  # send output of command
@@ -54,9 +62,9 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                         if isinstance(output, TextComponent):
                             if output.data.get("clickEvent") is None:
                                 output = output.click_event("suggest_command", message)
-                        self.client.chat(output)
+                        self.downstream.chat(output)
         else:
-            self.client.chat(
+            self.downstream.chat(
                 TextComponent("Unknown command '")
                 .color("red")
                 .append(TextComponent(f"/{cmd_name}").color("gold"))
@@ -66,7 +74,7 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                 .click_event("suggest_command", message)
             )
 
-    async def _tab_complete(self, text: str):
+    async def _tab_complete(self: BroadcastPeerPlugin, text: str):
         precommand = None
         suggestions: list[str] = []
 
@@ -111,14 +119,16 @@ class BroadcastPeerCommandsPlugin(BroadcastPeerPlugin, CommandsPlugin):
                     if cmd.startswith(precommand.lower())
                 ]
 
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x3A,
             VarInt.pack(len(suggestions)),
             *(String.pack(s) for s in suggestions),
         )
 
     @subscribe("chat:client:.*")
-    async def _broadcast_peer_base_event_chat_client_any(self, _match, buff: Buffer):
+    async def _broadcast_peer_base_event_chat_client_any(
+        self: BroadcastPeerPlugin, _match, buff: Buffer
+    ):
         msg = buff.unpack(String)
         if msg.startswith("/"):
             return  # command plugin

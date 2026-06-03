@@ -1,41 +1,21 @@
-from core.net import StreamReader, StreamWriter
-from core.proxy import Proxy
-from plugins.autoboop import AutoboopPlugin
-from plugins.broadcaster import BroadcastPlugin
-from plugins.chat import ChatPlugin
-from plugins.commands import CommandsPlugin
-from plugins.debug import DebugPlugin
-from plugins.gamestate import GameStatePlugin
-from plugins.hypixelstate import HypixelStatePlugin
-from plugins.login import LoginPlugin
-from plugins.misc import MiscPlugin
-from plugins.settings import SettingsPlugin
-from plugins.sound import SoundPlugin
-from plugins.spatial import SpatialPlugin
-from plugins.statcheck import StatCheckPlugin
-from plugins.statcheck.command import StatcheckCommandPlugin
-from plugins.window import WindowPlugin
+import logging
+from asyncio import StreamReader, StreamWriter
 
-plugins: tuple[type, ...] = (
-    AutoboopPlugin,
-    BroadcastPlugin,
-    ChatPlugin,
-    CommandsPlugin,
-    DebugPlugin,
-    GameStatePlugin,
-    HypixelStatePlugin,
-    LoginPlugin,
-    MiscPlugin,
-    SettingsPlugin,
-    SpatialPlugin,
-    StatCheckPlugin,
-    StatcheckCommandPlugin,
-    SoundPlugin,
-    WindowPlugin,
-)
+from proxhy.plugin import ProxhyPlugin
 
 
-class _Proxhy(Proxy):
+class _ProxhyLogger(logging.LoggerAdapter):
+    def __init__(self, logger: logging.Logger, instance: "_Proxhy") -> None:
+        super().__init__(logger)
+        self._instance = instance
+
+    def process(self, msg, kwargs):
+        username = getattr(self._instance, "username", None)
+        prefix = f"[{username}] " if username else ""
+        return f"{prefix}{msg}", kwargs
+
+
+class _Proxhy(ProxhyPlugin):
     def __init__(
         # proxy params
         self,
@@ -57,5 +37,7 @@ class _Proxhy(Proxy):
         self.FAKE_CONNECT_HOST = fake_connect_host
         self.dev_mode = dev_mode
 
+        self.logger = _ProxhyLogger(logging.getLogger("proxhy"), self)
 
-Proxhy = type("Proxhy", (*plugins, _Proxhy), {})
+
+Proxhy = _Proxhy

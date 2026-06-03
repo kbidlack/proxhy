@@ -1,15 +1,17 @@
 import asyncio
+from typing import TYPE_CHECKING
 
 import numba
 import numpy as np
-
-from core.events import subscribe
-from protocol.datatypes import (
+from petty.events import subscribe
+from petty.protocol.datatypes import (
     Boolean,
     Float,
     Int,
 )
-from proxhy.plugin import ProxhyPlugin
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
 @numba.njit(cache=True, fastmath=True)
@@ -29,12 +31,12 @@ def _compute_height_warning(
     return True, limit_dist, float(particle_y)
 
 
-class SpatialPlugin(ProxhyPlugin):
+class SpatialPlugin:
     @subscribe("login_success")
-    async def _spatial_event_login_success(self, _match, _data):
+    async def _spatial_event_login_success(self: ProxhyPlugin, _match, _data):
         self.create_task(self.check_height_loop())
 
-    async def check_height_loop(self):
+    async def check_height_loop(self: ProxhyPlugin):
         """Called once when the proxy is started; loops indefinitely"""
         while True:
             if (
@@ -46,7 +48,7 @@ class SpatialPlugin(ProxhyPlugin):
 
             await asyncio.sleep(1 / 20)
 
-    def height_limit_warnings(self):
+    def height_limit_warnings(self: ProxhyPlugin):
         """Display warnings when the player is near the height limit"""
         # should never happen but makes type checker happy
         if self.game.map is None:
@@ -62,7 +64,7 @@ class SpatialPlugin(ProxhyPlugin):
             return
 
         color_mappings = {0: "§4", 1: "§c", 2: "§6", 3: "§e", 4: "§a", 5: "§2"}
-        self.client.set_actionbar_text(
+        self.downstream.set_actionbar_text(
             f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
         )
         for _ in range(10):
@@ -73,7 +75,7 @@ class SpatialPlugin(ProxhyPlugin):
             )
 
     def display_particle(
-        self,
+        self: ProxhyPlugin,
         particle_id: int,
         pos: tuple[float, float, float],
         offset: tuple[float, float, float] = (0.0, 0.0, 0.0),
@@ -85,7 +87,7 @@ class SpatialPlugin(ProxhyPlugin):
             raise NotImplementedError(
                 "Data field is 0 for most particles. ironcrack, blockcrack, and blockdust not implemented."
             )
-        self.client.send_packet(
+        self.downstream.send_packet(
             0x2A,  # display particle
             Int.pack(particle_id),  # particle id
             Boolean.pack(True),  # long distance?

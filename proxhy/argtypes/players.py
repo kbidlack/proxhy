@@ -1,15 +1,13 @@
-import re
-import shelve
 from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import hypixel
+from petty.protocol.datatypes import TextComponent
 
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,
 )
-from protocol.datatypes import TextComponent
 from proxhy.utils import APIClient, PlayerInfo
 
 from ._argtypes import _resolve_in_proxy_chain
@@ -253,14 +251,3 @@ class HypixelPlayer(Player):
                     TextComponent(str(e)).color("gold")
                 )
             )
-
-
-class AutoboopPlayer(HypixelPlayer):
-    @classmethod
-    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
-        with shelve.open(ctx.proxy.AB_DATA_PATH) as db:
-            user_players = db.get(ctx.proxy.username, {})
-            user_values = [
-                re.sub(r"§.", "", str(u.split(" ")[-1])) for u in user_players.values()
-            ]
-            return sorted(user_values)

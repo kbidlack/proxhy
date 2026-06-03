@@ -1,15 +1,17 @@
 import argparse
 import asyncio
 import errno
+import logging
 import platform
 import signal
 import sys
 from asyncio import StreamReader, StreamWriter
+from datetime import datetime
 
-import pyroh
+from petty.endpoints import Proxy
+from platformdirs import user_log_path
 
 import auth
-from core.proxy import Proxy
 from proxhy.proxhy import Proxhy
 
 if platform.system() == "Windows":
@@ -18,6 +20,22 @@ else:
     import uvloop as loop_impl
 
 loop_impl.install()
+
+_log_dir = user_log_path("proxhy")
+_log_dir.mkdir(parents=True, exist_ok=True)
+_log_file = _log_dir / f"proxhy_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
+
+logging.basicConfig(
+    level=logging.WARNING,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    handlers=[
+        logging.FileHandler(_log_file, encoding="utf-8"),
+        logging.StreamHandler(),
+    ],
+)
+logging.getLogger("proxhy").setLevel(logging.INFO)
+
+logger = logging.getLogger("proxhy")
 
 instances: list[Proxy] = []
 
@@ -159,11 +177,12 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
 
     server = ProxhyServer(server)
 
-    print(
+    logger.info(
         f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
     if args.dev:
-        print("==> DEV MODE ACTIVATED <==")
+        logger.setLevel(logging.DEBUG)
+        logger.info("DEV MODE ACTIVATED")
 
     return server
 
@@ -261,8 +280,6 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
 
 # Main entry point
 async def _main():
-    pyroh.setup_event_loop()
-
     # Start server first so the signal handler can reference it safely
     server = await start(
         host="localhost",
@@ -280,7 +297,7 @@ async def _main():
     try:
         try:
             loop.add_signal_handler(signal.SIGINT, _on_sigint)
-        except (NotImplementedError, AttributeError):
+        except NotImplementedError, AttributeError:
             # Windows / event loops without add_signal_handler
             signal.signal(
                 signal.SIGINT,

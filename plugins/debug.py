@@ -1,41 +1,61 @@
+from typing import TYPE_CHECKING
+
+from petty.protocol.datatypes import TextComponent
+
 from plugins.commands import command
-from protocol.datatypes import (
-    TextComponent,
-)
-from proxhy.plugin import ProxhyPlugin
+
+if TYPE_CHECKING:
+    from proxhy.plugin import ProxhyPlugin
 
 
-class DebugPluginState:
-    pass
-
-
-class DebugPlugin(ProxhyPlugin):
+class DebugPlugin:
     @command("game")
-    async def _command_game(self):
+    async def _command_game(self: ProxhyPlugin):
         """Display current game info."""
-        self.client.chat(TextComponent("Game:").color("green"))
+        self.downstream.chat(TextComponent("Game:").color("green"))
         for key in type(self.game).__annotations__:
             if value := getattr(self.game, key):
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent(f"{key.capitalize()}: ")
                     .color("aqua")
                     .append(TextComponent(str(value)).color("yellow"))
                 )
 
+    @command("nicked")
+    async def _command_nicked(self: ProxhyPlugin):
+        msg = (
+            TextComponent("Nicked:")
+            .color("yellow")
+            .appends(
+                TextComponent(f"{(nicked := self.nick is not None)}").color(
+                    "green" if nicked else "red"
+                )
+            )
+        )
+        if nicked:
+            msg = msg.appends(
+                TextComponent("(")
+                .color("yellow")
+                .append(TextComponent(self.nick).color("aqua"))
+                .append(TextComponent(")").color("yellow"))
+            )
+
+        return msg
+
     @command("rqgame")
-    async def _command_rqgame(self):
+    async def _command_rqgame(self: ProxhyPlugin):
         """Display requeue game info."""
-        self.client.chat(TextComponent("Requeue Game:").color("green"))
+        self.downstream.chat(TextComponent("Requeue Game:").color("green"))
         for key in type(self.rq_game).__annotations__:
             if value := getattr(self.rq_game, key):
-                self.client.chat(
+                self.downstream.chat(
                     TextComponent(f"{key.capitalize()}: ")
                     .color("aqua")
                     .append(TextComponent(str(value)).color("yellow"))
                 )
 
     @command("teams")
-    async def _command_teams(self):
+    async def _command_teams(self: ProxhyPlugin):
         """[DEBUG] Print out all current teams known to Proxhy."""
         print("\n")
         for team_name, team in self.gamestate.teams.items():
@@ -43,24 +63,24 @@ class DebugPlugin(ProxhyPlugin):
         print("\n")
 
     @command("player_list")
-    async def _command_player_list(self):
+    async def _command_player_list(self: ProxhyPlugin):
         """[DEBUG] List all players known to Proxhy."""
         print([(p.name, p.uuid) for p in self.gamestate.player_list.values()])
 
     @command("iphone_ringtone")
-    async def _command_iphone_ringtone(self):
+    async def _command_iphone_ringtone(self: ProxhyPlugin):
         """[DEBUG] Play the iPhone ringtone sound."""
         await self._iphone_ringtone()
 
     @command("samsung_ringtone")
-    async def _command_samsung_ringtone(self):
+    async def _command_samsung_ringtone(self: ProxhyPlugin):
         """[DEBUG] Play the Samsung ringtone sound."""
         await self._samsung_ringtone()
 
     @command("pos")
-    async def _command_pos(self):
+    async def _command_pos(self: ProxhyPlugin):
         """Get your current position."""
-        self.client.chat(
+        self.downstream.chat(
             f"{self.gamestate.position.x} {self.gamestate.position.y} {self.gamestate.position.z}"
         )
 
