@@ -1,31 +1,38 @@
 [project]
 name = "proxhy"
-version = "2026.06.03.post2"
+version = "2026.06.03.post3"
 description = "A Hypixel proxy with various different features"
 requires-python = ">=3.14"
 license = "MIT"
 authors = [{ name = "Kavi Bidlack" }, { name = "Manu Jhawar" }]
 dependencies = [
+  "compass",
   "cryptography>=48.0.0",
   "httpx>=0.28.1",
   "hypixel-py>=0.4.2",
   "keyring>=25.6",
+  "mcauth",
   "numba>=0.63.1",
   "numpy>=2.3.3",
   "orjson>=3.11.7",
+  "packaging>=26.2",
+  "petty",
   "platformdirs>=4.3",
   "pyjwt>=2.10",
   "pyroh>=0.4.1",
   "uvloop>=0.22.1; platform_system != 'Windows'",
-  "winloop>=0.6.0",
+  "winloop>=0.6.0; platform_system == 'Windows'",
 ]
 
 [project.scripts]
 proxhy = "proxhy.main:main"
 
 [build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["proxhy"]
 
 [tool.pyrefly]
 project-excludes = ["assets/*"]
@@ -38,3 +45,11 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "assets" = ["*.json", "*.png"]
+
+[tool.uv.workspace]
+members = ["auth", "petty", "compass"]
+
+[tool.uv.sources]
+auth = { workspace = true }
+petty = { workspace = true }
+compass = { workspace = true }

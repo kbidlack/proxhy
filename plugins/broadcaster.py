@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING, Optional
 
 import pyroh
 
-import auth
 import compass
+import mcauth as auth
 from broadcasting.plugin import BroadcastPeerPlugin
 from broadcasting.proxy import BroadcastPeerProxy
 from broadcasting.transform import (
