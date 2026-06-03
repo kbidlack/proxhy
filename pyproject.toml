@@ -13,6 +13,7 @@ dependencies = [
   "numba>=0.63.1",
   "numpy>=2.3.3",
   "orjson>=3.11.7",
+  "packaging>=26.2",
   "platformdirs>=4.3",
   "pyjwt>=2.10",
   "pyroh>=0.4.1",

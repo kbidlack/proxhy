@@ -19,6 +19,7 @@ from hypixel import (
     utils,
 )
 from hypixel.client import JSON_DECODER, Client
+from packaging.version import Version
 from platformdirs import user_cache_dir
 
 PlayerInfo = namedtuple("PlayerInfo", ("name", "uuid"))
@@ -231,10 +232,17 @@ def current_ln() -> Optional[int]:
     return f_back_f_lineno(inspect.currentframe())  # lmfao
 
 
-def zero_pad_calver(ver: str):
-    """Pad a Proxhy version (CalVer) with 0s; e.g. 2026.2.19 -> 2026.02.19)"""
-    dv = datetime.strptime(ver, "%Y.%m.%d")
-    return dv.strftime("%Y.%m.%d")
+def zero_pad_calver(ver: str) -> str:
+    v = Version(ver)
+
+    date_str = ".".join(map(str, v.release))
+    dv = datetime.strptime(date_str, "%Y.%m.%d")
+    result = dv.strftime("%Y.%m.%d")
+
+    if v.post is not None:
+        result += f".post{v.post}"
+
+    return result
 
 
 def short_node_id(node_id: str, prefix=8, suffix=8) -> str:

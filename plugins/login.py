@@ -553,8 +553,6 @@ class LoginPlugin:
                 TextComponent("==> Dev Mode Activated <==").color("green").bold()
             )
 
-            return
-
         if self.settings.update_check.get() == "ON":
             self.create_task(self._check_for_update())
 
