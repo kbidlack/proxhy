@@ -68,19 +68,18 @@ jobs:
 
       - name: Copy wheel into pyapp source
         shell: bash
-        run: cp proxhy/dist/proxhy-*.whl pyapp-src/proxhy.whl
+        run: cp proxhy/dist/proxhy-*.whl pyapp-src/
 
-      - name: Cache cargo (pyapp)
-        uses: actions/cache@v4
-        with:
-          path: pyapp-src/target
-          key: ${{ runner.os }}-pyapp-${{ hashFiles('pyapp-src/Cargo.lock') }}
+      - name: Get wheel filename
+        id: wheel
+        shell: bash
+        run: echo "path=$(ls proxhy/dist/proxhy-*.whl | head -1 | xargs basename)" >> $GITHUB_OUTPUT
 
       - name: Build pyapp
         shell: bash
         working-directory: pyapp-src
         env:
-          PYAPP_PROJECT_PATH: proxhy.whl
+          PYAPP_PROJECT_PATH: ${{ steps.wheel.outputs.path }}
           PYAPP_EXEC_SPEC: proxhy.main:main
           PYAPP_PYTHON_VERSION: "3.14"
           PYAPP_INDEX_URL: https://kbidlack.github.io/proxhy/simple/
@@ -124,6 +123,10 @@ jobs:
           </dict></plist>
           EOF
           zip -r proxhy-macos-${{ github.ref_name }}.zip $APP
+
+      - name: Ad-hoc sign .app
+        if: runner.os == 'macOS'
+        run: codesign --force --deep --sign - Proxhy.app
 
       - name: Bundle Windows (single exe)
         if: runner.os == 'Windows'
