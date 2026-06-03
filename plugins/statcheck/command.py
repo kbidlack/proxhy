@@ -7,9 +7,9 @@ from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
 
 import hypixel
 import orjson
+
 from petty.events import subscribe
 from petty.protocol.datatypes import TextComponent
-
 from plugins.commands import CommandContext, CommandException, Lazy, command
 from proxhy.argtypes import Gamemode, HypixelPlayer, Statistic
 from proxhy.argtypes.hypixel import GAMETYPE_T, Stat

@@ -2,13 +2,7 @@ from typing import TYPE_CHECKING
 
 from .commands import HelpPath
 from .hypixel import Gamemode, Statistic, Submode
-from .players import (
-    BroadcastPlayer,
-    HypixelPlayer,
-    MojangPlayer,
-    Player,
-    ServerPlayer,
-)
+from .players import BroadcastPlayer, HypixelPlayer, MojangPlayer, Player, ServerPlayer
 from .settings import SettingPath, SettingValue
 
 if TYPE_CHECKING:

@@ -3,12 +3,9 @@ from typing import TYPE_CHECKING
 
 import numba
 import numpy as np
+
 from petty.events import subscribe
-from petty.protocol.datatypes import (
-    Boolean,
-    Float,
-    Int,
-)
+from petty.protocol.datatypes import Boolean, Float, Int
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin

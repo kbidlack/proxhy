@@ -3,12 +3,7 @@ from textwrap import fill
 from typing import TYPE_CHECKING, Any, TypeVar
 
 from petty.nbt import dumps, from_dict
-from petty.protocol.datatypes import (
-    Item,
-    SlotData,
-    TextComponent,
-)
-
+from petty.protocol.datatypes import Item, SlotData, TextComponent
 from plugins.commands import command
 from plugins.window import Window
 from proxhy.argtypes import SettingPath, SettingValue

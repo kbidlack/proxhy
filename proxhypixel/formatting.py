@@ -8,10 +8,7 @@ from hypixel.color import Color
 
 from proxhy.argtypes.hypixel import GAMETYPE_T
 from proxhy.utils import safe_div
-from proxhypixel.mappings import (
-    BEDWARS_DREAM_MAPPING_SIMPLE,
-    BEDWARS_MAPPING_FULL,
-)
+from proxhypixel.mappings import BEDWARS_DREAM_MAPPING_SIMPLE, BEDWARS_MAPPING_FULL
 
 SUPPORTED_MODES: set[GAMETYPE_T] = {"bedwars", "skywars"}
 

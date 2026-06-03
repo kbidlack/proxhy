@@ -1,9 +1,9 @@
 from pathlib import Path
 from typing import Literal
 
-from petty.protocol.datatypes import Item
 from platformdirs import user_config_dir
 
+from petty.protocol.datatypes import Item
 from plugins.settings._settings import (  # import directly to avoid circular imports
     Setting,
     SettingGroup,

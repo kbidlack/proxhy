@@ -3,7 +3,6 @@ from typing import TYPE_CHECKING
 
 from petty.nbt import dumps, from_dict
 from petty.protocol.datatypes import Item, SlotData, String, TextComponent
-
 from plugins.commands import CommandException, command
 from proxhy.argtypes import Gamemode, Submode
 from proxhy.utils import zero_pad_calver

@@ -1,7 +1,6 @@
 from typing import TYPE_CHECKING, Any
 
 from petty.protocol.datatypes import TextComponent
-
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,

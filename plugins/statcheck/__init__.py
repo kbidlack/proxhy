@@ -4,15 +4,7 @@ import uuid
 from dataclasses import dataclass, field
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import (
-    TYPE_CHECKING,
-    Any,
-    Callable,
-    Literal,
-    Optional,
-    TypeIs,
-    get_args,
-)
+from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeIs, get_args
 
 import keyring
 from hypixel import (
@@ -25,6 +17,9 @@ from hypixel import (
     RateLimitError,
     TimeoutError,
 )
+from platformdirs import user_cache_dir
+
+from assets import load_json_asset
 from petty.events import listen_server, subscribe
 from petty.protocol.datatypes import (
     UUID,
@@ -36,14 +31,9 @@ from petty.protocol.datatypes import (
     TextComponent,
     VarInt,
 )
-from platformdirs import user_cache_dir
-
-from assets import load_json_asset
 from plugins.commands import CommandException, command
 from proxhy.utils import offline_uuid
-from proxhypixel.formatting import (
-    format_player_dict,
-)
+from proxhypixel.formatting import format_player_dict
 from proxhypixel.models import Game
 
 if TYPE_CHECKING:

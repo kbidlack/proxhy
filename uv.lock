@@ -145,17 +145,6 @@ wheels = [
 ]
 
 [[package]]
-name = "compass"
-version = "0.2.0"
-source = { git = "https://github.com/kbidlack/compass.git?rev=e9fa9e6738d77e7556b69f7d8dcc7d74d4d07603#e9fa9e6738d77e7556b69f7d8dcc7d74d4d07603" }
-dependencies = [
-    { name = "aiohttp" },
-    { name = "httpx" },
-    { name = "petty" },
-    { name = "pyroh" },
-]
-
-[[package]]
 name = "cryptography"
 version = "48.0.0"
 source = { registry = "https://pypi.org/simple" }
@@ -509,15 +498,6 @@ wheels = [
 ]
 
 [[package]]
-name = "petty"
-version = "0.2.0"
-source = { git = "https://github.com/kbidlack/petty.git?rev=ea200702955ee0fc5b7cd71cc832a7968bc98490#ea200702955ee0fc5b7cd71cc832a7968bc98490" }
-dependencies = [
-    { name = "cryptography" },
-    { name = "orjson" },
-]
-
-[[package]]
 name = "platformdirs"
 version = "4.10.0"
 source = { registry = "https://pypi.org/simple" }
@@ -571,17 +551,16 @@ wheels = [
 
 [[package]]
 name = "proxhy"
-version = "2026.6.3"
+version = "2026.6.3.post1"
 source = { editable = "." }
 dependencies = [
-    { name = "compass" },
+    { name = "cryptography" },
     { name = "httpx" },
     { name = "hypixel-py" },
     { name = "keyring" },
     { name = "numba" },
     { name = "numpy" },
     { name = "orjson" },
-    { name = "petty" },
     { name = "platformdirs" },
     { name = "pyjwt" },
     { name = "pyroh" },
@@ -591,14 +570,13 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "compass", git = "https://github.com/kbidlack/compass.git?rev=e9fa9e6738d77e7556b69f7d8dcc7d74d4d07603" },
+    { name = "cryptography", specifier = ">=48.0.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypixel-py", specifier = ">=0.4.2" },
     { name = "keyring", specifier = ">=25.6" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.3" },
     { name = "orjson", specifier = ">=3.11.7" },
-    { name = "petty", git = "https://github.com/kbidlack/petty.git?rev=ea200702955ee0fc5b7cd71cc832a7968bc98490" },
     { name = "platformdirs", specifier = ">=4.3" },
     { name = "pyjwt", specifier = ">=2.10" },
     { name = "pyroh", specifier = ">=0.4.1" },

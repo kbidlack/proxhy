@@ -3,7 +3,7 @@ from plugins.commands._commands import (  # import directly to avoid circular im
     CommandContext,
     CommandGroup,
     CommandRegistry,
-)  # import directly to avoid circular imports
+)
 
 
 class HelpPath(CommandArg):

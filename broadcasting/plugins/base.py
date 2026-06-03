@@ -1,17 +1,9 @@
 import asyncio
 from typing import TYPE_CHECKING, Literal, Optional
 
-from petty.events import subscribe
-from petty.protocol.datatypes import (
-    UUID,
-    Byte,
-    Double,
-    Float,
-    TextComponent,
-    VarInt,
-)
-
 from gamestate.state import PlayerAbilityFlags
+from petty.events import subscribe
+from petty.protocol.datatypes import UUID, Byte, Double, Float, TextComponent, VarInt
 from plugins.commands import CommandException, command
 from proxhy.argtypes import ServerPlayer
 

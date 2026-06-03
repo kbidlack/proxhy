@@ -11,6 +11,9 @@ from unittest.mock import Mock
 import httpx
 import hypixel
 import orjson
+
+import auth
+from auth.errors import AuthException
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
 from petty.protocol.crypt import (
@@ -34,9 +37,6 @@ from petty.protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
-
-import auth
-from auth.errors import AuthException
 from proxhy import utils
 from proxhy.utils import Cache
 

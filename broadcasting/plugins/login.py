@@ -5,6 +5,8 @@ from typing import TYPE_CHECKING, Literal, TypedDict
 from unittest.mock import Mock
 
 import orjson
+
+from gamestate.state import PlayerAbilityFlags
 from petty.events import listen_client as listen
 from petty.events import subscribe
 from petty.net import ServerStream, State
@@ -25,8 +27,6 @@ from petty.protocol.datatypes import (
     UnsignedShort,
     VarInt,
 )
-
-from gamestate.state import PlayerAbilityFlags
 from proxhy.utils import APIClient, offline_uuid, uuid_version
 
 if TYPE_CHECKING:

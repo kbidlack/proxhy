@@ -1,12 +1,11 @@
 import time
 from typing import TYPE_CHECKING, Hashable
 
+from gamestate.state import Entity, GameState
 from petty.events import listen_client, subscribe
 
 # from petty.events import listen_server
 from petty.protocol.datatypes import Buffer, VarInt
-
-from gamestate.state import Entity, GameState
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin

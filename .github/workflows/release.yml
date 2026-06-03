@@ -1,0 +1,210 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact_name: proxhy-gui-linux
+            bundle_ext: tar.gz
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact_name: proxhy-gui-macos
+            bundle_ext: zip
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact_name: proxhy-gui-windows
+            bundle_ext: zip
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: proxhy
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+
+      - name: Install Python 3.14
+        run: uv python install 3.14
+        working-directory: proxhy
+
+      - name: Build proxhy wheel
+        run: uv build --wheel
+        working-directory: proxhy
+        # output: proxhy/dist/proxhy-*.whl
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # ── Linux: egui deps ──────────────────────────────────────────
+      - name: Install Linux GUI deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgl1-mesa-dev libx11-dev libxcb-shape0-dev \
+            libxcb-xfixes0-dev libwayland-dev libxkbcommon-dev \
+            pkg-config
+
+      # ── Download and prepare pyapp source ────────────────────────
+      - name: Download pyapp source
+        shell: bash
+        run: |
+          curl -fsSL https://github.com/ofek/pyapp/releases/latest/download/source.tar.gz \
+            | tar -xz
+          mv pyapp-* pyapp-src
+
+      - name: Copy wheel into pyapp source
+        shell: bash
+        run: cp proxhy/dist/proxhy-*.whl pyapp-src/proxhy.whl
+
+      - name: Cache cargo (pyapp)
+        uses: actions/cache@v4
+        with:
+          path: pyapp-src/target
+          key: ${{ runner.os }}-pyapp-${{ hashFiles('pyapp-src/Cargo.lock') }}
+
+      - name: Build pyapp
+        shell: bash
+        working-directory: pyapp-src
+        env:
+          PYAPP_PROJECT_PATH: proxhy.whl
+          PYAPP_EXEC_SPEC: proxhy.main:main
+          PYAPP_PYTHON_VERSION: "3.14"
+          PYAPP_INDEX_URL: https://kbidlack.github.io/proxhy/simple/
+        run: cargo build --release
+
+      # ── Build proxhy-gui ──────────────────────────────────────────
+      - name: Cache cargo (gui)
+        uses: actions/cache@v4
+        with:
+          path: proxhy/proxhy-gui/target
+          key: ${{ runner.os }}-gui-${{ hashFiles('proxhy/proxhy-gui/Cargo.lock') }}
+
+      - name: Build proxhy-gui
+        shell: bash
+        working-directory: proxhy/proxhy-gui
+        env:
+          # build.rs uses this to find the pyapp binary to embed
+          PYAPP_BINARY_PATH: ../../pyapp-src/target/release/pyapp${{ runner.os == 'Windows' && '.exe' || '' }}
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # ── Bundle ───────────────────────────────────────────────────
+      - name: Bundle macOS .app
+        if: runner.os == 'macOS'
+        run: |
+          APP=Proxhy.app
+          mkdir -p $APP/Contents/MacOS
+          cp pyapp-src/target/release/pyapp $APP/Contents/MacOS/proxhy
+          cp proxhy/proxhy-gui/target/${{ matrix.target }}/release/proxhy-gui \
+             $APP/Contents/MacOS/proxhy-gui
+          cat > $APP/Contents/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>CFBundleExecutable</key><string>proxhy-gui</string>
+            <key>CFBundleIdentifier</key><string>com.proxhy.app</string>
+            <key>CFBundleName</key><string>Proxhy</string>
+            <key>CFBundleVersion</key><string>${{ github.ref_name }}</string>
+            <key>LSMinimumSystemVersion</key><string>12.0</string>
+            <key>NSHighResolutionCapable</key><true/>
+          </dict></plist>
+          EOF
+          zip -r proxhy-macos-${{ github.ref_name }}.zip $APP
+
+      - name: Bundle Windows (single exe)
+        if: runner.os == 'Windows'
+        run: |
+          # The GUI embeds pyapp inside itself (via build.rs + include_bytes!),
+          # so users only need proxhy-gui.exe.
+          $src = "proxhy\proxhy-gui\target\${{ matrix.target }}\release\proxhy-gui.exe"
+          $dest = "proxhy-windows-${{ github.ref_name }}.zip"
+          Compress-Archive -Path $src -DestinationPath $dest
+
+      - name: Bundle Linux
+        if: runner.os == 'Linux'
+        run: |
+          mkdir bundle
+          cp pyapp-src/target/release/pyapp bundle/proxhy
+          cp proxhy/proxhy-gui/target/${{ matrix.target }}/release/proxhy-gui bundle/
+          chmod +x bundle/proxhy bundle/proxhy-gui
+          tar -czf proxhy-linux-${{ github.ref_name }}.tar.gz -C bundle .
+
+      - name: Upload bundle artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bundle-${{ matrix.os }}
+          path: proxhy-${{ runner.os == 'macOS' && 'macos' || runner.os == 'Windows' && 'windows' || 'linux' }}-${{ github.ref_name }}.*
+
+  # ── Publish wheel to GitHub Pages (for `proxhy self update`) ────
+  publish-index:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: proxhy
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Build wheel
+        run: uv build --wheel
+        working-directory: proxhy
+
+      - name: Generate simple index
+        run: |
+          mkdir -p pages/simple/proxhy
+          cp proxhy/dist/proxhy-*.whl pages/simple/proxhy/
+          echo "<html><body>" > pages/simple/proxhy/index.html
+          for f in pages/simple/proxhy/*.whl; do
+            name=$(basename "$f")
+            echo "<a href=\"$name\">$name</a><br>" >> pages/simple/proxhy/index.html
+          done
+          echo "</body></html>" >> pages/simple/proxhy/index.html
+          echo "<html><body><a href=\"proxhy/\">proxhy</a></body></html>" \
+            > pages/simple/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: pages
+
+      - uses: actions/deploy-pages@v4
+
+  # ── Create GitHub Release ────────────────────────────────────────
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            proxhy-macos-${{ github.ref_name }}.zip
+            proxhy-windows-${{ github.ref_name }}.zip
+            proxhy-linux-${{ github.ref_name }}.tar.gz

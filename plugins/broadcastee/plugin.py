@@ -1,5 +1,4 @@
 from petty.endpoints import Proxy
-
 from plugins.broadcastee.plugins import (
     BroadcasteeClosePlugin,
     BroadcasteeCommandsPlugin,

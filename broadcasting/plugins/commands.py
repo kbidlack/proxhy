@@ -2,19 +2,8 @@ import re
 from typing import TYPE_CHECKING, Optional
 
 from petty.events import subscribe
-from petty.protocol.datatypes import (
-    Buffer,
-    String,
-    TextComponent,
-    VarInt,
-)
-
-from plugins.commands import (
-    Command,
-    CommandException,
-    CommandGroup,
-    CommandsPlugin,
-)
+from petty.protocol.datatypes import Buffer, String, TextComponent, VarInt
+from plugins.commands import Command, CommandException, CommandGroup, CommandsPlugin
 
 if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin

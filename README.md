@@ -2,7 +2,27 @@
 
 A Hypixel proxy.
 
-## Installation
+## Download
+
+[![Latest Release](https://img.shields.io/github/v/release/kbidlack/proxhy?style=flat-square)](https://github.com/kbidlack/proxhy/releases/latest)
+
+| Platform              | Download                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------- |
+| macOS (Apple Silicon) | [proxhy-macos.zip](https://github.com/kbidlack/proxhy/releases/latest/download/proxhy-macos-latest.zip)       |
+| Windows (x64)         | [proxhy-windows.zip](https://github.com/kbidlack/proxhy/releases/latest/download/proxhy-windows-latest.zip)   |
+| Linux (x64)           | [proxhy-linux.tar.gz](https://github.com/kbidlack/proxhy/releases/latest/download/proxhy-linux-latest.tar.gz) |
+
+**macOS:** Unzip → drag `Proxhy.app` to Applications → double-click.
+
+**Windows:** Unzip → run `proxhy-gui.exe`.
+
+**Linux:** Extract → run `./proxhy-gui`.
+
+> On first launch, proxhy will download and set up Python 3.14 automatically (~50MB, one-time).
+
+## Installation without GUI
+
+You can also install and run Proxhy without a GUI.
 
 The preferred method of installation is to use a Python package manager like `uv`:
 
@@ -16,13 +36,13 @@ You can also try out an ephemerally installed version with `uvx`:
 uvx --from git+https://github.com/kbidlack/proxhy proxhy
 ```
 
-## Upgrading
+### Upgrading
 
 ```bash
 uv upgrade proxhy
 ```
 
-## Usage
+### Usage
 
 Start the proxy:
 
@@ -51,6 +71,16 @@ By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:4122
 ```
 
 ## Uninstallation
+
+### GUI
+
+Delete the app file:
+
+**macOS:** Remove `/Applications/Proxhy.app`
+
+**Windows:** Delete `proxhy-gui.exe`
+
+**Linux:** Delete `proxhy-gui`
 
 ```bash
 uv tool uninstall proxhy

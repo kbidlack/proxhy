@@ -7,9 +7,8 @@ from typing import Any
 
 from numba import float64, int64
 from numba.experimental import jitclass
-from petty.protocol.datatypes import (
-    SlotData,
-)
+
+from petty.protocol.datatypes import SlotData
 
 _vec3d_spec = [
     ("x", float64),

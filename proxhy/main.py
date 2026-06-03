@@ -8,10 +8,10 @@ import sys
 from asyncio import StreamReader, StreamWriter
 from datetime import datetime
 
-from petty.endpoints import Proxy
 from platformdirs import user_log_path
 
 import auth
+from petty.endpoints import Proxy
 from proxhy.proxhy import Proxhy
 
 if platform.system() == "Windows":

@@ -2,7 +2,6 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Literal, TypedDict
 
 from petty.protocol.datatypes import TextComponent
-
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,

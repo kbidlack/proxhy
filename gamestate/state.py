@@ -12,27 +12,6 @@ import uuid as uuid_mod
 from typing import Any, Callable, Literal, Optional
 
 import numpy as np
-from petty.protocol.datatypes import (
-    UUID,
-    Angle,
-    Boolean,
-    Buffer,
-    Byte,
-    Chat,
-    Double,
-    Float,
-    Int,
-    Long,
-    Pos,
-    Position,
-    Short,
-    Slot,
-    SlotData,
-    String,
-    UnsignedByte,
-    UnsignedShort,
-    VarInt,
-)
 
 from gamestate.constants import MOB_TYPES
 from gamestate.enums import (
@@ -76,6 +55,27 @@ from gamestate.models import (
     VillagerTrade,
     Window,
     WorldBorder,
+)
+from petty.protocol.datatypes import (
+    UUID,
+    Angle,
+    Boolean,
+    Buffer,
+    Byte,
+    Chat,
+    Double,
+    Float,
+    Int,
+    Long,
+    Pos,
+    Position,
+    Short,
+    Slot,
+    SlotData,
+    String,
+    UnsignedByte,
+    UnsignedShort,
+    VarInt,
 )
 from proxhy.utils import uuid_version
 

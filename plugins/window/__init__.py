@@ -1,19 +1,9 @@
 import inspect
 from types import NoneType, NotImplementedType
-from typing import (
-    TYPE_CHECKING,
-    Callable,
-)
+from typing import TYPE_CHECKING, Callable
 
 from petty.events import listen_client
-from petty.protocol.datatypes import (
-    Buffer,
-    Byte,
-    Short,
-    Slot,
-    SlotData,
-    UnsignedByte,
-)
+from petty.protocol.datatypes import Buffer, Byte, Short, Slot, SlotData, UnsignedByte
 
 from ._window import Window, get_trigger
 

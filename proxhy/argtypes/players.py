@@ -2,8 +2,8 @@ from abc import abstractmethod
 from typing import TYPE_CHECKING, Any
 
 import hypixel
-from petty.protocol.datatypes import TextComponent
 
+from petty.protocol.datatypes import TextComponent
 from plugins.commands._commands import (  # import directly to avoid circular imports
     CommandArg,
     CommandException,
