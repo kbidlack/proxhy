@@ -27,6 +27,7 @@ struct LogLine {
 }
 
 // Embedded pyapp binary (baked in at compile time)
+#[allow(dead_code)]
 const PYAPP_BYTES: &[u8] = include_bytes!("proxhy_inner");
 
 #[derive(Default, Clone)]
@@ -36,7 +37,6 @@ struct UpdateState {
     error: Option<String>,
 }
 
-// Call this once from main(), before eframe::run_native
 fn spawn_update_check(update_state: Arc<Mutex<UpdateState>>) {
     std::thread::spawn(move || {
         let result = self_update::backends::github::Update::configure()
@@ -99,7 +99,8 @@ fn extract_pyapp() -> std::path::PathBuf {
         let mut path = std::env::current_exe().unwrap();
         path.pop();
         path.push("proxhy");
-        return path;
+
+        path
     }
 
     // On Windows, extract to %APPDATA%\proxhy\ so it persists between runs
@@ -197,6 +198,9 @@ fn push_line(log: &Arc<Mutex<VecDeque<LogLine>>>, raw: &str) {
 }
 
 fn main() -> eframe::Result {
+    let update_state = Arc::new(Mutex::new(UpdateState::default()));
+    spawn_update_check(Arc::clone(&update_state));
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Proxhy")
@@ -330,7 +334,7 @@ impl eframe::App for App {
                 ui.horizontal(|ui| {
                     ui.colored_label(
                         egui::Color32::from_rgb(255, 200, 50),
-                        format!("⬆ Update available: {}", version),
+                        format!("⬆ Update available: {version}"),
                     );
                     if update_state.installing {
                         ui.spinner();
