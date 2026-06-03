@@ -7,6 +7,7 @@ import signal
 import sys
 from asyncio import StreamReader, StreamWriter
 from datetime import datetime
+from importlib.metadata import version
 
 from platformdirs import user_log_path
 
@@ -178,7 +179,7 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     server = ProxhyServer(server)
 
     logger.info(
-        f"Started proxhy on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
+        f"Started proxhy v{version('proxhy')} on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
     if args.dev:
         logger.setLevel(logging.DEBUG)

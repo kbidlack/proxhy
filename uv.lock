@@ -607,7 +607,7 @@ wheels = [
 
 [[package]]
 name = "proxhy"
-version = "2026.6.3.post2"
+version = "2026.6.3.post3"
 source = { editable = "." }
 dependencies = [
     { name = "compass" },
