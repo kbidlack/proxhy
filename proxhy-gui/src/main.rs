@@ -27,7 +27,7 @@ struct LogLine {
 }
 
 // Embedded pyapp binary (baked in at compile time)
-const PYAPP_BYTES: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/proxhy-inner"));
+const PYAPP_BYTES: &[u8] = include_bytes!("proxhy_inner");
 
 #[derive(Default, Clone)]
 struct UpdateState {
