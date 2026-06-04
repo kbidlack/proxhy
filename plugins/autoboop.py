@@ -17,7 +17,7 @@ class AutoboopPlugin:
             "autoboop",
             "ab",
             help="Autoboop commands.",
-            key=lambda proxy: f"autoboop:{proxy.username}",
+            key=lambda proxy: f"autoboop:{proxy.uuid}",
             add_type=HypixelPlayer,
             display=lambda player: get_rankname(player._player),
         ).register(self)
@@ -35,7 +35,7 @@ class AutoboopPlugin:
 
         player_name = str(player.group(2))
 
-        if PlayerList(f"autoboop:{self.username}").contains(player_name):
+        if PlayerList(f"autoboop:{self.uuid}").contains(player_name):
             self.upstream.chat(f"/boop {player_name}")
 
         self.downstream.send_packet(0x02, buff.getvalue())

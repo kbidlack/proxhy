@@ -350,12 +350,12 @@ class StatcheckCommandPlugin:
     def _calculate_stat_deltas(
         self, current_stats: dict, old_stats: dict, required_keys: list[str]
     ) -> dict:
-        diffs = {}
+        diffs: dict[str, int | float] = {}
         for key in required_keys:
             current_val = float(current_stats.get(key, 0))
             old_val = float(old_stats.get(key, 0))
             diff = current_val - old_val
-            diffs[key] = diff
+            diffs[key] = int(diff) if diff.is_integer() else diff
         return diffs
 
     def _calculate_ratios(

@@ -46,7 +46,6 @@ from gamestate.models import (
     Rotation,
     Score,
     ScoreboardObjective,
-    Sign,
     Statistics,
     Team,
     TitleState,
@@ -169,9 +168,6 @@ class GameState:
 
         # Block entities
         self.block_entities: dict[tuple[int, int, int], BlockEntity] = {}
-
-        # Signs
-        self.signs: dict[tuple[int, int, int], Sign] = {}
 
         # World border
         self.world_border: WorldBorder = WorldBorder()
@@ -1121,10 +1117,32 @@ class GameState:
     def _handle_update_sign(self, buff: Buffer) -> None:
         """Handle Update Sign packet (0x33)."""
         pos: Pos = buff.unpack(Position)
+        line1 = Chat.unpack_component(buff)
+        line2 = Chat.unpack_component(buff)
+        line3 = Chat.unpack_component(buff)
+        line4 = Chat.unpack_component(buff)
 
-        self.signs[(pos.x, pos.y, pos.z)] = Sign(
+        from petty.nbt import dumps, from_dict
+
+        nbt_data = dumps(
+            from_dict(
+                {
+                    "id": "Sign",
+                    "x": pos.x,
+                    "y": pos.y,
+                    "z": pos.z,
+                    "Text1": line1.to_json() if line1 else '""',
+                    "Text2": line2.to_json() if line2 else '""',
+                    "Text3": line3.to_json() if line3 else '""',
+                    "Text4": line4.to_json() if line4 else '""',
+                }
+            )
+        )
+
+        self.block_entities[(pos.x, pos.y, pos.z)] = BlockEntity(
             position=Vec3i(pos.x, pos.y, pos.z),
-            lines=[buff.unpack(Chat) for _ in range(4)],
+            action=9,
+            nbt_data=nbt_data,
         )
 
     def _handle_map(self, buff: Buffer) -> None:
@@ -2113,20 +2131,6 @@ class GameState:
             packets.append((0x35, data))
         return packets
 
-    def _build_signs(self) -> list[Packet]:
-        """Build Update Sign packets (0x33)."""
-        packets: list[Packet] = []
-        for (x, y, z), sign in self.signs.items():
-            data = (
-                Position.pack((x, y, z))
-                + Chat.pack(sign.lines[0])
-                + Chat.pack(sign.lines[1])
-                + Chat.pack(sign.lines[2])
-                + Chat.pack(sign.lines[3])
-            )
-            packets.append((0x33, data))
-        return packets
-
     def _build_entity_spawns(self) -> list[Packet]:
         """Build spawn packets for all entities."""
         packets: list[Packet] = []
@@ -2743,9 +2747,6 @@ class GameState:
         # 18. Block Entities (0x35)
         packets.extend(self._build_block_entities())
 
-        # 19. Signs (0x33)
-        packets.extend(self._build_signs())
-
         # 20. Entities - Spawn all entities
         packets.extend(self._build_entity_spawns())
 
@@ -2870,9 +2871,6 @@ class GameState:
 
         # 18. Block Entities (0x35)
         packets.extend(self._build_block_entities())
-
-        # 19. Signs (0x33)
-        packets.extend(self._build_signs())
 
         # 20. Entities - Spawn all entities
         packets.extend(self._build_entity_spawns())
@@ -3003,9 +3001,6 @@ class GameState:
 
         # 18. Block Entities (0x35)
         packets.extend(self._build_block_entities())
-
-        # 19. Signs (0x33)
-        packets.extend(self._build_signs())
 
         # 20. Entities - Spawn all entities
         packets.extend(self._build_entity_spawns())

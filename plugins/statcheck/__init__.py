@@ -561,7 +561,7 @@ class StatCheckPlugin:
                 if not is_team_letter(team_letter):
                     if self.in_bedwars_game():
                         self.logger.debug(
-                            f"packet_teams: {team_letter} is not a valid team letter, skipping ({team.prefix})"
+                            f"{team_letter} is not a valid team letter, skipping ({team.prefix})"
                         )
 
                     return
@@ -575,7 +575,7 @@ class StatCheckPlugin:
                 )
                 self.game_players[username] = player
                 self.logger.debug(
-                    f"packet_teams: put {player.username!r} on {player.team!r}, {name}, {self.gamestate.teams[name].prefix}"
+                    f"put {player.username!r} on {player.team!r}, {name}, {self.gamestate.teams[name].prefix}"
                 )
                 self.player_stats_queue.put_nowait(player)
 
@@ -703,7 +703,7 @@ class StatCheckPlugin:
 
         if player.username != player_result.name:
             self.logger.debug(
-                f"_update_player_stats: expected '{player.username}', got '{player_result.name}'; assuming nick"
+                f"expected '{player.username}', got '{player_result.name}'; assuming nick"
             )
             # assume nick -- TODO: should we assume this?
             # no I am NOT chat gpt despite the em dash ):
@@ -765,7 +765,7 @@ class StatCheckPlugin:
             return
 
         if self.game.map is None:
-            self.logger.warning("highlight_adjacent_teams: unknown map")
+            self.logger.warning("unknown map")
             return
         try:
             main_rush, alt_rush = self.get_adjacent_teams()
@@ -782,7 +782,7 @@ class StatCheckPlugin:
             other_adjacent_rush, other_adjacent_players = main_rush, main_players
         else:
             self.logger.warning(
-                f"highlight_adjacent_teams: unexpected rush_direction {self.game.map.rush_direction!r}"
+                f"unexpected rush_direction {self.game.map.rush_direction!r}"
             )
             return
 
@@ -807,7 +807,7 @@ class StatCheckPlugin:
             key = lambda fp: fp["raw_fkdr"]  # noqa: E731
         else:
             self.logger.warning(
-                f"highlight_adjacent_teams: unexpected display_top_stats value {self.settings.bedwars.display_top_stats.get()!r}"
+                f" unexpected display_top_stats value {self.settings.bedwars.display_top_stats.get()!r}"
             )
             return
 
@@ -852,7 +852,7 @@ class StatCheckPlugin:
                         ].display_name
             case _:
                 self.logger.warning(
-                    f"highlight_adjacent_teams: unexpected first rush team size {len(first_players):d}: {first_players}"
+                    f"unexpected first rush team size {len(first_players):d}: {first_players}"
                 )
                 return
 
@@ -886,7 +886,7 @@ class StatCheckPlugin:
                         ].display_name
                 case _:
                     self.logger.warning(
-                        f"highlight_adjacent_teams: unexpected alt rush team size {len(other_adjacent_players):d}: {other_adjacent_players}"
+                        f"unexpected alt rush team size {len(other_adjacent_players):d}: {other_adjacent_players}"
                     )
                     return
         self.downstream.reset_title()
@@ -960,9 +960,7 @@ class StatCheckPlugin:
         try:
             own_team_color = self.get_own_team_info().name
         except ValueError as e:
-            self.logger.warning(
-                f"stat_highlights: could not determine own team color: {e}"
-            )
+            self.logger.warning(f"could not determine own team color: {e}")
             return
 
         enemy_players = []
@@ -1128,9 +1126,7 @@ class StatCheckPlugin:
                 Chat.pack(self._get_dead_display_name(self_game_player)),
             )
 
-        self.logger.debug(
-            f"statcheck_event_chat_server_bedwars_rejoin: putting self: {self_game_player!r}"
-        )
+        self.logger.debug(f"putting self: {self_game_player!r}")
         self.player_stats_queue.put_nowait(self_game_player)
 
         self.upstream.send_packet(0x01, String.pack("/who"))
@@ -1308,7 +1304,6 @@ class StatCheckPlugin:
 
         if (player := self.game_players.get(username)) is None:
             return self.logger.warning(
-                "_statcheck_event_chat_server_player_recon: "
                 f"{username} reconnected but was not found in self.game_players"
             )
 
@@ -1340,10 +1335,7 @@ class StatCheckPlugin:
         if username not in self.game_players:
             color_code = match_player_color(username, fmted_message)
             if color_code is None:
-                self.logger.warning(
-                    "_statcheck_event_chat_server_kill_msg: "
-                    f"failed to find color code for {username}"
-                )
+                self.logger.warning(f"failed to find color code for {username}")
                 return
 
             self.game_players[username] = GamePlayer(

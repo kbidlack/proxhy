@@ -136,7 +136,7 @@ class BroadcastPlugin:
             "wl",
             label="the whitelist",
             help="Manage your compass whitelist.",
-            key=lambda proxy: "whitelist",
+            key=lambda proxy: f"whitelist:{proxy.uuid}",
             add_type=MojangPlayer,
             display=lambda player: f"§b{player.name}",
             on_change=lambda proxy: proxy._update_compass_client_settings(),
@@ -287,7 +287,7 @@ class BroadcastPlugin:
             "trust",
             label="trusted players",
             help="Manage trusted players.",
-            key=lambda proxy: "trusted",
+            key=lambda proxy: f"trusted:{proxy.uuid}",
             add_type=MojangPlayer,
             display=lambda player: f"§b{player.name}",
             uuid=lambda player: player.uuid,
@@ -718,7 +718,7 @@ class BroadcastPlugin:
                 username = (await reader.read(16)).decode("utf-8").strip("0")
         except (asyncio.TimeoutError, ValueError) as e:
             self.logger.warning(
-                f"handle_new_connection: failed to accept connection from {conn.remote_node_id!r}: {e}"
+                f"failed to accept connection from {conn.remote_node_id!r}: {e}"
             )
             conn.close()
             return
@@ -735,7 +735,7 @@ class BroadcastPlugin:
                 )
             except RequestFailure:
                 self.logger.warning(
-                    f"handle_new_connection: compass verification request failed for {username!r}"
+                    f"compass verification request failed for {username!r}"
                 )
                 await _reject()
                 return
@@ -744,9 +744,7 @@ class BroadcastPlugin:
             uid = response.details
 
             if not verified:
-                self.logger.warning(
-                    f"handle_new_connection: {username!r} failed compass verification"
-                )
+                self.logger.warning(f"{username!r} failed compass verification")
                 await _reject()
                 return
         else:
@@ -761,7 +759,7 @@ class BroadcastPlugin:
                 )
                 uid = str(offline_uuid(username))
                 self.logger.warning(
-                    f"handle_new_connection: {err_msg} while fetching uuid for {username!r};"
+                    f"{err_msg} while fetching uuid for {username!r};"
                     f"using hash of 'OfflinePlayer:{username}'"
                 )
 
@@ -769,9 +767,7 @@ class BroadcastPlugin:
             username
         ) or self.received_broadcast_requests.get(username)
         if existing is not None:
-            self.logger.warning(
-                f"handle_new_connection: duplicate connection from {username!r}, rejecting"
-            )
+            self.logger.warning(f"duplicate connection from {username!r}, rejecting")
             await _reject()
             return
 

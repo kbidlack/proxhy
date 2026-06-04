@@ -152,6 +152,7 @@ class ConnectedClient(Client):
             request_id = buff.unpack(Byte)
 
         if channel == "COMPASS|STATE":
+            e: Exception | None = None
             try:
                 self.discoverable = buff.unpack(Boolean)
                 num_whitelist = buff.unpack(Byte)

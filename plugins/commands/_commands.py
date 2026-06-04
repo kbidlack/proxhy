@@ -328,11 +328,14 @@ class Parameter:
         if isinstance(type_hint, type) and issubclass(type_hint, CommandArg):
             return await type_hint.convert(ctx, value)
 
-        if type_hint is int or type_hint is float:
-            if not value.isdigit():
-                raise CommandException(
-                    f"Could not convert '{value}' to a{'n' if type_hint is int else ''} {type_hint.__name__}!"
-                )
+        if type_hint is int:
+            if not value.lstrip("-").isdigit():
+                raise CommandException(f"Could not convert '{value}' to an int!")
+        elif type_hint is float:
+            try:
+                float(value)
+            except ValueError:
+                raise CommandException(f"Could not convert '{value}' to a float!")
 
         # Handle basic types
         if type_hint is int:
@@ -508,14 +511,22 @@ class Command:
                 msg.append(TextComponent(f"/{self.full_name} {overload}").color("gold"))
         else:
             usage_parts = f"/{self.full_name}"
+            has_optional = False
+            has_autodetect = False
             for param in self.parameters:
                 name = param.name.lstrip("_")
                 if param.infinite:
                     usage_parts += f" [{name}...]"
+                    has_optional = True
                 elif param.required:
                     usage_parts += f" <{name}>"
-                else:
+                elif param.is_lazy:
                     usage_parts += f" [{name}]"
+                    has_optional = True
+                else:
+                    usage_parts += f" [{name}?]"
+                    has_optional = True
+                    has_autodetect = True
             msg.append(TextComponent(usage_parts).color("gold"))
 
         if self.description:
@@ -526,6 +537,27 @@ class Command:
                 .color("dark_gray")
                 .appends(TextComponent(self.description).color("gray"))
             )
+
+        if not self.usage and (has_optional or has_autodetect):
+            key_parts: list[TextComponent] = []
+            if has_optional:
+                key_parts.append(
+                    TextComponent("[]")
+                    .color("gold")
+                    .append(TextComponent(" = optional").color("dark_gray"))
+                )
+            if has_autodetect:
+                key_parts.append(
+                    TextComponent("?")
+                    .color("gold")
+                    .append(TextComponent(" = skippable").color("dark_gray"))
+                )
+            key = TextComponent("\n  ").color("dark_gray")
+            for i, part in enumerate(key_parts):
+                if i:
+                    key.append(TextComponent("  ").color("dark_gray"))
+                key.append(part)
+            msg.append(key)
 
         return msg
 
@@ -1022,3 +1054,52 @@ def command(name: str, *aliases: str, usage: list[str] | None = None):
         return func
 
     return decorator
+
+
+class HelpPath(CommandArg):
+    """Suggests command names and subcommand paths."""
+
+    def __init__(self, value: str):
+        self.value = value
+
+    @classmethod
+    async def convert(cls, ctx: CommandContext, value: str) -> "HelpPath":
+        return cls(value)
+
+    @classmethod
+    async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
+        registry: CommandRegistry = ctx.proxy.command_registry
+        prior = ctx.raw_args[: ctx.param_index]
+
+        if not prior:
+            return [
+                name
+                for name in registry.command_names()
+                if name.startswith(partial.lower())
+            ]
+
+        root = registry.get(prior[0].lower())
+        if not isinstance(root, CommandGroup):
+            return []
+
+        group = root
+        for segment in prior[1:]:
+            lower = segment.lower()
+            if lower in group._subgroups:
+                group = group._subgroups[lower]
+            else:
+                return []
+
+        options: list[str] = []
+        seen: set[int] = set()
+        for cmd in group._subcommands.values():
+            if id(cmd) not in seen:
+                seen.add(id(cmd))
+                if cmd.name.startswith(partial.lower()):
+                    options.append(cmd.name)
+        for grp in group._subgroups.values():
+            if id(grp) not in seen:
+                seen.add(id(grp))
+                if grp.name.startswith(partial.lower()):
+                    options.append(grp.name)
+        return options

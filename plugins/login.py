@@ -357,7 +357,7 @@ class LoginPlugin:
         except RuntimeError:
             try:
                 async with hypixel.Client(timeout=5) as c:
-                    uuid_ = await c.get_uuid(self.username)
+                    uuid_ = uuid.UUID(await c.get_uuid(self.username))
             except Exception as e:
                 self.downstream.send_packet(
                     0x40,
@@ -367,11 +367,11 @@ class LoginPlugin:
                         )
                     ),
                 )
-                await self.close()
+                return await self.close()
 
         self.downstream.send_packet(
             0x02,
-            String.pack(str(uuid.UUID(uuid_))),  # type: ignore
+            String.pack(str(uuid_)),
             String.pack(self.username),
         )
 
