@@ -14,6 +14,7 @@ from platformdirs import user_log_path
 import mcauth as auth
 from petty.endpoints import Proxy
 from proxhy.proxhy import Proxhy
+from proxhy.utils import zero_pad_calver
 
 if platform.system() == "Windows":
     import winloop as loop_impl
@@ -179,7 +180,7 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     server = ProxhyServer(server)
 
     logger.info(
-        f"Started proxhy v{version('proxhy')} on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
+        f"Started proxhy v{zero_pad_calver(version('proxhy'))} on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
     if args.dev:
         logger.setLevel(logging.DEBUG)
