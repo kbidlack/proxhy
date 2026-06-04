@@ -12,13 +12,9 @@ A Hypixel proxy.
 | Windows (x64)         | [proxhy-windows.zip](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.exe)       |
 | Linux (x64)           | [proxhy-linux.tar.gz](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.AppImage) |
 
-**macOS:** Unzip → drag `Proxhy.app` to Applications → double-click.
-
-**Windows:** Run `Proxhy.exe`.
-
-**Linux:** Run `Proxhy.AppImage`.
-
-> On first launch, proxhy will download and set up Python 3.14 automatically (~50MB, one-time).
+- **macOS:** Unzip → drag `Proxhy.app` to Applications → double-click.
+- **Windows:** Run `Proxhy.exe`.
+- **Linux:** Run `Proxhy.AppImage`.
 
 > [!NOTE]  
 > macOS will say the app is "damaged" because it's unsigned. To fix (after moving `Proxhy.app` to `/Applications`):
@@ -27,7 +23,7 @@ A Hypixel proxy.
 2. Run: `xattr -cr /Applications/Proxhy.app`
 3. Open Proxhy normally
 
-## Installation without GUI
+## Alternative Installiation
 
 You can also install and run Proxhy without a GUI.
 
@@ -79,24 +75,25 @@ By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:4122
 
 ## Uninstallation
 
+> [!NOTE]
+> Proxhy stores settings, cached data, login credentials, and logs in platform-specific directories, which are not automatically removed during uninstallation.
+
+- **macOS**: `~/Library/Application Support/proxhy`, `~/Library/Caches/proxhy`, `~/Library/Logs/proxhy`
+- **Linux**: `~/.config/proxhy`, `~/.cache/proxhy`, `~/.local/share/proxhy`, `~/.local/state/proxhy/log`
+- **Windows**: `%LOCALAPPDATA%\proxhy`, `%LOCALAPPDATA%\proxhy\Cache`, `%LOCALAPPDATA%\proxhy\Logs`
+
 ### GUI
 
 Delete the app file:
 
 **macOS:** Remove `/Applications/Proxhy.app`
 
-**Windows:** Delete `proxhy-gui.exe`
+**Windows:** Delete `Proxhy.exe`
 
-**Linux:** Delete `proxhy-gui`
+**Linux:** Delete `Proxhy.AppImage`
+
+### CLI
 
 ```bash
 uv tool uninstall proxhy
 ```
-
-**Note**: Proxhy stores settings, cached data, login credentials, and logs in platform-specific directories:
-
-- **macOS**: `~/Library/Application Support/proxhy`, `~/Library/Caches/proxhy`, `~/Library/Logs/proxhy`
-- **Linux**: `~/.config/proxhy`, `~/.cache/proxhy`, `~/.local/share/proxhy`, `~/.local/state/proxhy/log`
-- **Windows**: `%LOCALAPPDATA%\proxhy`, `%LOCALAPPDATA%\proxhy\Cache`, `%LOCALAPPDATA%\proxhy\Logs`
-
-These directories are not automatically removed during uninstallation.

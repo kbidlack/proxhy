@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import Literal, Optional, overload
+from typing import Any, Literal, Optional, overload
 
 import orjson
 
@@ -114,7 +114,9 @@ class TextComponent:
         elif isinstance(data, list):
             # Convert array format to object with extra
             if data:
-                first = data[0] if isinstance(data[0], dict) else {"text": str(data[0])}
+                first: dict[str, Any] = (
+                    data[0] if isinstance(data[0], dict) else {"text": str(data[0])}
+                )
                 if len(data) > 1:
                     first["extra"] = data[1:]
                 data = first
@@ -421,7 +423,7 @@ class TextComponent:
             return component
         elif isinstance(component, list):
             if component:
-                first = (
+                first: dict[str, Any] = (
                     component[0]
                     if isinstance(component[0], dict)
                     else {"text": str(component[0])}

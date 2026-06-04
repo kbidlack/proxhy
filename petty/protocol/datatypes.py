@@ -238,7 +238,7 @@ class Boolean(DataType[bool, bool]):
 class Int(DataType[int, int]):
     @staticmethod
     def pack(value: int) -> bytes:
-        return struct.pack(">i", int(value))
+        return struct.pack(">i", value)
 
     @staticmethod
     def unpack(buff) -> int:
@@ -336,7 +336,12 @@ class Slot(DataType[SlotData, SlotData]):
 
         nbt_data = Slot._read_nbt(buff)
 
-        return SlotData(Item.from_id(item_id), count, damage, nbt_data)
+        item = Item.from_id(item_id)
+
+        if item is None:
+            return SlotData()
+
+        return SlotData(item, count, damage, nbt_data)
 
     @staticmethod
     def _read_nbt(buff: Buffer) -> bytes:

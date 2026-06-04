@@ -405,14 +405,6 @@ class PluginChannel:
 
 
 @dataclass
-class Sign:
-    """Sign text content."""
-
-    position: Vec3i = field(default_factory=Vec3i)
-    lines: list[str] = field(default_factory=lambda: ["", "", "", ""])
-
-
-@dataclass
 class VillagerTrade:
     """A villager trade offer."""
 
