@@ -63,8 +63,7 @@ jobs:
           PYAPP_PROJECT_PATH: ${{ steps.wheel.outputs.path }}
           PYAPP_EXEC_SPEC: proxhy.main:main
           PYAPP_PYTHON_VERSION: "3.14"
-          PYAPP_PIP_INDEX_URL: "https://kbidlack.github.io/proxhy/simple/"
-          PYAPP_PIP_EXTRA_ARGS: "--extra-index-url https://pypi.org/simple/"
+          PYAPP_PIP_EXTRA_ARGS: "--index-url https://kbidlack.github.io/proxhy/simple/ --extra-index-url https://pypi.org/simple/"
           PYAPP_EXPOSE_ALL_COMMANDS: 1
         run: cargo build --release --target ${{ matrix.target }}
 
