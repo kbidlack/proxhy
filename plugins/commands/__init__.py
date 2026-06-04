@@ -5,9 +5,6 @@ from typing import TYPE_CHECKING
 from petty.events import listen_client, listen_server, subscribe
 from petty.protocol.datatypes import Boolean, Buffer, String, TextComponent, VarInt
 
-if TYPE_CHECKING:
-    from proxhy.argtypes import HelpPath
-
 from ._commands import (
     Command,
     CommandArg,
@@ -15,6 +12,7 @@ from ._commands import (
     CommandException,
     CommandGroup,
     CommandRegistry,
+    HelpPath,
     Lazy,
     command,
 )
