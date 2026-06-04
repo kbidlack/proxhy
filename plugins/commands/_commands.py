@@ -328,11 +328,14 @@ class Parameter:
         if isinstance(type_hint, type) and issubclass(type_hint, CommandArg):
             return await type_hint.convert(ctx, value)
 
-        if type_hint is int or type_hint is float:
-            if not value.isdigit():
-                raise CommandException(
-                    f"Could not convert '{value}' to a{'n' if type_hint is int else ''} {type_hint.__name__}!"
-                )
+        if type_hint is int:
+            if not value.lstrip("-").isdigit():
+                raise CommandException(f"Could not convert '{value}' to an int!")
+        elif type_hint is float:
+            try:
+                float(value)
+            except ValueError:
+                raise CommandException(f"Could not convert '{value}' to a float!")
 
         # Handle basic types
         if type_hint is int:
