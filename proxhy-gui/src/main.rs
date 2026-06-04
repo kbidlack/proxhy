@@ -1,7 +1,7 @@
 #![cfg_attr(target_os = "windows", windows_subsystem = "windows")]
-#![windows_subsystem = "windows"]
 
 use eframe::egui;
+use self_update::update::ReleaseUpdate;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader};
 use std::process::{Child, Command, Stdio};
@@ -27,80 +27,33 @@ struct LogLine {
     text: String,
 }
 
-// Embedded pyapp binary (baked in at compile time)
 #[allow(dead_code)]
 const PYAPP_BYTES: &[u8] = include_bytes!("proxhy_inner");
 
 #[derive(Default, Clone)]
 struct UpdateState {
-    available: Option<String>, // Some("v1.2.3") if update found
+    available: Option<String>,
     installing: bool,
     error: Option<String>,
 }
 
-fn spawn_update_check(update_state: Arc<Mutex<UpdateState>>) {
-    std::thread::spawn(move || {
-        let result = self_update::backends::github::Update::configure()
-            .repo_owner("kbidlack")
-            .repo_name("proxhy")
-            .bin_name("proxhy-gui")
-            .current_version(env!("CARGO_PKG_VERSION"))
-            .no_confirm(true)
-            .build();
-
-        match result {
-            Ok(updater) => {
-                // Just check — don't update yet
-                match updater.get_latest_release() {
-                    Ok(release) if release.version != env!("CARGO_PKG_VERSION") => {
-                        let mut s = update_state.lock().unwrap();
-                        s.available = Some(release.version);
-                    }
-                    _ => {}
-                }
-            }
-            Err(e) => {
-                let mut s = update_state.lock().unwrap();
-                s.error = Some(e.to_string());
-            }
-        }
-    });
+#[derive(PartialEq, Clone, Copy)]
+enum LogFilter {
+    All,
+    InfoAndAbove,
+    WarnAndAbove,
+    ErrorOnly,
 }
 
-fn apply_update(update_state: Arc<Mutex<UpdateState>>) {
-    std::thread::spawn(move || {
-        {
-            let mut s = update_state.lock().unwrap();
-            s.installing = true;
-        }
+// --- pyapp binary path ---
 
-        let result = self_update::backends::github::Update::configure()
-            .repo_owner("kbidlack")
-            .repo_name("proxhy")
-            .bin_name("proxhy-gui")
-            .current_version(env!("CARGO_PKG_VERSION"))
-            .no_confirm(true)
-            .build()
-            .and_then(|u| u.update());
-
-        let mut s = update_state.lock().unwrap();
-        s.installing = false;
-        match result {
-            Ok(_) => s.available = None, // updated; prompt restart
-            Err(e) => s.error = Some(e.to_string()),
-        }
-    });
-}
-
-fn extract_pyapp() -> std::path::PathBuf {
-    // On macOS, the binary lives next to the GUI in the .app bundle —
-    // no extraction needed, just return the sibling path.
+fn pyapp_path() -> std::path::PathBuf {
+    // On macOS, the binary lives next to the GUI in the .app bundle.
     #[cfg(not(target_os = "windows"))]
     {
         let mut path = std::env::current_exe().unwrap();
         path.pop();
         path.push("proxhy");
-
         path
     }
 
@@ -114,8 +67,6 @@ fn extract_pyapp() -> std::path::PathBuf {
         std::fs::create_dir_all(&base).unwrap();
         let dest = base.join("proxhy.exe");
 
-        // Only write if the file doesn't exist or is a different size
-        // (cheap freshness check — good enough for our purposes).
         let needs_write = dest
             .metadata()
             .map(|m| m.len() != PYAPP_BYTES.len() as u64)
@@ -128,11 +79,92 @@ fn extract_pyapp() -> std::path::PathBuf {
     }
 }
 
+// --- update logic ---
+
+fn github_updater() -> Result<Box<dyn ReleaseUpdate>, self_update::errors::Error> {
+    self_update::backends::github::Update::configure()
+        .repo_owner("kbidlack")
+        .repo_name("proxhy")
+        .bin_name("proxhy-gui")
+        .current_version(env!("CARGO_PKG_VERSION"))
+        .no_confirm(true)
+        .build()
+}
+
+fn spawn_update_check(update_state: Arc<Mutex<UpdateState>>) {
+    thread::spawn(move || match github_updater() {
+        Ok(updater) => match updater.get_latest_release() {
+            Ok(release) if release.version != env!("CARGO_PKG_VERSION") => {
+                update_state.lock().unwrap().available = Some(release.version);
+            }
+            _ => {}
+        },
+        Err(e) => {
+            update_state.lock().unwrap().error = Some(e.to_string());
+        }
+    });
+}
+
+fn apply_update(update_state: Arc<Mutex<UpdateState>>, log: Arc<Mutex<VecDeque<LogLine>>>) {
+    thread::spawn(move || {
+        update_state.lock().unwrap().installing = true;
+
+        // Step 1: update the proxhy Python package in the pyapp venv.
+        push_line(&log, "[gui] Updating proxhy...");
+        let binary = pyapp_path();
+        match Command::new(&binary)
+            .args(["self", "update"])
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+        {
+            Ok(mut child) => {
+                let stdout_thread = child.stdout.take().map(|stdout| {
+                    let log2 = Arc::clone(&log);
+                    thread::spawn(move || {
+                        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+                            push_line(&log2, &line);
+                        }
+                    })
+                });
+                let stderr_thread = child.stderr.take().map(|stderr| {
+                    let log2 = Arc::clone(&log);
+                    thread::spawn(move || {
+                        for line in BufReader::new(stderr).lines().map_while(Result::ok) {
+                            push_line(&log2, &line);
+                        }
+                    })
+                });
+                let _ = child.wait();
+                if let Some(t) = stdout_thread {
+                    let _ = t.join();
+                }
+                if let Some(t) = stderr_thread {
+                    let _ = t.join();
+                }
+            }
+            Err(e) => push_line(&log, &format!("[gui] proxhy update failed: {e}")),
+        }
+
+        // Step 2: replace the GUI binary.
+        push_line(&log, "[gui] Updating proxhy-gui...");
+        let result = github_updater().and_then(|u| u.update());
+        let mut s = update_state.lock().unwrap();
+        s.installing = false;
+        match result {
+            Ok(_) => {
+                s.available = None;
+                // The GUI binary has been replaced on disk — user needs to restart.
+            }
+            Err(e) => s.error = Some(e.to_string()),
+        }
+    });
+}
+
+// --- log helpers ---
+
 impl LogLine {
     fn parse(raw: &str) -> Self {
-        // Match Python logging format: "2026-06-03 12:08:30,884 [INFO] proxhy: ..."
-        // Also match plain level prefixes: "[INFO]", "[WARN]", "[ERROR]", "[DEBUG]"
-        // and warnings like "CryptographyDeprecationWarning:"
         let upper = raw.to_uppercase();
 
         let level = if raw.starts_with("[gui]") {
@@ -198,57 +230,33 @@ fn push_line(log: &Arc<Mutex<VecDeque<LogLine>>>, raw: &str) {
     l.push_back(LogLine::parse(raw));
 }
 
-fn main() -> eframe::Result {
-    let update_state = Arc::new(Mutex::new(UpdateState::default()));
-    spawn_update_check(Arc::clone(&update_state));
-
-    let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_title("Proxhy")
-            .with_inner_size([800.0, 500.0]),
-        ..Default::default()
-    };
-    eframe::run_native(
-        "Proxhy",
-        options,
-        Box::new(|_cc| Ok(Box::new(App::default()))),
-    )
-}
+// --- app ---
 
 struct App {
     log: Arc<Mutex<VecDeque<LogLine>>>,
     child: Option<Child>,
-    running: bool,
     auto_scroll: bool,
     filter: LogFilter,
     update_state: Arc<Mutex<UpdateState>>,
 }
 
-#[derive(PartialEq, Clone, Copy)]
-enum LogFilter {
-    All,
-    InfoAndAbove,
-    WarnAndAbove,
-    ErrorOnly,
-}
-
-impl Default for App {
-    fn default() -> Self {
+impl App {
+    fn new(update_state: Arc<Mutex<UpdateState>>) -> Self {
         Self {
             log: Arc::new(Mutex::new(VecDeque::with_capacity(MAX_LOG_LINES))),
             child: None,
-            running: false,
             auto_scroll: true,
             filter: LogFilter::All,
-            update_state: Arc::new(Mutex::new(UpdateState::default())),
+            update_state,
         }
     }
-}
 
-impl App {
+    fn running(&self) -> bool {
+        self.child.is_some()
+    }
+
     fn start(&mut self) {
-        let binary = extract_pyapp();
-
+        let binary = pyapp_path();
         push_line(
             &self.log,
             &format!("[gui] Starting {}...", binary.display()),
@@ -260,9 +268,6 @@ impl App {
             .spawn()
         {
             Ok(mut child) => {
-                self.running = true;
-
-                // stdout
                 if let Some(stdout) = child.stdout.take() {
                     let log = Arc::clone(&self.log);
                     thread::spawn(move || {
@@ -271,7 +276,6 @@ impl App {
                         }
                     });
                 }
-
                 // stderr — NOT treated as errors; proxhy's logger writes to stderr
                 if let Some(stderr) = child.stderr.take() {
                     let log = Arc::clone(&self.log);
@@ -281,7 +285,6 @@ impl App {
                         }
                     });
                 }
-
                 self.child = Some(child);
             }
             Err(e) => {
@@ -295,7 +298,6 @@ impl App {
             let _ = child.kill();
             let _ = child.wait();
         }
-        self.running = false;
         push_line(&self.log, "[gui] Stopped.");
     }
 
@@ -314,42 +316,42 @@ impl App {
     }
 }
 
-impl eframe::App for App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Poll child exit
-        if self.running {
-            if let Some(child) = &mut self.child {
-                if let Ok(Some(status)) = child.try_wait() {
-                    self.running = false;
-                    push_line(&self.log, &format!("[gui] Process exited ({status})"));
-                    self.child = None;
-                }
+impl App {
+    fn poll_child(&mut self, ctx: &egui::Context) {
+        if let Some(child) = &mut self.child {
+            if let Ok(Some(status)) = child.try_wait() {
+                push_line(&self.log, &format!("[gui] Process exited ({status})"));
+                self.child = None;
             }
             ctx.request_repaint_after(std::time::Duration::from_millis(100));
         }
+    }
 
-        // Toolbar
+    fn show_update_banner(&mut self, ctx: &egui::Context) {
         let update_state = self.update_state.lock().unwrap().clone();
-        if let Some(ref version) = update_state.available {
-            egui::TopBottomPanel::top("update_banner").show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    ui.colored_label(
-                        egui::Color32::from_rgb(255, 200, 50),
-                        format!("⬆ Update available: {version}"),
-                    );
-                    if update_state.installing {
-                        ui.spinner();
-                        ui.label("Installing...");
-                    } else if ui.button("Update & Restart").clicked() {
-                        let state = Arc::clone(&self.update_state);
-                        apply_update(state);
-                    }
-                    if let Some(ref err) = update_state.error {
-                        ui.colored_label(egui::Color32::RED, err);
-                    }
-                });
+        let Some(ref version) = update_state.available.clone() else {
+            return;
+        };
+        egui::TopBottomPanel::top("update_banner").show(ctx, |ui| {
+            ui.horizontal(|ui| {
+                ui.colored_label(
+                    egui::Color32::from_rgb(255, 200, 50),
+                    format!("⬆ Update available: {version}"),
+                );
+                if update_state.installing {
+                    ui.spinner();
+                    ui.label("Installing...");
+                } else if ui.button("Update & Restart").clicked() {
+                    apply_update(Arc::clone(&self.update_state), Arc::clone(&self.log));
+                }
+                if let Some(ref err) = update_state.error {
+                    ui.colored_label(egui::Color32::RED, err);
+                }
             });
-        }
+        });
+    }
+
+    fn show_toolbar(&mut self, ctx: &egui::Context) {
         egui::TopBottomPanel::top("controls")
             .min_height(40.0)
             .show(ctx, |ui| {
@@ -357,7 +359,7 @@ impl eframe::App for App {
                     ui.heading("Proxhy");
                     ui.separator();
 
-                    if self.running {
+                    if self.running() {
                         if ui.button("⏹ Stop").clicked() {
                             self.stop();
                         }
@@ -371,7 +373,6 @@ impl eframe::App for App {
 
                     ui.separator();
 
-                    // Filter buttons
                     ui.label("Filter:");
                     ui.selectable_value(&mut self.filter, LogFilter::All, "All");
                     ui.selectable_value(&mut self.filter, LogFilter::InfoAndAbove, "Info+");
@@ -386,6 +387,14 @@ impl eframe::App for App {
                     });
                 });
             });
+    }
+}
+
+impl eframe::App for App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.poll_child(ctx);
+        self.show_update_banner(ctx);
+        self.show_toolbar(ctx);
 
         // Log panel
         egui::CentralPanel::default().show(ctx, |ui| {
@@ -400,7 +409,6 @@ impl eframe::App for App {
                         ui.horizontal_wrapped(|ui| {
                             ui.spacing_mut().item_spacing.x = 4.0;
 
-                            // Colored level badge
                             if let Some(badge) = line.badge_text() {
                                 let badge_color = line.color();
                                 let dark_bg = egui::Color32::from_rgba_unmultiplied(
@@ -425,7 +433,6 @@ impl eframe::App for App {
                                         );
                                     });
                             } else {
-                                // Spacer to align unknown lines with badged ones
                                 ui.add_space(30.0);
                             }
 
@@ -442,9 +449,25 @@ impl eframe::App for App {
                         ui.add_space(1.0);
                     }
 
-                    // Keep scroll area tall enough to scroll even when few lines
                     ui.add_space(text_height);
                 });
         });
     }
+}
+
+fn main() -> eframe::Result {
+    let update_state = Arc::new(Mutex::new(UpdateState::default()));
+    spawn_update_check(Arc::clone(&update_state));
+
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_title("Proxhy")
+            .with_inner_size([800.0, 500.0]),
+        ..Default::default()
+    };
+    eframe::run_native(
+        "Proxhy",
+        options,
+        Box::new(move |_cc| Ok(Box::new(App::new(update_state)))),
+    )
 }

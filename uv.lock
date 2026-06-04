@@ -5,6 +5,7 @@ requires-python = ">=3.14"
 [manifest]
 members = [
     "compass",
+    "mcauth",
     "petty",
     "proxhy",
 ]
@@ -399,9 +400,26 @@ wheels = [
 
 [[package]]
 name = "mcauth"
-version = "1.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/df/ac/74e423ef7157c9df2b05e05e9db56cc44e3dee758b238a8fa3669c71bd9e/mcauth-1.0.tar.gz", hash = "sha256:458e5677185d2e2b3bb5eb5586e10e9dd683e14860c855b9032e9b5f88ccb9e8", size = 3720, upload-time = "2011-05-31T00:23:13.919Z" }
+version = "0.1.0"
+source = { editable = "mcauth" }
+dependencies = [
+    { name = "cryptography" },
+    { name = "httpx" },
+    { name = "keyring" },
+    { name = "orjson" },
+    { name = "platformdirs" },
+    { name = "pyjwt" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "cryptography", specifier = ">=48.0.0" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "keyring", specifier = ">=25.6" },
+    { name = "orjson", specifier = ">=3.11.7" },
+    { name = "platformdirs", specifier = ">=4.3" },
+    { name = "pyjwt", specifier = ">=2.10" },
+]
 
 [[package]]
 name = "more-itertools"
@@ -607,7 +625,7 @@ wheels = [
 
 [[package]]
 name = "proxhy"
-version = "2026.6.3.post3"
+version = "2026.6.3.post4"
 source = { editable = "." }
 dependencies = [
     { name = "compass" },
@@ -635,7 +653,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "hypixel-py", specifier = ">=0.4.2" },
     { name = "keyring", specifier = ">=25.6" },
-    { name = "mcauth" },
+    { name = "mcauth", editable = "mcauth" },
     { name = "numba", specifier = ">=0.63.1" },
     { name = "numpy", specifier = ">=2.3.3" },
     { name = "orjson", specifier = ">=3.11.7" },
