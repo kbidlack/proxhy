@@ -1,6 +1,46 @@
 # Proxhy
 
-A Hypixel proxy.
+An advanced, feature-rich proxy for players who want to level up their Hypixel experience! Proxhy is **free forever**.
+
+Proxhy adds a multitude of customizable quality of life features, allows you to view player stats in the tab list, and can broadcast live games to your friends, allowing them to spectate while you play.
+
+[Download Proxhy!](##Download)
+
+## Features
+*All relevant features may be disabled at any time through the settings menu.*
+
+### General
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#sc) `/sc` to view any player's game stats
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#rq) `/rq` to re-queue the previous gamemode
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#settings) Settings GUI accessed via `/setting` lets you enable, disable, or customize any feature
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#autoboop) An Autoboop list to automatically `/boop` select players on your friend list when they join
+
+### Broadcasting
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#broadcast) Spectate your friends' games and invite them to spectate yours with the `/broadcast join` and `/broadcast invite` commands
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#watch) `/watch` to have your camera automatically follow the player you are spectating
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#spectate-menu) Spectate menu accessed by right clicking players shows inventory (owner only), health, and armor
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#broadcast-whitelist) Whitelist for security and privacy
+
+### Bed Wars
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#tablist-stats) Toggleable and customizable player stats in the tab list, replacing external overlays
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#respawn-timers) Respawn timers in the tab list
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#disconnect-respawning) Chat message when a player disconnects while respawning
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#show-eliminated) Show elimiated players in the tab list, grayed out
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#first-rush-highlight) Highlight the stats of your first rush team(s)
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#preface-top-stats) Display the top player stats at the start of the game
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#height-limit) Particles to visualize the lower and upper height limits when you get close to them
 
 ## Download
 
@@ -97,3 +137,95 @@ Delete the app file:
 ```bash
 uv tool uninstall proxhy
 ```
+
+
+## Features (in-depth)
+<details>
+  <summary><a id="sc"></a><strong><code>/sc</code> command</strong></summary>
+
+  ...
+
+</details>
+
+<details>
+  <summary><a id="rq"></a><strong><code>/rq</code> command</strong></summary>
+
+  ...
+
+</details>
+
+<details>
+  <summary><a id="settings"></a><strong>Settings menu</strong></summary>
+
+  ...
+
+</details>
+
+<details>
+  <summary><a id="autoboop"></a><strong>Autoboop</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="broadcast"></a><strong>Broadcasts</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="watch"></a><strong><code>/watch</code> Broadcast command</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="spectate-menu"></a><strong>Broadcast spectate menu</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="broadcast-whitelist"></a><strong>Broadcast whitelists</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="tablist-stats"></a><strong>Tab list stats</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="respawn-timers"></a><strong>Respawn timers</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="disconnect-respawning"></a><strong>Disconnected while respawning</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="show-eliminated"></a><strong>Eliminated players in tab list</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="first-rush-highlight"></a><strong>First rush stat highlights</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="preface-top-stats"></a><strong>Preface top stats</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="height-limit"></a><strong>Height limit warnings</strong></summary>
