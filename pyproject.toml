@@ -1,6 +1,6 @@
 [project]
 name = "proxhy"
-version = "2026.06.04"
+version = "2026.06.04.post1"
 description = "A Hypixel proxy with various different features"
 requires-python = ">=3.14"
 license = "MIT"
