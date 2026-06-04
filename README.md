@@ -42,7 +42,7 @@ uvx --from git+https://github.com/kbidlack/proxhy proxhy
 ### Upgrading
 
 ```bash
-uv upgrade proxhy
+uv tool upgrade proxhy
 ```
 
 ### Usage
