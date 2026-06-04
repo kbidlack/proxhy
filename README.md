@@ -6,11 +6,11 @@ A Hypixel proxy.
 
 [![Latest Release](https://img.shields.io/github/v/release/kbidlack/proxhy?style=flat-square)](https://github.com/kbidlack/proxhy/releases/latest)
 
-| Platform              | Download                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------ |
-| macOS (Apple Silicon) | [proxhy-macos.zip](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.zip)         |
-| Windows (x64)         | [proxhy-windows.zip](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.exe)       |
-| Linux (x64)           | [proxhy-linux.tar.gz](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.AppImage) |
+| Platform              | Download                                                                                           |
+| --------------------- | -------------------------------------------------------------------------------------------------- |
+| macOS (Apple Silicon) | [Proxhy.zip](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.zip)           |
+| Windows (x64)         | [Proxhy.exe](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.exe)           |
+| Linux (x64)           | [Proxhy.AppImage](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.AppImage) |
 
 - **macOS:** Unzip → drag `Proxhy.app` to Applications → double-click.
 - **Windows:** Run `Proxhy.exe`.

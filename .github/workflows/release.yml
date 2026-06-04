@@ -63,7 +63,8 @@ jobs:
           PYAPP_PROJECT_PATH: ${{ steps.wheel.outputs.path }}
           PYAPP_EXEC_SPEC: proxhy.main:main
           PYAPP_PYTHON_VERSION: "3.14"
-          PYAPP_INDEX_URL: https://kbidlack.github.io/proxhy/simple/
+          PYAPP_PIP_EXTRA_ARGS: "--extra-index-url https://kbidlack.github.io/proxhy/simple/"
+          PYAPP_EXPOSE_ALL_COMMANDS: 1
         run: cargo build --release --target ${{ matrix.target }}
 
       - name: Stage artifact (Unix)
@@ -126,12 +127,6 @@ jobs:
         with:
           merge-multiple: true
 
-      - name: Alias to latest
-        run: |
-          cp proxhy-macos proxhy-macos-latest
-          cp proxhy-linux proxhy-linux-latest
-          cp proxhy-windows.exe proxhy-windows-latest.exe
-
       - name: Get version without v prefix
         id: version
         run: echo "name=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
@@ -145,6 +140,3 @@ jobs:
             proxhy-macos
             proxhy-linux
             proxhy-windows.exe
-            proxhy-macos-latest
-            proxhy-linux-latest
-            proxhy-windows-latest.exe
