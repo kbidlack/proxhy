@@ -2838,7 +2838,7 @@ checksum = "3d595e54a326bc53c1c197b32d295e14b169e3cfeaa8dc82b529f947fba6bcf5"
 
 [[package]]
 name = "proxhy-gui"
-version = "0.1.0"
+version = "2026.6.3"
 dependencies = [
  "dirs",
  "eframe",
