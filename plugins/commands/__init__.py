@@ -255,7 +255,10 @@ class CommandsPlugin:
                     if segments[0].startswith("//"):  # send output of command
                         # remove chat formatting
                         output = re.sub(r"§.", "", str(output))
-                        self.upstream.chat(output)
+                        if self.broadcast_chat_toggled:
+                            self.bc_chat(self.username, output)
+                        else:
+                            self.upstream.chat(output)
                     else:
                         if isinstance(output, TextComponent):
                             if output.data.get("clickEvent") is None:
