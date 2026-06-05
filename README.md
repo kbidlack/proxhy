@@ -30,13 +30,13 @@ You can also install and run Proxhy without a GUI.
 The preferred method of installation is to use a Python package manager like `uv`:
 
 ```bash
-uv tool install git+https://github.com/kbidlack/proxhy
+uv tool install --index=https://kbidlack.github.io/proxhy/simple proxhy
 ```
 
 You can also try out an ephemerally installed version with `uvx`:
 
 ```bash
-uvx --from git+https://github.com/kbidlack/proxhy proxhy
+uvx --index=https://kbidlack.github.io/proxhy/simple proxhy
 ```
 
 ### Upgrading
