@@ -4,7 +4,7 @@ An advanced, feature-rich proxy for players who want to level up their Hypixel e
 
 Proxhy adds a multitude of customizable quality of life features, allows you to view player stats in the tab list, and can broadcast live games to your friends, allowing them to spectate while you play.
 
-[Download Proxhy!](#Download)
+### [Download Proxhy!](#Download)
 
 ## Features
 *All relevant features may be disabled at any time through the settings menu.*
