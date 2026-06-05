@@ -4,7 +4,7 @@ An advanced, feature-rich proxy for players who want to level up their Hypixel e
 
 Proxhy adds a multitude of customizable quality of life features, allows you to view player stats in the tab list, and can broadcast live games to your friends, allowing them to spectate while you play.
 
-[Download Proxhy!](##Download)
+[Download Proxhy!](#Download)
 
 ## Features
 *All relevant features may be disabled at any time through the settings menu.*
@@ -12,11 +12,11 @@ Proxhy adds a multitude of customizable quality of life features, allows you to 
 ### General
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#sc) `/sc` to view any player's game stats
 
-&nbsp;&nbsp;&nbsp;&nbsp;[↗](#rq) `/rq` to re-queue the previous gamemode
-
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#settings) Settings GUI accessed via `/setting` lets you enable, disable, or customize any feature
 
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#autoboop) An Autoboop list to automatically `/boop` select players on your friend list when they join
+
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#QOL) QOL: Re-queue games with `/rq`, send command outputs to chat with `//`, check a user's last login with `/lastlogin`, and use intuitive `/play` commands to join games
 
 ### Broadcasting
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#broadcast) Spectate your friends' games and invite them to spectate yours with the `/broadcast join` and `/broadcast invite` commands
@@ -146,23 +146,20 @@ uv tool uninstall proxhy
   ...
 
 </details>
-
-<details>
-  <summary><a id="rq"></a><strong><code>/rq</code> command</strong></summary>
-
-  ...
-
-</details>
-
 <details>
   <summary><a id="settings"></a><strong>Settings menu</strong></summary>
 
   ...
 
 </details>
-
 <details>
   <summary><a id="autoboop"></a><strong>Autoboop</strong></summary>
+
+  ...
+
+</details>
+<details>
+  <summary><a id="QOL"></a><strong>Quality of Life features</strong></summary>
 
   ...
 
