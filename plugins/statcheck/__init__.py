@@ -262,7 +262,7 @@ class StatCheckPlugin:
         self.stats_highlighted = False
         self.adjacent_teams_highlighted = False
 
-        self.player_stats_queue: asyncio.Queue[GamePlayer] = asyncio.Queue()
+        self.player_stats_queue: asyncio.Queue[tuple[GamePlayer, int]] = asyncio.Queue()
 
         self.log_path = (
             Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
@@ -301,6 +301,7 @@ class StatCheckPlugin:
 
         if self.player_stats_task:
             self.player_stats_task.cancel()
+
         while not self.player_stats_queue.empty():
             self.player_stats_queue.get_nowait()
 
@@ -577,7 +578,7 @@ class StatCheckPlugin:
                 self.logger.debug(
                     f"put {player.username!r} on {player.team!r}, {name}, {self.gamestate.teams[name].prefix}"
                 )
-                self.player_stats_queue.put_nowait(player)
+                self.player_stats_queue.put_nowait((player, 1))
 
     @listen_server(0x38, blocking=True)
     async def _packet_player_list_item(self: ProxhyPlugin, buff: Buffer):
@@ -641,12 +642,13 @@ class StatCheckPlugin:
 
         await self.validate_api_key()
 
-        while player := await self.player_stats_queue.get():
+        while result := await self.player_stats_queue.get():
+            player, try_n = result
             while not self._api_key_valid:
                 await asyncio.sleep(0.1)
-            self.create_task(self._update_player_stats(player))
+            self.create_task(self._update_player_stats(player, try_n))
 
-    async def _update_player_stats(self: ProxhyPlugin, player: GamePlayer):
+    async def _update_player_stats(self: ProxhyPlugin, player: GamePlayer, try_n: int):
         try:
             player_result: Player | Nick = await self.hypixel_client.player(
                 player.username
@@ -661,7 +663,7 @@ class StatCheckPlugin:
             asyncio.TimeoutError,
             ApiError,
         ) as err:
-            err_message: dict[type, TextComponent] = {
+            err_messages: dict[type, TextComponent] = {
                 InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
                 KeyRequired: TextComponent("No API Key provided!").color("red"),
                 RateLimitError: TextComponent("Rate limit!").color("red"),
@@ -679,17 +681,24 @@ class StatCheckPlugin:
             # if an error message hasn't already been sent in this game
             # game being hypixel sub-server, clears on packet_join_game
             if isinstance(err, (InvalidApiKey, KeyRequired)):
+                err_message = err_messages[type(err)]
                 self._api_key_valid = False
                 if not self.game_error:
-                    self.downstream.chat(err_message[type(player)])
+                    self.downstream.chat(err_message)
                     self.game_error = err
+            else:
+                # retryable
+                err_message = err_messages[type(err)]
+                if try_n < 3:  # give up on the third try
+                    self.logger.debug(
+                        f"retrying {player.username} for {type(err)}; try #{try_n}"
+                    )
+                    self.downstream.chat(f"{err_message} Retrying... (#{try_n})")
+                    try_n += 1
+                else:
+                    return self.downstream.chat(err_message)
 
-            self.logger.debug(err_message)
-
-            if not isinstance(err, (InvalidApiKey, KeyRequired)):
-                self.downstream.chat(err_message[type(err)])
-
-            self.player_stats_queue.put_nowait(player)
+            self.player_stats_queue.put_nowait((player, try_n))
 
             return
         except Exception as err:
@@ -1127,7 +1136,7 @@ class StatCheckPlugin:
             )
 
         self.logger.debug(f"putting self: {self_game_player!r}")
-        self.player_stats_queue.put_nowait(self_game_player)
+        self.player_stats_queue.put_nowait((self_game_player, 1))
 
         self.upstream.send_packet(0x01, String.pack("/who"))
         self.received_who.clear()
