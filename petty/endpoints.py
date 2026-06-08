@@ -1,5 +1,6 @@
 import asyncio
 import re
+import traceback
 import zlib
 from abc import ABC
 from collections import defaultdict
@@ -112,7 +113,10 @@ class PacketNode(ABC):
             results = self._packet_listeners[direction][(packet_id, self.state)]
             for handler, meta in results:
                 if meta.blocking:
-                    await handler(self, Buffer(packet_data))
+                    try:
+                        await handler(self, Buffer(packet_data))
+                    except Exception:
+                        traceback.print_exc()
                 else:
                     self.create_task(handler(self, Buffer(packet_data)))
 
