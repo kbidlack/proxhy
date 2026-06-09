@@ -5,7 +5,7 @@ import uuid
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from io import BytesIO
-from typing import Any, Dict, Literal, Optional, Protocol, TypedDict, overload
+from typing import Any, Literal, Protocol, TypedDict, overload
 
 from _typeshed import Incomplete
 
@@ -80,11 +80,11 @@ class Buffer(BytesIO):
     def clone(self) -> Buffer: ...
 
 class MapData(TypedDict):
-    max_height: Optional[int]
-    min_height: Optional[int]
+    max_height: int | None
+    min_height: int | None
     rush_direction: Literal["side", "alt"]
 
-BW_MAPS = Dict[str, MapData]
+BW_MAPS = dict[str, MapData]
 
 class DataType[PT, UT](ABC, metaclass=abc.ABCMeta):
     value: PT | UT

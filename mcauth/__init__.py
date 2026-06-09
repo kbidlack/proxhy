@@ -389,7 +389,7 @@ def token_needs_refresh(username: str) -> bool:
         token_age = time.time() - float(iat)
         return token_age > 82_800  # 23 hours
 
-    except (jwt.InvalidTokenError, KeyError, ValueError):
+    except jwt.InvalidTokenError, KeyError, ValueError:
         return True
 
 

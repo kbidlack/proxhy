@@ -135,7 +135,7 @@ class BroadcastPeerLoginPlugin:
                     async with asyncio.timeout(2):
                         self.uuid = uuid.UUID(await c.get_uuid(self.username))
                         self.skin_properties = await c.get_skin_properties(self.uuid)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 self.proxy.downstream.chat(
                     TextComponent("Failed to fetch uuid for")
                     .color("dark_red")

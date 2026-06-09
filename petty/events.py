@@ -1,6 +1,7 @@
 import re
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal, TypeVar
+from typing import TYPE_CHECKING, Any, Literal, TypeVar
 
 from petty.protocol.datatypes import Buffer
 
@@ -50,7 +51,7 @@ def _listen(
 ) -> DecoratorType[T]:
     def wrapper(func: ListenerFunction[T]) -> ListenerFunction[T]:
         listener_meta = PacketListener(source, packet_id, state, blocking, consume)
-        setattr(func, "_listener_meta", listener_meta)
+        func._listener_meta = listener_meta  # type: ignore[attr-defined]
 
         return func
 
@@ -59,7 +60,7 @@ def _listen(
 
 def subscribe(event: str) -> EventDecoratorType:
     def wrapper(func: EventListenerFunction) -> EventListenerFunction:
-        setattr(func, "_listener_meta", event)
+        func._listener_meta = event  # type: ignore[attr-defined]
 
         return func
 

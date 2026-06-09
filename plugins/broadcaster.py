@@ -3,7 +3,7 @@ import random
 import re
 import uuid as uuid_mod
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import pyroh
 
@@ -56,7 +56,7 @@ class ConnectionRequest:
     writer: asyncio.StreamWriter
     conn: pyroh.Connection
 
-    expires_task: Optional[asyncio.TimerHandle] = None
+    expires_task: asyncio.TimerHandle | None = None
 
 
 class BroadcastPlugin:
@@ -68,7 +68,7 @@ class BroadcastPlugin:
 
         self.broadcast_chat_toggled = False
 
-        self._respawn_debounce_task: Optional[asyncio.Task] = None
+        self._respawn_debounce_task: asyncio.Task | None = None
 
         self._transformer = PlayerTransformer(
             gamestate=self.gamestate,
@@ -304,7 +304,7 @@ class BroadcastPlugin:
         try:
             async with asyncio.timeout(1):
                 response = await self.compass_client.request(mplayer.name)
-        except IOError as e:
+        except OSError as e:
             raise CommandException(
                 TextComponent("Unable to connect to ")
                 .append(TextComponent(mplayer.name).color("blue"))
@@ -312,7 +312,7 @@ class BroadcastPlugin:
             )
         except compass.RequestFailure as e:
             raise CommandException(e.details)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise CommandException(
                 f"Timed out while trying to connect to {mplayer.name}"
             )
@@ -400,7 +400,7 @@ class BroadcastPlugin:
                 reader, writer = await conn.open_bi()
                 writer.write(Byte.pack(reason))
                 writer.write(self.username.zfill(16).encode("utf-8"))
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise CommandException(
                 TextComponent("Timed out while connecting to")
                 .appends(TextComponent(name).color("gold"))
@@ -433,7 +433,7 @@ class BroadcastPlugin:
                 raise CommandException(
                     TextComponent(name).color("gold").appends(f"denied your {command}!")
                 )
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise CommandException(
                 TextComponent(expired_msg)
                 .append(TextComponent(name).color("gold"))
@@ -544,7 +544,7 @@ class BroadcastPlugin:
             async with asyncio.timeout(5):
                 await self.compass_client.register(self.endpoint)
                 await self._update_compass_client_settings()
-        except asyncio.TimeoutError:
+        except TimeoutError:
             return self.downstream.chat(
                 TextComponent("Failed to initialize compass client (timed out)!").color(
                     "red"
@@ -646,7 +646,7 @@ class BroadcastPlugin:
             try:
                 if self.compass_client is not None:
                     await asyncio.wait_for(self.compass_client.close(), timeout=0.5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
 
             self._transformer.reset()
@@ -716,7 +716,7 @@ class BroadcastPlugin:
                 reader, writer = await conn.accept_bi()
                 intent = StreamIntent(int.from_bytes(await reader.read(1)))
                 username = (await reader.read(16)).decode("utf-8").strip("0")
-        except (asyncio.TimeoutError, ValueError) as e:
+        except (TimeoutError, ValueError) as e:
             self.logger.warning(
                 f"failed to accept connection from {conn.remote_node_id!r}: {e}"
             )

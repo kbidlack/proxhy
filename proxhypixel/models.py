@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from typing import Literal, Optional
+from typing import Literal
 
 from assets import load_json_asset
 from proxhy.argtypes.hypixel import GAMETYPE_T
@@ -8,9 +8,9 @@ from proxhy.argtypes.hypixel import GAMETYPE_T
 @dataclass
 class BedwarsMap:
     name: str
-    rush_direction: Optional[Literal["main", "alt"]] = None
-    max_height: Optional[int] = None
-    min_height: Optional[int] = None
+    rush_direction: Literal["main", "alt"] | None = None
+    max_height: int | None = None
+    min_height: int | None = None
 
     def __eq__(self, other: object):
         if not isinstance(other, BedwarsMap):
@@ -41,7 +41,7 @@ class Game:
     server: str = ""
     gametype: GAMETYPE_T | Literal[""] = ""
     mode: str = ""
-    map: Optional[BedwarsMap] = None
+    map: BedwarsMap | None = None
     lobbyname: str = ""
     started: bool = False
 

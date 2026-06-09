@@ -1,6 +1,7 @@
 import shelve
+from collections.abc import Callable
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 from platformdirs import user_config_dir
 
@@ -103,7 +104,7 @@ class PlayerListSystem:
 
     def register(
         self,
-        proxy: "ProxhyPlugin",
+        proxy: ProxhyPlugin,
         *,
         onto: CommandGroup | None = None,
     ) -> CommandGroup:
@@ -121,11 +122,11 @@ class PlayerListSystem:
                 self.value = value
 
             @classmethod
-            async def convert(cls, ctx: "CommandContext", value: str) -> "_RemoveArg":
+            async def convert(cls, ctx: CommandContext, value: str) -> _RemoveArg:
                 return cls(value)
 
             @classmethod
-            async def suggest(cls, ctx: "CommandContext", partial: str) -> list[str]:
+            async def suggest(cls, ctx: CommandContext, partial: str) -> list[str]:
                 pl = PlayerList(system._key(ctx.proxy))
                 p = partial.lower()
                 return [n for n in pl.names() if n.lower().startswith(p)]
@@ -137,7 +138,7 @@ class PlayerListSystem:
             group = CommandGroup(*system._names, help=system._help)
 
         # --- list ---
-        async def _list(self: "ProxhyPlugin"):
+        async def _list(self: ProxhyPlugin):
             pl = PlayerList(system._key(self))
             entries = pl.all()
             if not entries:
@@ -154,7 +155,7 @@ class PlayerListSystem:
         group.command("list", "ls")(_list)
 
         # --- add ---
-        async def _add(self: "ProxhyPlugin", player):
+        async def _add(self: ProxhyPlugin, player):
             display = system._display(player)
             uuid = system._uuid(player) if system._uuid else ""
             pl = PlayerList(system._key(self))
@@ -182,7 +183,7 @@ class PlayerListSystem:
         group.command("add")(_add)
 
         # --- remove ---
-        async def _remove(self: "ProxhyPlugin", player):
+        async def _remove(self: ProxhyPlugin, player):
             pl = PlayerList(system._key(self))
             try:
                 proper_name, display, _uuid = pl.remove(player.value)

@@ -9,7 +9,8 @@ clientbound packets and maintains the complete game state as seen by a client.
 # to copy this all myself from the mc wiki
 
 import uuid as uuid_mod
-from typing import Any, Callable, Literal, Optional
+from collections.abc import Callable
+from typing import Any, Literal
 
 import numpy as np
 
@@ -1830,7 +1831,7 @@ class GameState:
     # =========================================================================
 
     def _build_join_game(
-        self, eid: Optional[int] = None, gamemode: Optional[Literal[1, 2, 3, 4]] = None
+        self, eid: int | None = None, gamemode: Literal[1, 2, 3, 4] | None = None
     ) -> Packet:
         """Build Join Game packet (0x01)."""
         game_mode = gamemode or self.gamemode.value
@@ -2799,7 +2800,7 @@ class GameState:
 
         return packets
 
-    def sync_spectator(self, eid: Optional[int] = None) -> list[Packet]:
+    def sync_spectator(self, eid: int | None = None) -> list[Packet]:
         """
         To use for broadcasting; generate a list of packets that would update a
         player's view to be a spectator of this game state.

@@ -1,5 +1,6 @@
 import time
-from typing import TYPE_CHECKING, Hashable
+from collections.abc import Hashable
+from typing import TYPE_CHECKING
 
 from gamestate.state import Entity, GameState
 from petty.events import listen_client, subscribe

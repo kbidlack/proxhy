@@ -56,7 +56,7 @@ class Stream:
 
         try:
             data = await self.reader.read(n)
-        except (BrokenPipeError, ConnectionResetError):
+        except BrokenPipeError, ConnectionResetError:
             self.close()
             return b""
 
@@ -112,9 +112,9 @@ class Stream:
                     data = await asyncio.wait_for(self.reader.read(1024), timeout=0.1)
                     if not data:
                         break
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     continue
-                except (BrokenPipeError, ConnectionResetError):
+                except BrokenPipeError, ConnectionResetError:
                     self.close()
                     break
         except asyncio.CancelledError:

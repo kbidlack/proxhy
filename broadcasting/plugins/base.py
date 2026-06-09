@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal
 
 from gamestate.state import PlayerAbilityFlags
 from petty.events import subscribe
@@ -18,7 +18,7 @@ class BroadcastPeerBasePlugin:
     flying: Literal[0, PlayerAbilityFlags.FLYING]
 
     def _init_broadcast_peer(self: BroadcastPeerPlugin):
-        self.spec_eid: Optional[int] = None
+        self.spec_eid: int | None = None
         self.flight: Literal[0, PlayerAbilityFlags.ALLOW_FLYING] = (
             PlayerAbilityFlags.ALLOW_FLYING
         )  # alternatively 0 if off
@@ -35,14 +35,11 @@ class BroadcastPeerBasePlugin:
         try:
             self.writer.close()
             await asyncio.wait_for(self.writer.wait_closed(), timeout=0.5)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             pass
 
-        try:
-            self.username
-        except AttributeError:
-            # username not set; handshake only?
-            return
+        if getattr(self, "username", None) is None:
+            return  # username not set; handshake only?
 
         self.proxy.downstream.chat(
             TextComponent(self.username)

@@ -1,10 +1,12 @@
 import asyncio
+import builtins
 import re
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum, auto
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Literal, Optional, TypeIs, get_args
+from typing import TYPE_CHECKING, Any, Literal, TypeIs, get_args
 
 import keyring
 from hypixel import (
@@ -136,13 +138,13 @@ def is_team_letter(letter: str) -> TypeIs[TeamLetter]:
     return letter in set(get_args(TeamLetter))
 
 
-def match_team_name(name: str) -> Optional[TeamName]:
+def match_team_name(name: str) -> TeamName | None:
     m = TEAM_COLOR_NAME.fullmatch(name)
     if m is not None:
         return REMOVE_DIGITS.sub("", m.group())  # type: ignore
 
 
-def match_player_color(username: str, msg: str) -> Optional[TeamColorCode]:
+def match_player_color(username: str, msg: str) -> TeamColorCode | None:
     m = re.search(rf"(§.){username}", msg)
     if m is not None:
         return m.group(1)  # type: ignore
@@ -234,7 +236,7 @@ class GamePlayer:
     status: GamePlayerStatus
     respawn_time: int
 
-    respawn_timer_task: Optional[asyncio.Task] = field(init=False)
+    respawn_timer_task: asyncio.Task | None = field(init=False)
     offline_uuid: uuid.UUID = field(init=False)
 
     def __post_init__(self):
@@ -270,7 +272,7 @@ class StatCheckPlugin:
         self._api_key_valid: bool | None = None
 
         # _update_stats
-        self.player_stats_task: Optional[asyncio.Task[None]] = None
+        self.player_stats_task: asyncio.Task[None] | None = None
         # list of tasks spawned by _update_player_stats
         self.player_stats_tasks: list[asyncio.Task[None]] = list()
         # players from /who
@@ -660,7 +662,6 @@ class StatCheckPlugin:
             RateLimitError,
             TimeoutError,
             KeyRequired,
-            asyncio.TimeoutError,
             ApiError,
         ) as err:
             err_messages: dict[type, TextComponent] = {
@@ -770,7 +771,7 @@ class StatCheckPlugin:
 
         try:
             await asyncio.wait_for(self.who_players_statted.wait(), timeout=15)
-        except asyncio.TimeoutError:
+        except builtins.TimeoutError:
             return
 
         if self.game.map is None:
@@ -1211,7 +1212,7 @@ class StatCheckPlugin:
         self.game_error = None
         self.downstream.chat(TextComponent("Updated API Key!").color("green"))
 
-    def match_kill_message(self: ProxhyPlugin, message: str) -> Optional[re.Match]:
+    def match_kill_message(self: ProxhyPlugin, message: str) -> re.Match | None:
         """Match a kill message against known patterns.
 
         Returns:

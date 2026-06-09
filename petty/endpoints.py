@@ -4,8 +4,9 @@ import traceback
 import zlib
 from abc import ABC
 from collections import defaultdict
+from collections.abc import Callable, Coroutine
 from copy import deepcopy
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from petty.events import PacketListener, StreamDirection
 from petty.net import ClientStream, ServerStream, State, StreamReader, StreamWriter
@@ -35,7 +36,7 @@ class PacketNode(ABC):
         StreamDirection,
         dict[tuple[int, State], PacketListenerList[Buffer]],
     ] = {"downstream": defaultdict(list), "upstream": defaultdict(list)}
-    _event_listeners: dict[str, list["EventListenerFunction"]] = defaultdict(list)
+    _event_listeners: dict[str, list[EventListenerFunction]] = defaultdict(list)
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -68,8 +69,8 @@ class PacketNode(ABC):
         self.closed = asyncio.Event()
         self._should_stop = False
         self._tasks: set[asyncio.Task] = set()
-        self.handle_downstream_task: Optional[asyncio.Task] = None
-        self.handle_upstream_task: Optional[asyncio.Task] = None
+        self.handle_downstream_task: asyncio.Task | None = None
+        self.handle_upstream_task: asyncio.Task | None = None
 
     @property
     def open(self) -> bool:
@@ -161,7 +162,7 @@ class PacketNode(ABC):
         if force:
             try:
                 await asyncio.wait_for(self.emit("close", reason), timeout=0.5)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass
         else:
             await self.emit("close", reason)
@@ -202,7 +203,7 @@ class Proxy(PacketNode):
         autostart: bool = True,
     ):
         self._setup_node()
-        self._next: Optional[Self] = None
+        self._next: Self | None = None
         self.CONNECT_HOST = connect_host
         self.downstream = ClientStream(reader, writer)
         self.initialize_plugins()
@@ -210,7 +211,7 @@ class Proxy(PacketNode):
         if autostart:
             self.handle_downstream_task = asyncio.create_task(self.handle_downstream())
 
-    async def run(self) -> Optional[Proxy]:
+    async def run(self) -> Proxy | None:
         self.handle_downstream_task = asyncio.create_task(self.handle_downstream())
         try:
             await self.handle_downstream_task

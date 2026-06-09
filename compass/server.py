@@ -246,7 +246,7 @@ class ConnectedClient(Client):
                     c_ka_num = await self.c_keep_alive_q.get()
                     if c_ka_num != ka_num:
                         return await self.close("Incorrect keep alive packet!")
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return await self.close("Timed out.")
 
             await asyncio.sleep(5)

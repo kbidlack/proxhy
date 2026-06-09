@@ -1,6 +1,6 @@
 import asyncio
 import random
-from typing import TYPE_CHECKING, Literal, Optional, TypedDict
+from typing import TYPE_CHECKING, Literal, TypedDict
 
 import hypixel
 import numpy as np
@@ -332,9 +332,9 @@ class PlayerSpectateWindow(Window):
         self.proxy = proxy
         self.entity = entity
 
-        self.health: Optional[float] = None
+        self.health: float | None = None
         self.display_name: str = self.entity.name
-        self.player: Optional[hypixel.Player] = None
+        self.player: hypixel.Player | None = None
 
         super().__init__(
             proxy=self.proxy,

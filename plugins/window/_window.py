@@ -1,11 +1,9 @@
 import random
+from collections.abc import Awaitable, Callable
 from copy import deepcopy
 from functools import wraps
 from typing import (
-    Awaitable,
-    Callable,
     Literal,
-    Optional,
     Protocol,
     SupportsIndex,
     overload,
@@ -26,7 +24,7 @@ from petty.protocol.datatypes import (
 
 class _HasDownstreamAndWindows(Protocol):
     downstream: ClientStream
-    windows: dict[int, "Window"]
+    windows: dict[int, Window]
 
 
 def ensure_open[F: Callable[..., object]](open: bool = True) -> Callable[[F], F]:
@@ -42,7 +40,7 @@ def ensure_open[F: Callable[..., object]](open: bool = True) -> Callable[[F], F]
     return decorator
 
 
-type SlotType = tuple[SlotData, Optional[Callable | Awaitable], bool]
+type SlotType = tuple[SlotData, Callable | Awaitable | None, bool]
 
 type WindowType = Literal[
     "minecraft:chest",
@@ -82,7 +80,7 @@ class Window:
         window_title: str = "Chest",
         window_type: WindowType = "minecraft:chest",
         num_slots: int = 27,
-        entity_id: Optional[int] = None,
+        entity_id: int | None = None,
     ):
         self.proxy = proxy
         self.window_title = window_title
@@ -104,7 +102,7 @@ class Window:
         self,
         slot: int,
         slot_data: SlotData,
-        callback: Optional[Callable | Awaitable] = None,
+        callback: Callable | Awaitable | None = None,
         locked=True,
     ):
         """Set a slot in the window."""
@@ -123,7 +121,7 @@ class Window:
     def set_slots(
         self,
         slots: dict[int, SlotData],
-        callback: Optional[Callable | Awaitable] = None,
+        callback: Callable | Awaitable | None = None,
         locked=True,
     ):
         """Set multiple slots in the window."""

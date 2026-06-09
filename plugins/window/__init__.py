@@ -1,6 +1,7 @@
 import inspect
+from collections.abc import Callable
 from types import NoneType, NotImplementedType
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from petty.events import listen_client
 from petty.protocol.datatypes import Buffer, Byte, Short, Slot, SlotData, UnsignedByte

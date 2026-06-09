@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Dict
+from typing import TYPE_CHECKING, Any
 
 import orjson
 
@@ -21,7 +21,7 @@ class Setting[S: str]:
         display_name: str,
         description: str,
         item: Item_T,
-        states: Dict[S, SettingState],
+        states: dict[S, SettingState],
         default_state: S,
         storage: SettingsStorage,
     ):
@@ -53,7 +53,7 @@ class Setting[S: str]:
         return self._item
 
     @property
-    def states(self) -> Dict[S, SettingState]:
+    def states(self) -> dict[S, SettingState]:
         """Returns available states and their items and colors."""
         return self._states.copy()
 
@@ -202,7 +202,7 @@ class SettingsStorage:
 
     def __init__(self, storage_file: Path = Path("settings.json")):
         self.storage_file = Path(storage_file)
-        self._data: Dict[str, Any] = {}
+        self._data: dict[str, Any] = {}
         self._load()
 
     def _load(self) -> None:
@@ -211,7 +211,7 @@ class SettingsStorage:
             try:
                 with open(self.storage_file, "rb") as f:
                     self._data = orjson.loads(f.read())
-            except (orjson.JSONDecodeError, IOError):
+            except OSError, orjson.JSONDecodeError:
                 self._data = {}
 
     def _save(self) -> None:
@@ -220,7 +220,7 @@ class SettingsStorage:
             self.storage_file.parent.mkdir(parents=True, exist_ok=True)
             with open(self.storage_file, "wb") as f:
                 f.write(orjson.dumps(self._data, option=orjson.OPT_INDENT_2))
-        except IOError:
+        except OSError:
             pass  # Silently fail if we can't save
 
     def get_setting[T](self, key: str, default: T) -> T:
@@ -238,7 +238,7 @@ def create_setting[T: str](
     display_name: str,
     description: str,
     item: Item_T,
-    states: Dict[T, SettingState],
+    states: dict[T, SettingState],
     default_state: T,
     storage: SettingsStorage,
 ) -> Setting[T]:

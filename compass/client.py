@@ -2,7 +2,6 @@ import asyncio
 import os
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Optional
 
 import httpx
 import pyroh
@@ -70,7 +69,7 @@ class Response:
 
 class CompassClient(Server):
     _registered: asyncio.Event
-    endpoint: Optional[pyroh.Endpoint]
+    endpoint: pyroh.Endpoint | None
 
     def __init__(
         self,
@@ -87,7 +86,7 @@ class CompassClient(Server):
 
         self.broker_url = broker_url
 
-        self._shared_secret: Optional[bytes] = None
+        self._shared_secret: bytes | None = None
         self._registered = asyncio.Event()
 
         self.discoverable: bool = True
@@ -216,7 +215,7 @@ class CompassClient(Server):
                     self.upstream.send_packet(
                         0x00, VarInt.pack(num), String.pack(self.endpoint.ticket or "")
                     )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 return await self.close("Timed out.")
 
     async def close(self, reason="", force=False):
@@ -250,7 +249,7 @@ class CompassClient(Server):
         )
 
     async def update_settings(
-        self, discoverable: Optional[bool], whitelist: Optional[set[str]]
+        self, discoverable: bool | None, whitelist: set[str] | None
     ) -> Response:
         if discoverable is not None:
             self.discoverable = discoverable

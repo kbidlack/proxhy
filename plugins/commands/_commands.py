@@ -2,13 +2,11 @@ import annotationlib
 import inspect
 import types
 from abc import ABC, abstractmethod
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from typing import (
     Any,
-    Awaitable,
-    Callable,
     Literal,
-    Optional,
     Union,
     get_args,
     get_origin,
@@ -130,7 +128,7 @@ class CommandContext:
     param_index: int = 0
     command_name: str = ""
 
-    async def get_arg[T](self, type_: type[T]) -> Optional[T]:
+    async def get_arg[T](self, type_: type[T]) -> T | None:
         """
         Get the first converted argument of the specified type.
 
@@ -159,7 +157,7 @@ class CommandContext:
                     try:
                         arg = await self.args.get(i)
                         return arg
-                    except (ValueError, CommandException):
+                    except ValueError, CommandException:
                         pass
         else:
             for arg in self.args:
@@ -257,7 +255,7 @@ class CommandArg(ABC):
 class Parameter:
     """Represents a command parameter with its metadata."""
 
-    options: Optional[tuple]
+    options: tuple | None
     union_types: tuple | None
 
     def __init__(self, param: inspect.Parameter, type_hint: Any = None):
@@ -637,16 +635,16 @@ class Command:
                         converted = await param.convert(ctx, args[arg_index])
                         converted_args.append(converted)
                         arg_index += 1
-                    except (ValueError, CommandException):
+                    except ValueError, CommandException:
                         converted_args.append(param.default)
                         # arg_index intentionally not advanced
                 else:
                     # Required or lazy: always consume the arg
                     if param.is_lazy:
                         lazy = Lazy(
-                            lambda p=param,
-                            a=args[arg_index],
-                            ix=arg_index: self._lazy_convert(ctx, p, a, ix),
+                            lambda p=param, a=args[arg_index], ix=arg_index: (
+                                self._lazy_convert(ctx, p, a, ix)
+                            ),
                             value=args[arg_index],
                         )
                         converted_args.append(lazy)
@@ -687,7 +685,7 @@ class Command:
                 try:
                     await param.convert(ctx, args[arg_index])
                     arg_index += 1
-                except (ValueError, CommandException):
+                except ValueError, CommandException:
                     pass  # fallthrough: don't advance
             else:
                 arg_index += 1
@@ -1050,7 +1048,7 @@ def command(name: str, *aliases: str, usage: list[str] | None = None):
     def decorator(func: Callable[..., Awaitable[Any]]):
         cmd = Command(func, name=name, aliases=aliases, usage=usage)
         # Store as attribute for discovery by CommandsPlugin
-        setattr(func, "_command", cmd)
+        func._command = cmd  # type: ignore[attr-defined]
         return func
 
     return decorator
@@ -1063,7 +1061,7 @@ class HelpPath(CommandArg):
         self.value = value
 
     @classmethod
-    async def convert(cls, ctx: CommandContext, value: str) -> "HelpPath":
+    async def convert(cls, ctx: CommandContext, value: str) -> HelpPath:
         return cls(value)
 
     @classmethod

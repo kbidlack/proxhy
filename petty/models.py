@@ -1,6 +1,6 @@
 import re
 from dataclasses import dataclass
-from typing import Any, Literal, Optional, overload
+from typing import Any, Literal, overload
 
 import orjson
 
@@ -57,7 +57,7 @@ class SlotData:
 
     def __init__(
         self,
-        item: Optional[Item] = None,
+        item: Item | None = None,
         count: int = 1,
         damage: int = 0,
         nbt: bytes = b"",
@@ -327,7 +327,7 @@ class TextComponent:
         self.append(component)
         return self
 
-    def extend(self, components) -> "TextComponent":
+    def extend(self, components) -> TextComponent:
         """Add multiple child components"""
         for component in components:
             self.append(component)
@@ -482,13 +482,13 @@ class TextComponent:
         if isinstance(data, str):
             return data
         if isinstance(data, list):
-            return "".join((self._parse_to_text(e) for e in data))
+            return "".join(self._parse_to_text(e) for e in data)
 
         if "translate" in data:
             text += data["translate"]
             if "with" in data:
-                args = ", ".join((self._parse_to_text(e) for e in data["with"]))
-                text += "{%s}" % args
+                args = ", ".join(self._parse_to_text(e) for e in data["with"])
+                text += f"{args}"
         if "text" in data:
             text += data["text"]
         if "extra" in data:

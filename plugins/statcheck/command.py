@@ -2,8 +2,9 @@ import asyncio
 import datetime
 import os
 import re
+from collections.abc import Callable, Coroutine
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Coroutine, Optional
+from typing import TYPE_CHECKING, Any
 
 import hypixel
 import orjson
@@ -62,7 +63,7 @@ class StatcheckCommandPlugin:
     log_stats: Callable[[str], Coroutine[Any, Any, None]]
 
     def _resolve_mode(
-        self: ProxhyPlugin, mode: Optional[SCSupportedGamemode]
+        self: ProxhyPlugin, mode: SCSupportedGamemode | None
     ) -> SCSupportedGamemode:
         if mode is not None:
             return mode
@@ -73,7 +74,7 @@ class StatcheckCommandPlugin:
     @command("lastlogin", "ll")
     async def _command_lastlogin(
         self: ProxhyPlugin,
-        _player: Optional[Lazy[HypixelPlayer]] = None,
+        _player: Lazy[HypixelPlayer] | None = None,
     ):
         """Check when a player last logged in to Hypixel."""
         try:
@@ -113,9 +114,9 @@ class StatcheckCommandPlugin:
     @command("sc", "statcheck")
     async def _command_statcheck(
         self: ProxhyPlugin,
-        _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Optional[SCSupportedGamemode] = None,
-        window: Optional[float] = None,
+        _player: Lazy[HypixelPlayer] | None = None,
+        mode: SCSupportedGamemode | None = None,
+        window: float | None = None,
         *stats: Statistic,
     ):
         """Check player stats."""
@@ -130,8 +131,8 @@ class StatcheckCommandPlugin:
     @command("scw", "scweekly")
     async def _command_scweekly(
         self: ProxhyPlugin,
-        _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Optional[SCSupportedGamemode] = None,
+        _player: Lazy[HypixelPlayer] | None = None,
+        mode: SCSupportedGamemode | None = None,
         *stats: Statistic,
     ):
         """Check player stats for the past 7 days."""
@@ -146,8 +147,8 @@ class StatcheckCommandPlugin:
     @command("scwfull", "scweeklyfull")
     async def _command_scweeklyfull(
         self: ProxhyPlugin,
-        _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Optional[SCSupportedGamemode] = None,
+        _player: Lazy[HypixelPlayer] | None = None,
+        mode: SCSupportedGamemode | None = None,
         *stats: Statistic,
     ):
         """Check player stats for the past 7 days with all modes."""
@@ -163,9 +164,9 @@ class StatcheckCommandPlugin:
     @command("scfull")
     async def _command_scfull(
         self: ProxhyPlugin,
-        _player: Optional[Lazy[HypixelPlayer]] = None,
-        mode: Optional[SCSupportedGamemode] = None,
-        window: Optional[float] = None,
+        _player: Lazy[HypixelPlayer] | None = None,
+        mode: SCSupportedGamemode | None = None,
+        window: float | None = None,
         *stats: Statistic,
     ):
         """Check player stats with all modes."""
@@ -198,11 +199,11 @@ class StatcheckCommandPlugin:
             if self.hypixel_client:
                 try:
                     await asyncio.wait_for(self.log_stats("logout"), timeout=2.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass
                 try:
                     await asyncio.wait_for(self.hypixel_client.close(), timeout=1.0)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     pass  # force close anyways
         except AttributeError:
             pass  # TODO: log
@@ -231,7 +232,7 @@ class StatcheckCommandPlugin:
 
         if os.path.exists(self.log_path):
             try:
-                with open(self.log_path, "r") as f:
+                with open(self.log_path) as f:
                     lines = f.readlines()
                 if lines:
                     last_line = lines[-1].strip()
@@ -262,7 +263,7 @@ class StatcheckCommandPlugin:
         if not os.path.exists(self.log_path):
             return
 
-        with open(self.log_path, "r") as f:
+        with open(self.log_path) as f:
             lines = f.readlines()
 
         # Collect unique names that need migration
@@ -315,7 +316,7 @@ class StatcheckCommandPlugin:
 
         # Read and parse the stat log file
         entries = []
-        with open(self.log_path, "r") as f:
+        with open(self.log_path) as f:
             for line in f:
                 try:
                     entry = orjson.loads(line.strip())
@@ -467,8 +468,8 @@ class StatcheckCommandPlugin:
 
     async def _sc_internal(
         self: ProxhyPlugin,
-        player: Optional[HypixelPlayer] = None,
-        window: Optional[float] = None,
+        player: HypixelPlayer | None = None,
+        window: float | None = None,
         mode: SCSupportedGamemode = SCSupportedGamemode("bedwars"),
         stat_names: tuple[Statistic, ...] = tuple(),
         display_abridged=True,
@@ -488,7 +489,7 @@ class StatcheckCommandPlugin:
                 current_player = await self.hypixel_client.player(self.username)
             api_key = _GAMEMODE_API_KEY.get(gamemode, gamemode.capitalize())
             current_stats = current_player._data.get("stats", {}).get(api_key, {})
-        except (hypixel.KeyRequired, hypixel.InvalidApiKey):
+        except hypixel.KeyRequired, hypixel.InvalidApiKey:
             raise CommandException("Invalid Hypixel API key!")
         except Exception as e:
             raise CommandException(f"Failed to fetch current stats: {e}")
@@ -508,7 +509,7 @@ class StatcheckCommandPlugin:
         self: ProxhyPlugin,
         player: hypixel.Player,
         current_stats: dict,
-        window: Optional[float],
+        window: float | None,
         stats: tuple[Stat, ...],
         display_abridged=True,
     ):
@@ -603,7 +604,7 @@ class StatcheckCommandPlugin:
         self: ProxhyPlugin,
         player: hypixel.Player,
         current_stats: dict,
-        window: Optional[float],
+        window: float | None,
         stats: tuple[Stat, ...],
         display_abridged=True,
     ):

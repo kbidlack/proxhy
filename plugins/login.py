@@ -5,7 +5,7 @@ import uuid
 from importlib.metadata import version
 from importlib.resources import files
 from secrets import token_bytes
-from typing import TYPE_CHECKING, Literal, Optional
+from typing import TYPE_CHECKING, Literal
 from unittest.mock import Mock
 
 import httpx
@@ -73,7 +73,7 @@ class LoginPlugin:
         self.access_token = ""
         self.secret: bytes = b""
 
-        self.secret_task: Optional[asyncio.Task] = None
+        self.secret_task: asyncio.Task | None = None
         self.keep_alive_task = None
 
     @listen_server(0x02, State.LOGIN, blocking=True)
@@ -513,11 +513,7 @@ class LoginPlugin:
         # generate shared secret
         secret = token_bytes(16)
 
-        has_uuid = True
-        try:
-            self.uuid
-        except AttributeError:
-            has_uuid = False
+        has_uuid = getattr(self, "uuid", None) is not None
 
         if not (self.access_token or has_uuid):
             self.access_token, self.username, self.uuid = await auth.load_auth_info(

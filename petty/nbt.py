@@ -5,7 +5,7 @@ import io
 import struct
 import zlib
 from enum import IntEnum
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 
 class TagType(IntEnum):
@@ -47,7 +47,7 @@ class NBTWriteError(NBTError):
 class NBTTag:
     """Base class for all NBT tags."""
 
-    def __init__(self, name: Optional[str] = None, value: Any = None):
+    def __init__(self, name: str | None = None, value: Any = None):
         self.name = name
         self.value = value
 
@@ -70,56 +70,56 @@ class TagEnd(NBTTag):
 class TagByte(NBTTag):
     """TAG_Byte - A single signed byte."""
 
-    def __init__(self, name: Optional[str] = None, value: int = 0):
+    def __init__(self, name: str | None = None, value: int = 0):
         super().__init__(name, value)
 
 
 class TagShort(NBTTag):
     """TAG_Short - A single signed, big endian 16 bit integer."""
 
-    def __init__(self, name: Optional[str] = None, value: int = 0):
+    def __init__(self, name: str | None = None, value: int = 0):
         super().__init__(name, value)
 
 
 class TagInt(NBTTag):
     """TAG_Int - A single signed, big endian 32 bit integer."""
 
-    def __init__(self, name: Optional[str] = None, value: int = 0):
+    def __init__(self, name: str | None = None, value: int = 0):
         super().__init__(name, value)
 
 
 class TagLong(NBTTag):
     """TAG_Long - A single signed, big endian 64 bit integer."""
 
-    def __init__(self, name: Optional[str] = None, value: int = 0):
+    def __init__(self, name: str | None = None, value: int = 0):
         super().__init__(name, value)
 
 
 class TagFloat(NBTTag):
     """TAG_Float - A single, big endian IEEE-754 single-precision floating point number."""
 
-    def __init__(self, name: Optional[str] = None, value: float = 0.0):
+    def __init__(self, name: str | None = None, value: float = 0.0):
         super().__init__(name, value)
 
 
 class TagDouble(NBTTag):
     """TAG_Double - A single, big endian IEEE-754 double-precision floating point number."""
 
-    def __init__(self, name: Optional[str] = None, value: float = 0.0):
+    def __init__(self, name: str | None = None, value: float = 0.0):
         super().__init__(name, value)
 
 
 class TagByteArray(NBTTag):
     """TAG_Byte_Array - A length-prefixed array of signed bytes."""
 
-    def __init__(self, name: Optional[str] = None, value: Optional[List[int]] = None):
+    def __init__(self, name: str | None = None, value: list[int] | None = None):
         super().__init__(name, value or [])
 
 
 class TagString(NBTTag):
     """TAG_String - A length-prefixed modified UTF-8 string."""
 
-    def __init__(self, name: Optional[str] = None, value: str = ""):
+    def __init__(self, name: str | None = None, value: str = ""):
         super().__init__(name, value)
 
 
@@ -128,9 +128,9 @@ class TagList(NBTTag):
 
     def __init__(
         self,
-        name: Optional[str] = None,
+        name: str | None = None,
         tag_type: TagType = TagType.TAG_End,
-        value: Optional[List[NBTTag]] = None,
+        value: list[NBTTag] | None = None,
     ):
         super().__init__(name, value or [])
         self.tag_type = tag_type
@@ -167,9 +167,7 @@ class TagList(NBTTag):
 class TagCompound(NBTTag):
     """TAG_Compound - A collection of named tags."""
 
-    def __init__(
-        self, name: Optional[str] = None, value: Optional[Dict[str, NBTTag]] = None
-    ):
+    def __init__(self, name: str | None = None, value: dict[str, NBTTag] | None = None):
         super().__init__(name, value or {})
 
     def __getitem__(self, key: str) -> NBTTag:
@@ -179,7 +177,7 @@ class TagCompound(NBTTag):
         self.value[key] = value
         value.name = key
 
-    def get(self, key: str, default: Any = None) -> Optional[NBTTag]:
+    def get(self, key: str, default: Any = None) -> NBTTag | None:
         """Get a tag by name."""
         return self.value.get(key, default)
 
@@ -205,14 +203,14 @@ class TagCompound(NBTTag):
 class TagIntArray(NBTTag):
     """TAG_Int_Array - A length-prefixed array of signed integers."""
 
-    def __init__(self, name: Optional[str] = None, value: Optional[List[int]] = None):
+    def __init__(self, name: str | None = None, value: list[int] | None = None):
         super().__init__(name, value or [])
 
 
 class TagLongArray(NBTTag):
     """TAG_Long_Array - A length-prefixed array of signed longs."""
 
-    def __init__(self, name: Optional[str] = None, value: Optional[List[int]] = None):
+    def __init__(self, name: str | None = None, value: list[int] | None = None):
         super().__init__(name, value or [])
 
 
@@ -267,7 +265,7 @@ class NBTReader:
             raise NBTParseError(f"Expected {length} bytes for string, got {len(data)}")
         return data.decode("utf-8")
 
-    def read_byte_array(self) -> List[int]:
+    def read_byte_array(self) -> list[int]:
         """Read a length-prefixed array of signed bytes."""
         length = self.read_int()
         if length < 0:
@@ -281,7 +279,7 @@ class NBTReader:
             )
         return list(struct.unpack(f"{length}b", data))
 
-    def read_int_array(self) -> List[int]:
+    def read_int_array(self) -> list[int]:
         """Read a length-prefixed array of signed integers."""
         length = self.read_int()
         if length < 0:
@@ -295,7 +293,7 @@ class NBTReader:
             )
         return list(struct.unpack(f"{self.endian}{length}i", data))
 
-    def read_long_array(self) -> List[int]:
+    def read_long_array(self) -> list[int]:
         """Read a length-prefixed array of signed longs."""
         length = self.read_int()
         if length < 0:
@@ -309,7 +307,7 @@ class NBTReader:
             )
         return list(struct.unpack(f"{self.endian}{length}q", data))
 
-    def read_tag(self, tag_type: TagType, name: Optional[str] = None) -> NBTTag:
+    def read_tag(self, tag_type: TagType, name: str | None = None) -> NBTTag:
         """Read a tag of the specified type."""
         if tag_type == TagType.TAG_End:
             return TagEnd()
@@ -340,7 +338,7 @@ class NBTReader:
         else:
             raise NBTParseError(f"Unknown tag type: {tag_type}")
 
-    def read_list(self, name: Optional[str] = None) -> TagList:
+    def read_list(self, name: str | None = None) -> TagList:
         """Read a TAG_List."""
         try:
             tag_type = TagType(self.read_byte())
@@ -359,7 +357,7 @@ class NBTReader:
 
         return TagList(name, tag_type, tags)
 
-    def read_compound(self, name: Optional[str] = None) -> TagCompound:
+    def read_compound(self, name: str | None = None) -> TagCompound:
         """Read a TAG_Compound."""
         tags = {}
 
@@ -436,19 +434,19 @@ class NBTWriter:
         self.write_short(len(encoded))
         self.data.write(encoded)
 
-    def write_byte_array(self, value: List[int]):
+    def write_byte_array(self, value: list[int]):
         """Write a length-prefixed array of signed bytes."""
         self.write_int(len(value))
         if value:
             self.data.write(struct.pack(f"{len(value)}b", *value))
 
-    def write_int_array(self, value: List[int]):
+    def write_int_array(self, value: list[int]):
         """Write a length-prefixed array of signed integers."""
         self.write_int(len(value))
         if value:
             self.data.write(struct.pack(f"{self.endian}{len(value)}i", *value))
 
-    def write_long_array(self, value: List[int]):
+    def write_long_array(self, value: list[int]):
         """Write a length-prefixed array of signed longs."""
         self.write_int(len(value))
         if value:
@@ -600,7 +598,7 @@ def loads(data: bytes, little_endian: bool = False) -> TagCompound:
 def dump(
     tag: TagCompound,
     file_path: str,
-    compression: Optional[str] = None,
+    compression: str | None = None,
     little_endian: bool = False,
 ):
     """
@@ -619,7 +617,7 @@ def dump(
 
 
 def dumps(
-    tag: TagCompound, compression: Optional[str] = None, little_endian: bool = False
+    tag: TagCompound, compression: str | None = None, little_endian: bool = False
 ) -> bytes:
     """
     Serialize NBT data to bytes.
@@ -647,7 +645,7 @@ def dumps(
 
 
 # Convenience functions for creating tags from Python values
-def from_dict(data: Dict[str, Any], name: str = "") -> TagCompound:
+def from_dict(data: dict[str, Any], name: str = "") -> TagCompound:
     """
     Create a TagCompound from a Python dictionary.
 
@@ -708,7 +706,7 @@ def from_dict(data: Dict[str, Any], name: str = "") -> TagCompound:
     return compound
 
 
-def to_dict(tag: TagCompound) -> Dict[str, Any]:
+def to_dict(tag: TagCompound) -> dict[str, Any]:
     """
     Convert a TagCompound to a Python dictionary.
 

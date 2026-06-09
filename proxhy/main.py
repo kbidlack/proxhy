@@ -17,9 +17,9 @@ from proxhy.proxhy import Proxhy
 from proxhy.utils import zero_pad_calver
 
 if platform.system() == "Windows":
-    import winloop as loop_impl
+    import winloop as loop_impl  # type: ignore
 else:
-    import uvloop as loop_impl
+    import uvloop as loop_impl  # type: ignore
 
 loop_impl.install()
 
@@ -202,7 +202,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
                     asyncio.gather(*close_tasks, return_exceptions=True),
                     timeout=1.0,
                 )
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 pass  # continue anyway
 
         pending = [
@@ -221,7 +221,7 @@ async def shutdown(loop: asyncio.AbstractEventLoop, server: ProxhyServer, _):
     if instances:
         logged_in_instances = []
         non_logged_in_instances = []
-        for i, instance in enumerate(instances):
+        for instance in instances:
             if getattr(instance, "logged_in", False):
                 logged_in_instances.append(instance)
             else:

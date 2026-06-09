@@ -1,5 +1,5 @@
 import re
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 from petty.events import subscribe
 from petty.protocol.datatypes import Buffer, String, TextComponent, VarInt
@@ -14,7 +14,7 @@ class BroadcastPeerCommandsPlugin(CommandsPlugin):
         segments = message.split()
         cmd_name = segments[0].removeprefix("/").removeprefix("/").casefold()
 
-        command: Optional[Command | CommandGroup] = self.command_registry.get(cmd_name)
+        command: Command | CommandGroup | None = self.command_registry.get(cmd_name)
 
         if command:
             try:

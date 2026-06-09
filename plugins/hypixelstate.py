@@ -1,5 +1,5 @@
 import asyncio
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING
 
 import orjson
 
@@ -77,7 +77,7 @@ class HypixelStatePlugin:
             elif b"vanilla" in data:
                 self.client_type = "vanilla"
 
-    def get_health(self: ProxhyPlugin, player_name: str) -> Optional[float]:
+    def get_health(self: ProxhyPlugin, player_name: str) -> float | None:
         health = None
 
         for name, score in (self.gamestate.scores.get("health") or {}).items():

@@ -181,13 +181,13 @@ class Chat(DataType[str, str]):
             if isinstance(data, str):
                 return data
             if isinstance(data, list):
-                return "".join((parse(e) for e in data))
+                return "".join(parse(e) for e in data)
 
             if "translate" in data:
                 text += data["translate"]
                 if "with" in data:
-                    args = ", ".join((parse(e) for e in data["with"]))
-                    text += "{%s}" % args
+                    args = ", ".join(parse(e) for e in data["with"])
+                    text += f"{args}"
             if "text" in data:
                 text += data["text"]
             if "extra" in data:
@@ -377,7 +377,7 @@ class Slot(DataType[SlotData, SlotData]):
             nbt_data = buff.read(bytes_consumed)
             return nbt_data
 
-        except (nbt.NBTError, Exception):
+        except nbt.NBTError, Exception:
             # If parsing fails, assume no NBT data
             buff.seek(start_pos)
             buff.read(1)  # Consume the tag type byte we already read

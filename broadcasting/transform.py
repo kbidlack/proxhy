@@ -9,7 +9,7 @@ This module handles converting player packets (serverbound) into entity packets
 # because there is a lot of busywork here
 
 import uuid as uuid_mod
-from typing import Callable
+from collections.abc import Callable
 
 from gamestate.state import GameState, PlayerAbilityFlags, Rotation, Vec3d
 from petty.protocol.datatypes import (

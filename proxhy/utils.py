@@ -8,7 +8,6 @@ import uuid as _uuid
 from collections import namedtuple
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from hypixel import (
     ApiError,
@@ -47,7 +46,7 @@ class APIClient(Client):
             raise ClosedSession
         try:
             response = await self._get_skin_properties_helper(uuid)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError("mojang")
 
         if response.status == 429:
@@ -115,7 +114,7 @@ class APIClient(Client):
             raise ClosedSession
         try:
             response = await self._get_uuid_helper(name)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             raise TimeoutError("mojang")
 
         if response.status == 429:
@@ -220,14 +219,14 @@ def offline_uuid(username: str) -> _uuid.UUID:
     return _uuid.UUID(bytes=digest, version=3)
 
 
-def uuid_version(value: str) -> Optional[int]:
+def uuid_version(value: str) -> int | None:
     try:
         return _uuid.UUID(value).version
     except ValueError:
         return None
 
 
-def current_ln() -> Optional[int]:
+def current_ln() -> int | None:
     f_back_f_lineno = operator.attrgetter("f_back.f_lineno")
     return f_back_f_lineno(inspect.currentframe())  # lmfao
 
