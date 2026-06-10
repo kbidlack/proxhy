@@ -145,8 +145,8 @@ uv tool uninstall proxhy
 ## Features (in-depth)
 
 <details>
-  <summary><a id="sc"></a><strong><code>/sc</code> command</strong></summary>
-
+  <summary><h3><a id="sc"></a><strong><code>/sc</code> command</strong></h3></summary>
+  
 `/sc [player] [mode?] [window?] [stats...]` fetches and displays Hypixel stats for any player. Omitting the player name checks yourself.
 
 The default view shows abbreviated mode breakdowns (Solo, Doubles, Threes, Fours for Bed Wars); append `full` (e.g. `/scfull`) to show all modes including Dream modes.
@@ -156,16 +156,15 @@ The optional `window` parameter limits stats to a recent time period in days —
 Hovering over the stat output in chat shows per-mode breakdowns. If a player is currently online, `(ONLINE)` is shown next to their name.
 
 Requires a valid Hypixel API key, stored securely in the system keyring. You can get one at [https://developer.hypixel.net](https://developer.hypixel.net)
+</details>
+<details>
+  <summary><h3><a id="settings"></a><strong>Settings menu</strong></h3></summary>
+
+`/s` opens a menu for browsing and toggling all Proxhy settings. Settings are organized into categories (Bed Wars, Compass, Broadcast); enabled settings are indicated with an enchantment glow. Hover over any item to read its description.
 
 </details>
 <details>
-  <summary><a id="settings"></a><strong>Settings menu</strong></summary>
-
-`/s` opens a Minecraft chest GUI for browsing and toggling all Proxhy settings. Settings are organized into categories (Bed Wars, Compass, Broadcast) navigable with back/next buttons. Enabled settings are indicated with an enchantment glow; hover over any item to read its description.
-
-</details>
-<details>
-  <summary><a id="autoboop"></a><strong>Autoboop</strong></summary>
+  <summary><h3><a id="autoboop"></a><strong>Autoboop</strong></h3></summary>
 
 Autoboop automatically sends `/boop` to players on a personal list whenever they join as a friend or guild member.
 
@@ -177,7 +176,7 @@ Manage the list with `/ab`:
 
 </details>
 <details>
-  <summary><a id="QOL"></a><strong>Quality of Life features</strong></summary>
+  <summary><h3><a id="QOL"></a><strong>Quality of Life features</strong></h3></summary>
 
 **`/rq` — Requeue**
 Instantly re-joins the last gamemode you played.
@@ -189,33 +188,34 @@ Prefix any command with `//` instead of `/` to broadcast its output to all playe
 Shows when a player last logged into Hypixel, formatted with an ordinal date, time, and timezone (e.g. "January 1st, 2024 at 3:42 PM EST"). Defaults to yourself if no player is specified. Shows `(ONLINE)` if the player is currently connected.
 
 **`/play` — Intuitive game joining**
-An enhanced `/play` command with autocomplete for gamemodes and submodes (e.g. `/play bedwars solo`). Shows available options if an incomplete submode is provided, so you never need to memorize Hypixel's internal game IDs.
+An enhanced `/play` command with autocomplete for gamemodes and submodes (e.g. `/play bedwars solo`). Shows available options if an incomplete submode is provided, so you never need to memorize Hypixel's internal game IDs. However, internal game IDs (e.g. `/play bedwars_eight_one`) are still supported.
 
 </details>
 <details>
-  <summary><a id="broadcast"></a><strong>Broadcasts</strong></summary>
+  <summary><h3><a id="broadcast"></a><strong>Broadcasts</strong></h3></summary>
 
-Broadcasts let friends spectate your game in real time, or let you spectate theirs.
+Broadcasts let friends using Proxhy spectate your game in real time, or let you spectate theirs.
 
 - `/broadcast join <player>` — Request to join another player's broadcast as a spectator. The request expires after 60 seconds if not accepted.
 - `/broadcast invite <player>` — Invite another player to spectate your broadcast. Also expires after 60 seconds.
 - `/broadcast accept <player>` — Accept a pending join request or invite.
 - `/broadcast list` — List all spectators currently connected to your broadcast.
-- `/broadcast chat [message]` — Send a message in the private broadcast chat channel. You can toggle broadcast chat with `/chat bc`
-- `/broadcast slime <player>` — Slime out a spectator from your broadcast.
+- `/broadcast chat [message]` — Send a message in the private broadcast chat channel. You can toggle broadcast chat with `/chat bc`.
+- `/broadcast slime <player>` — Slime out* a spectator from your broadcast.
 - `/broadcast server` — Show your broadcast server node ID.
 
 Trusted players (see [Broadcast whitelists](#broadcast-whitelist)) are accepted into your broadcast automatically without a prompt; use `/bc trust` to manage trusted players.
 
+_* Note: "slime out" is synonymous with "kick"._
 </details>
 <details>
-  <summary><a id="watch"></a><strong><code>/watch</code> Broadcast command</strong></summary>
+  <summary><h3><a id="watch"></a><strong><code>/watch</code> Broadcast command</strong></h3></summary>
 
-`/watch` is available to broadcast spectators and puts the camera into a cinematic follow mode. The camera locks onto the player you are spectating and tracks them from a fixed relative position, giving a smooth third-person view. Sneak to exit cinematic mode.
+`/watch` is available to broadcast spectators and puts the camera into a cinematic follow mode. The camera locks onto the player you are spectating and tracks them from a fixed relative position, giving a smooth third-person view, reminiscent of an enhanced "F5" view. Sneak to exit cinematic mode.
 
 </details>
 <details>
-  <summary><a id="spectate-menu"></a><strong>Broadcast spectate menu</strong></summary>
+  <summary><h3><a id="spectate-menu"></a><strong>Broadcast spectate menu</strong></h3></summary>
 
 Right-clicking any player while spectating a broadcast opens a menu with live information about that player:
 
@@ -228,25 +228,25 @@ The menu for the broadcast owner includes their current inventory and always sho
 
 </details>
 <details>
-  <summary><a id="broadcast-whitelist"></a><strong>Broadcast whitelists</strong></summary>
+  <summary><h3><a id="broadcast-whitelist"></a><strong>Broadcast whitelists</strong></h3></summary>
 
 Two separate lists control access to your broadcasts:
-
-**Compass whitelist** (`/compass whitelist add|remove|list <player>`):
-
-Controls who can look up your server node ID on the Compass relay. When enabled in settings, only whitelisted players can request your endpoint address, preventing uninvited connections entirely. **If this is enabled, only players on this list will be able to join or invite you to broadcasts.**
-
-This setting is left off for user intuitivity, but it is recommended to enable it and add only a few trusted players.
-
-You can enable the whitelist in the [settings menu](#settings), (accessed via `/s`). To manage it, use `/compass whitelist`
 
 **Trusted players** (`/broadcast trust add|remove|list <player>`):
 
 Players on this list have their join/invite requests auto-accepted.
 
+**Compass whitelist** (`/compass whitelist add|remove|list <player>`):
+
+Controls who can look up your server node ID on the Compass relay. When enabled in settings, only whitelisted players can request your endpoint address, preventing uninvited connections entirely.
+
+**If this is enabled, only players on this list will be able to join or invite you to broadcasts.** This setting is left off by default, but if you'd like to avoid others accessing your IP address, you should turn it on.
+
+You can enable the whitelist in the [settings menu](#settings), (accessed via `/s`). To manage it, use `/compass whitelist`
+
 </details>
 <details>
-  <summary><a id="tablist-stats"></a><strong>Tab list stats</strong></summary>
+  <summary><h3><a id="tablist-stats"></a><strong>Tab list stats</strong></h3></summary>
 
 Proxhy injects the Bed Wars tab list to show player stats alongside each name, replacing the need for external overlays. Each entry shows the player's star level and FKDR, color-coded by team.
 Configurable options:
@@ -258,25 +258,25 @@ Stats are fetched from the Hypixel API when players appear in the tab list and u
 
 </details>
 <details>
-  <summary><a id="respawn-timers"></a><strong>Respawn timers</strong></summary>
+  <summary><h3><a id="respawn-timers"></a><strong>Respawn timers</strong></h3></summary>
 
 When a Bed Wars player dies and enters the respawn state, a countdown timer (5 seconds normally, 10 seconds on reconnect) appears next to their name in the tab list, in gold.
 
 </details>
 <details>
-  <summary><a id="disconnect-respawning"></a><strong>Disconnected while respawning</strong></summary>
+  <summary><h3><a id="disconnect-respawning"></a><strong>Disconnected while respawning</strong></h3></summary>
 
 If a player's respawn timer runs out and they never reappear in the tab list, Proxhy sends a chat message: `[PlayerName] disconnected while respawning.`
 
 </details>
 <details>
-  <summary><a id="show-eliminated"></a><strong>Eliminated players in tab list</strong></summary>
+  <summary><h3><a id="show-eliminated"></a><strong>Eliminated players in tab list</strong></h3></summary>
 
 Final-killed players are kept in the tab list as grayed-out, italic entries rather than disappearing entirely. This lets you track which teams are still in the game and who has been eliminated without losing the full player list.
 
 </details>
 <details>
-  <summary><a id="first-rush-highlight"></a><strong>First rush stat highlights</strong></summary>
+  <summary><h3><a id="first-rush-highlight"></a><strong>First rush stat highlights</strong></h3></summary>
 
 At the start of a Bed Wars game, Proxhy shows a title card with the stats of the players on the teams most likely to rush you first (based on map layout).
 
@@ -288,13 +288,13 @@ Three modes (configurable in settings):
 
 </details>
 <details>
-  <summary><a id="preface-top-stats"></a><strong>Preface top stats</strong></summary>
+  <summary><h3><a id="preface-top-stats"></a><strong>Preface top stats</strong></h3></summary>
 
 Once all players have been statted at game start, Proxhy prints a ranked list of the top enemy players in chat. Teammates and yourself are excluded. The list can be sorted by FKDR, star level, or a combined index. Nicked players (those whose API lookup returned no data) are called out in a separate section at the top of the list.
 
 </details>
 <details>
-  <summary><a id="height-limit"></a><strong>Height limit warnings</strong></summary>
+  <summary><h3><a id="height-limit"></a><strong>Height limit warnings</strong></h3></summary>
 
 When you get within a few blocks of the map's height boundaries during a Bed Wars game, Proxhy displays an actionbar warning and spawns redstone particles at the boundary plane around your position. The actionbar color shifts from green → yellow → orange → red as you get closer.
 
