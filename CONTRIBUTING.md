@@ -2,31 +2,27 @@
 
 ## Setup
 
+Proxhy is a [uv](https://docs.astral.sh/uv/) project.
+
 ```bash
 uv sync --group dev
+uv run pre-commit install
 ```
 
 ## Before opening a PR
 
-Run checks:
+Checks run automatically on commit via pre-commit. To run them manually:
 
 ```bash
-uv run task ci-lint
-uv run task typecheck
+uv run pre-commit run --all-files
 ```
 
-If lint/format fails, try auto-fixing it:
+Exclude `--all-files` to run it on only changes that you've added with `git add`.
+
+To auto-fix lint and format issues:
 
 ```bash
-uv run task lint
+uv run ruff check --fix . && uv run ruff format .
 ```
 
-Then re-run `uv run task ci-lint` to confirm. Type errors from pyrefly must be fixed manually.
-
-## Tasks
-
-| Command                 | Description                      |
-| ----------------------- | -------------------------------- |
-| `uv run task ci-lint`   | Check lint and format (no fixes) |
-| `uv run task typecheck` | Run type checker                 |
-| `uv run task lint`      | Auto-fix lint and format issues  |
+Type errors from pyrefly must be fixed manually.

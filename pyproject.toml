@@ -25,7 +25,7 @@ dependencies = [
 proxhy = "proxhy.main:main"
 
 [dependency-groups]
-dev = ["pyrefly", "ruff", "taskipy"]
+dev = ["pre-commit", "pyrefly", "ruff"]
 
 [build-system]
 requires = ["setuptools"]
@@ -55,11 +55,6 @@ where = ["."]
 
 [tool.setuptools.package-data]
 "assets" = ["*.json", "*.png"]
-
-[tool.taskipy.tasks]
-ci-lint = { cmd = "ruff check . && ruff format --check --diff .", help = "Check lint/format (no fix)" }
-lint = { cmd = "ruff check --fix . && ruff format .", help = "Auto-fix lint and format" }
-typecheck = { cmd = "pyrefly check", help = "Run type checker" }
 
 [tool.uv.workspace]
 members = ["mcauth", "petty", "compass"]
