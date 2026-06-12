@@ -13,7 +13,7 @@ import hypixel
 import orjson
 
 import mcauth as auth
-from mcauth.errors import AuthException
+from mcauth.errors import AuthException, InvalidCredentials
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
 from petty.protocol.crypt import (
@@ -423,6 +423,17 @@ class LoginPlugin:
                 self.access_token, self.username, self.uuid = await auth.load_auth_info(
                     self.username
                 )
+            except InvalidCredentials as err:
+                self.downstream.chat(
+                    TextComponent("Invalid credentials:")
+                    .appends(err.message)
+                    .color("red")
+                )
+                self.downstream.chat(
+                    TextComponent("Please log in again:").color("yellow")
+                )
+                self.device_code_task = self.create_task(self._start_device_code_flow())
+                return
             except Exception as e:
                 return self.downstream.send_packet(
                     0x40,

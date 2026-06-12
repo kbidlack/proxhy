@@ -3,6 +3,8 @@ class AuthException(Exception):
 
     Attributes
     ----------
+    message: str
+        User-friendly error message
     code : str | None
         A short machine-friendly error code (e.g., "MSA-INTERACTIVE", "MSA-WRONG-PASSWORD").
     detail : str | None
@@ -13,6 +15,7 @@ class AuthException(Exception):
         self, message: str = "", *, code: str | None = None, detail: str | None = None
     ):
         super().__init__(message)
+        self.message = message
         self.code = code
         self.detail = detail
 
