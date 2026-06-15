@@ -16,13 +16,6 @@ from petty.endpoints import Proxy
 from proxhy.proxhy import Proxhy
 from proxhy.utils import zero_pad_calver
 
-if platform.system() == "Windows":
-    import winloop as loop_impl  # type: ignore
-else:
-    import uvloop as loop_impl  # type: ignore
-
-loop_impl.install()
-
 _log_dir = user_log_path("proxhy")
 _log_dir.mkdir(parents=True, exist_ok=True)
 _log_file = _log_dir / f"proxhy_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log"
@@ -90,6 +83,12 @@ def parse_args():
         default=-1,
         help="Port to send to the server as what the client is connecting to (default: remote_port)",
     )
+    parser.add_argument(
+        "--use-asyncio",
+        action="store_true",
+        default=False,
+        help="Use the asyncio event loop instead of a faster platform-specific alternative",
+    )
     return parser.parse_args()
 
 
@@ -110,6 +109,16 @@ if not args.fake_host:
 
 if args.fake_port == -1:
     args.fake_port = args.remote_port
+
+if not args.use_asyncio:
+    if platform.system() == "Windows":
+        import winloop as loop_impl  # type: ignore
+    else:
+        import uvloop as loop_impl  # type: ignore
+
+    loop_impl.install()
+else:
+    loop_impl = asyncio  # for logging
 
 
 class ProxhyServer:
@@ -185,6 +194,7 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     if args.dev:
         logger.setLevel(logging.DEBUG)
         logger.info("DEV MODE ACTIVATED")
+        logger.debug(f"using event loop: {loop_impl.__name__}")
 
     return server
 
