@@ -4,6 +4,7 @@ import random
 import uuid
 from importlib.metadata import version
 from importlib.resources import files
+from json import JSONDecodeError
 from secrets import token_bytes
 from typing import TYPE_CHECKING, Literal
 from unittest.mock import Mock
@@ -566,15 +567,26 @@ class LoginPlugin:
     async def _check_for_update(self: ProxhyPlugin):
         async with httpx.AsyncClient() as aclient:
             current = utils.zero_pad_calver(version("proxhy"))
-            latest = (
-                (
-                    await aclient.get(
-                        "https://api.github.com/repos/kbidlack/proxhy/releases/latest"
+            try:
+                latest = (
+                    (
+                        await aclient.get(
+                            "https://api.github.com/repos/kbidlack/proxhy/releases/latest"
+                        )
                     )
+                    .json()
+                    .get("name")
                 )
-                .json()
-                .get("name")
-            )
+            except JSONDecodeError:
+                self.logger.warning(
+                    "failed to fetch current release version: could not parse API response"
+                )
+                return
+            except httpx.ReadTimeout:
+                self.logger.warning(
+                    "failed to fetch current release version: timed out"
+                )
+                return
 
         base_url = "https://github.com/kbidlack/proxhy/releases/tag/v{}"
         current_url = base_url.format(current)
