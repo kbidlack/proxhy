@@ -255,6 +255,25 @@ class CommandsPlugin:
                     if segments[0].startswith("//"):  # send output of command
                         # remove chat formatting
                         output = re.sub(r"§.", "", str(output))
+                        if len(output) > 256:
+                            self.downstream.chat(
+                                TextComponent(
+                                    "Can't send that to the chat, it's too long!"
+                                ).color("red")
+                            )
+                            self.downstream.chat(
+                                TextComponent("To see the output of")
+                                .color("gray")
+                                .italic()
+                                .appends(
+                                    TextComponent(cmd_s := f"/{cmd_name}")
+                                    .color("aqua")
+                                    .hover_text(cmd_s)
+                                    .click_event("suggest_command", cmd_s)
+                                )
+                                .append(", re-run it with a single slash.")
+                            )
+                            return
                         if self.broadcast_chat_toggled:
                             self.bc_chat(self.username, output)
                         else:
