@@ -2,16 +2,15 @@
 
 ## Setup
 
-Proxhy is a [uv](https://docs.astral.sh/uv/) project.
+Proxhy is a [uv](https://docs.astral.sh/uv/) project. To set it up:
 
 ```bash
 uv sync --group dev
-uv run pre-commit install
 ```
 
 ## Before opening a PR
 
-Checks run automatically on commit via pre-commit. To run them manually:
+Make sure to run pre-commit:
 
 ```bash
 uv run pre-commit run --all-files
