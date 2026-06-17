@@ -25,6 +25,7 @@ from petty.protocol.datatypes import (
     Slot,
     SlotData,
     String,
+    TextComponent,
     UnsignedByte,
     VarInt,
 )
@@ -663,7 +664,7 @@ def build_player_list_add_packet(
     properties: list[dict] | None = None,
     gamemode: int = 0,
     ping: int = 0,
-    display_name: str | None = None,
+    display_name: TextComponent | None = None,
 ) -> bytes:
     """Build a Player List Item (0x38) packet with action ADD_PLAYER."""
     data = VarInt.pack(0)  # Action: ADD_PLAYER

@@ -8,7 +8,7 @@ from typing import Any
 from numba import float64, int64
 from numba.experimental import jitclass
 
-from petty.protocol.datatypes import SlotData
+from petty.protocol.datatypes import SlotData, TextComponent
 
 _vec3d_spec = [
     ("x", float64),
@@ -132,7 +132,7 @@ class PlayerInfo:
     properties: list[dict[str, Any]] = field(default_factory=list)
     gamemode: int = 0
     ping: int = 0
-    display_name: str | None = None
+    display_name: TextComponent | None = None
 
 
 @dataclass

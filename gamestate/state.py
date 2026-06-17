@@ -1234,7 +1234,7 @@ class GameState:
                 gamemode = buff.unpack(VarInt)
                 ping = buff.unpack(VarInt)
                 has_display_name = buff.unpack(Boolean)
-                display_name = buff.unpack(Chat) if has_display_name else None
+                display_name = Chat.unpack_component(buff) if has_display_name else None
 
                 self.player_list[uuid] = PlayerInfo(
                     uuid=uuid,
@@ -1263,7 +1263,7 @@ class GameState:
 
             elif action == PlayerListAction.UPDATE_DISPLAY_NAME:
                 has_display_name = buff.unpack(Boolean)
-                display_name = buff.unpack(Chat) if has_display_name else None
+                display_name = Chat.unpack_component(buff) if has_display_name else None
                 if uuid in self.player_list:
                     self.player_list[uuid].display_name = display_name or None
 
