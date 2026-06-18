@@ -161,4 +161,3 @@ cython_debug/
 # proxhy specific files
 stat_log.jsonl
 proxhy_settings.json
-proxhy-gui/src/proxhy_inner

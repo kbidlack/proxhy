@@ -1,6 +1,6 @@
 # Proxhy
 
-An advanced, feature-rich proxy for players who want to level up their Hypixel experience! Proxhy is **free forever**.
+An advanced, feature-rich Minecraft 1.8.9 proxy for players who want to level up their Hypixel experience! Proxhy is **free forever**.
 
 Proxhy adds a multitude of customizable quality of life features, allows you to view player stats in the tab list, and can broadcast live games to your friends, allowing them to spectate while you play.
 
@@ -14,7 +14,7 @@ _All relevant features may be disabled at any time through the settings menu._
 
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#sc) `/sc` to view any player's game stats
 
-&nbsp;&nbsp;&nbsp;&nbsp;[↗](#settings) Settings GUI accessed via `/setting` lets you enable, disable, or customize any feature
+&nbsp;&nbsp;&nbsp;&nbsp;[↗](#settings) Settings menu accessed via `/setting` lets you enable, disable, or customize any feature
 
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#autoboop) An Autoboop list to automatically `/boop` select players on your friend list when they join
 
@@ -67,45 +67,27 @@ _All relevant features may be disabled at any time through the settings menu._
 2. Run: `xattr -cr /Applications/Proxhy.app`
 3. Open Proxhy normally
 
-## Alternative Installiation
+### How to use
 
-You can also install and run Proxhy without a GUI.
+After opening the Proxhy app, press the "Start" button in the top-left corner. Then, join the server IP `localhost:41223` on Minecraft version 1.8.9 from any client.
 
-The preferred method of installation is to use a Python package manager like `uv`:
+## Alternative Installation
 
-```bash
-uv tool install --index=https://kbidlack.github.io/proxhy/simple proxhy
-```
-
-You can also try out an ephemerally installed version with `uvx`:
+The easiest way to run Proxhy is to use [uv](https://docs.astral.sh/uv/):
 
 ```bash
 uvx --index=https://kbidlack.github.io/proxhy/simple proxhy
 ```
 
-### Upgrading
+This will fetch the latest Proxhy release and run it. To update, simply rerun the command. By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:41223`.
+
+You can also install Proxhy with uv:
 
 ```bash
-uv tool upgrade proxhy
+uv tool install --index=https://kbidlack.github.io/proxhy/simple proxhy
 ```
 
-### Usage
-
-Start the proxy:
-
-```bash
-proxhy
-```
-
-or
-
-```bash
-uv tool run proxhy
-```
-
-By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:41223`.
-
-### Options
+### CLI Options
 
 ```
 -rh, --remote-host HOST    Remote server host (default: mc.hypixel.net)
@@ -126,7 +108,7 @@ By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:4122
 - **Linux**: `~/.config/proxhy`, `~/.cache/proxhy`, `~/.local/share/proxhy`, `~/.local/state/proxhy/log`
 - **Windows**: `%LOCALAPPDATA%\proxhy`, `%LOCALAPPDATA%\proxhy\Cache`, `%LOCALAPPDATA%\proxhy\Logs`
 
-### GUI
+### Application
 
 Delete the app file:
 
@@ -156,6 +138,7 @@ The optional `window` parameter limits stats to a recent time period in days —
 Hovering over the stat output in chat shows per-mode breakdowns. If a player is currently online, `(ONLINE)` is shown next to their name.
 
 Requires a valid Hypixel API key, stored securely in the system keyring. You can get one at [https://developer.hypixel.net](https://developer.hypixel.net)
+
 </details>
 <details>
   <summary><h3><a id="settings"></a><strong>Settings menu</strong></h3></summary>
@@ -201,12 +184,13 @@ Broadcasts let friends using Proxhy spectate your game in real time, or let you 
 - `/broadcast accept <player>` — Accept a pending join request or invite.
 - `/broadcast list` — List all spectators currently connected to your broadcast.
 - `/broadcast chat [message]` — Send a message in the private broadcast chat channel. You can toggle broadcast chat with `/chat bc`.
-- `/broadcast slime <player>` — Slime out* a spectator from your broadcast.
+- `/broadcast slime <player>` — Slime out\* a spectator from your broadcast.
 - `/broadcast server` — Show your broadcast server node ID.
 
 Trusted players (see [Broadcast whitelists](#broadcast-whitelist)) are accepted into your broadcast automatically without a prompt; use `/bc trust` to manage trusted players.
 
-_* Note: "slime out" is synonymous with "kick"._
+_\* Note: "slime out" is synonymous with "kick"._
+
 </details>
 <details>
   <summary><h3><a id="watch"></a><strong><code>/watch</code> Broadcast command</strong></h3></summary>
