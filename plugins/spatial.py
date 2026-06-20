@@ -64,7 +64,16 @@ class SpatialPlugin:
         self.downstream.set_actionbar_text(
             f"§l{color_mappings[limit_dist]}{limit_dist} {'BLOCK' if limit_dist == 1 else 'BLOCKS'} §f§rfrom height limit!"
         )
-        for _ in range(10):
+
+        if self.settings.bedwars.visual.height_limit_particles.get() != "OFF":
+            self.compute_particles(particle_y)
+
+    def compute_particles(self: ProxhyPlugin, particle_y):
+        PARTICLE_AMOUNTS = {"MINIMAL": 2, "REDUCED": 6, "FULL": 10}
+        amount = PARTICLE_AMOUNTS[
+            self.settings.bedwars.visual.height_limit_particles.get()
+        ]
+        for _ in range(amount):
             particle_x = self.gamestate.position.x + np.random.normal(0, 0.7) * 3
             particle_z = self.gamestate.position.z + np.random.normal(0, 0.7) * 3
             self.display_particle(

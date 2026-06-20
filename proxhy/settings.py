@@ -104,13 +104,36 @@ class VisualGroup(SettingGroup):
         self.height_limit_warnings: Setting[Literal["OFF", "ON"]] = create_setting(
             key="bedwars.visual.height_limit_warnings",
             display_name="Height Limit Warnings",
-            description="When you're near the top or bottom of the map, display particles and a warning in the actionbar.",
+            description="When you're near the top or bottom of the map, display a warning in the actionbar.",
             item="minecraft:quartz_stairs",
             states={
                 "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
                 "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
             },
             default_state="ON",
+            storage=storage,
+        )
+
+        self.height_limit_particles: Setting[
+            Literal["OFF", "MINIMAL", "REDUCED", "FULL"]
+        ] = create_setting(
+            key="bedwars.visual.height_limit_particles",
+            display_name="Height Limit Particles",
+            description="When you're near the top or bottom of the map, show particles at the edge of the build region.",
+            item="minecraft:redstone",
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "MINIMAL": (
+                    Item.from_display_name("Orange Stained Glass Pane"),
+                    "gold",
+                ),
+                "REDUCED": (
+                    Item.from_display_name("Yellow Stained Glass Pane"),
+                    "yellow",
+                ),
+                "FULL": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
+            default_state="FULL",
             storage=storage,
         )
 
