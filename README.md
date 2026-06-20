@@ -1,5 +1,12 @@
 # Proxhy
 
+[![Latest Release](https://img.shields.io/github/v/release/kbidlack/proxhy?style=flat-square)](https://github.com/kbidlack/proxhy/releases/latest)
+[![Discord](https://img.shields.io/discord/1517293954029195344?logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=gray)](https://discord.com/invite/3qFP9SQT)
+
+[![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.zip)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.exe)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.AppImage)
+
 An advanced, feature-rich Minecraft 1.8.9 proxy for players who want to level up their Hypixel experience! Proxhy is **free forever**.
 
 Proxhy adds a multitude of customizable quality of life features, allows you to view player stats in the tab list, and can broadcast live games to your friends, allowing them to spectate while you play.
@@ -47,8 +54,6 @@ _All relevant features may be disabled at any time through the settings menu._
 &nbsp;&nbsp;&nbsp;&nbsp;[↗](#height-limit) Particles to visualize the lower and upper height limits when you get close to them
 
 ## Download
-
-[![Latest Release](https://img.shields.io/github/v/release/kbidlack/proxhy?style=flat-square)](https://github.com/kbidlack/proxhy/releases/latest)
 
 | Platform              | Download                                                                                           |
 | --------------------- | -------------------------------------------------------------------------------------------------- |
