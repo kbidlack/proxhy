@@ -789,7 +789,7 @@ class BroadcastPlugin:
                     "has invited you to join their broadcast! You have 60 seconds to accept.",
                     "Accept",
                     f"/bc accept {request.from_player}",
-                    "Accept invite from ",
+                    "Accept invite from",
                 )
             )
             request.expires_task = asyncio.get_running_loop().call_later(
@@ -820,7 +820,7 @@ class BroadcastPlugin:
                     "wants to join your broadcast! You have 60 seconds to accept.",
                     "Accept",
                     f"/bc accept {request.from_player}",
-                    "Let ",
+                    "Accept join request from",
                 )
             )
             request.expires_task = asyncio.get_running_loop().call_later(
