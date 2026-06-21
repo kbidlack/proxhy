@@ -375,6 +375,7 @@ class PlayerSpectateWindow(Window):
                     )
                 ),
             ),
+            callback=self._ender_pearl_callback,
         )
         self.proxy.create_task(self._update_slots())
 
@@ -477,3 +478,15 @@ class PlayerSpectateWindow(Window):
     ):
         self.close()
         self.proxy._spectate(self.entity.entity_id)
+
+    async def _ender_pearl_callback(
+        self,
+        window: Window,
+        slot: int,
+        button: int,
+        action_num: int,
+        mode: int,
+        clicked_item: SlotData,
+    ):
+        self.close()
+        await self.proxy._command_watch()
