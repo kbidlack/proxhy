@@ -172,7 +172,8 @@ class PacketNode(ABC):
                 task.cancel()
                 try:
                     await task
-                except asyncio.CancelledError:
+                except asyncio.CancelledError, RuntimeError:
+                    # sometimes raises 'RuntimeError: await wasn't used with future' ?
                     pass
 
         current = asyncio.current_task()

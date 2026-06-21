@@ -3,6 +3,7 @@ import random
 from typing import TYPE_CHECKING, Literal, TypedDict
 
 import hypixel
+import numba
 import numpy as np
 
 from gamestate.state import Entity, Player, PlayerAbilityFlags, Rotation, Vec3d
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
     from broadcasting.plugin import BroadcastPeerPlugin
 
 
+@numba.njit(cache=True, fastmath=True)
 def compute_look(camera_pos: Vec3d, object_pos: Vec3d):
     delta = np.array(
         [
