@@ -250,7 +250,7 @@ class LoginPlugin:
                     .click_event("open_url", device["verification_uri"])
                     .hover_text(TextComponent("Open in browser").color("yellow"))
                 )
-                .appends("and enter code")
+                .appends("and enter this code:")
                 .appends(
                     TextComponent(device["user_code"])
                     .color("green")
@@ -262,7 +262,8 @@ class LoginPlugin:
                         .appends(
                             TextComponent(device["user_code"]).color("green").bold()
                         )
-                    )
+                    ),
+                    separator="\n",
                 )
             )
 
@@ -413,7 +414,9 @@ class LoginPlugin:
 
         if reason == "logging_in":
             self.downstream.chat(
-                "You have not logged into Proxhy with this account yet!"
+                TextComponent(
+                    "You have not logged into Proxhy with this account yet!"
+                ).color("yellow")
             )
             self.device_code_task = self.create_task(self._start_device_code_flow())
 
