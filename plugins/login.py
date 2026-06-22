@@ -173,9 +173,13 @@ class LoginPlugin:
         self.username = buff.unpack(String)
 
         if not auth.user_exists(self.username):
+            self.logger.debug(f"user {self.username} does not exist; logging in")
             return await self.login()
 
         if auth.token_needs_refresh(self.username):
+            self.logger.debug(
+                f"user {self.username} needs a token refresh; regenerating credentials"
+            )
             return await self.login(reason="regen")
 
         try:
@@ -188,6 +192,9 @@ class LoginPlugin:
                 self.transferring_to_server = False
             else:
                 packet_id = 0x00
+            self.logger.warning(
+                f"failed to connect to {self.CONNECT_HOST[0]}:{self.CONNECT_HOST[1]}; {self.state=}"
+            )
             self.downstream.send_packet(
                 packet_id,
                 Chat.pack(
@@ -310,6 +317,8 @@ class LoginPlugin:
                 f"Logged in! Redirecting to {self.CONNECT_HOST[0]}..."
             ).color("green")
             self.downstream.chat(success_msg)
+            if self.keep_alive_task:
+                self.keep_alive_task.cancel()
             self.state = State.LOGIN
             self.transferring_to_server = True
 
@@ -326,6 +335,9 @@ class LoginPlugin:
             if self.state == State.PLAY and self.downstream.open and self.logging_in:
                 self.downstream.send_packet(0x00, VarInt.pack(random.randint(0, 256)))
             else:
+                self.logger.debug(
+                    f"{self.state=}, {self.downstream.open=}, {self.logging_in=}; closing"
+                )
                 await self.close()
                 break
 
@@ -404,6 +416,7 @@ class LoginPlugin:
                 "You have not logged into Proxhy with this account yet!"
             )
             self.device_code_task = self.create_task(self._start_device_code_flow())
+
         else:
             self.regenerating_credentials = True
             self.downstream.set_title(
