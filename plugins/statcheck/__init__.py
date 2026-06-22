@@ -366,7 +366,7 @@ class StatCheckPlugin:
         try:
             await self.hypixel_client.player_count()
             self._api_key_valid = True
-        except InvalidApiKey, KeyRequired:
+        except InvalidApiKey, KeyRequired, MalformedApiKey:
             self._api_key_valid = False
 
         return self._api_key_valid
@@ -1196,21 +1196,18 @@ class StatCheckPlugin:
             else:
                 raise CommandException("You have not set your Hypixel API key yet!")
 
-        try:
-            self.hypixel_client.remove_key(self.hypixel_api_key)
-            self.hypixel_client.add_key(key)
-            # hypixel.Client.validate_keys does not work anymore
-            await self.validate_api_key()
-        except MalformedApiKey, InvalidApiKey:
-            self.hypixel_client.remove_key(key)
-            self.hypixel_client.add_key(self.hypixel_api_key)
+        self.hypixel_client.remove_key(self.hypixel_api_key)
+        self.hypixel_client.add_key(key)
+        # hypixel.Client.validate_keys does not work anymore
+        await self.validate_api_key()  # sets self._api_key_valid automatically
+
+        if self._api_key_valid:
+            self.hypixel_api_key = key
+
+            self.game_error = None
+            self.downstream.chat(TextComponent("Updated API Key!").color("green"))
+        else:
             raise CommandException("Invalid API Key!")
-
-        self.hypixel_api_key = key
-        self._api_key_valid = True
-
-        self.game_error = None
-        self.downstream.chat(TextComponent("Updated API Key!").color("green"))
 
     def match_kill_message(self: ProxhyPlugin, message: str) -> re.Match | None:
         """Match a kill message against known patterns.
