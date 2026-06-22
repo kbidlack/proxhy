@@ -25,9 +25,19 @@ async def main():
     parser = argparse.ArgumentParser(prog="compass")
     parser.add_argument("-k", "--keyfile")
     parser.add_argument("-p", "--http-port", type=int, default=None)
+    parser.add_argument(
+        "--no-auth",
+        action="store_true",
+        help="disable Mojang session verification (for testing)",
+    )
     args = parser.parse_args()
 
-    server = CompassServer()
+    if args.no_auth:
+        print(
+            "WARNING: auth is disabled — any username can connect without verification"
+        )
+
+    server = CompassServer(no_auth=args.no_auth)
 
     if args.keyfile is None:
         key_bytes = random.randbytes(32)

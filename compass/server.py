@@ -1,6 +1,8 @@
 import asyncio
+import hashlib
 import os
 import random
+import uuid
 from asyncio import StreamReader, StreamWriter
 
 import httpx
@@ -22,10 +24,19 @@ DER_PRIVATE_KEY, DER_PUBLIC_KEY = generate_rsa_keypair()
 SESSION_SERVER_URL = "https://sessionserver.mojang.com/session/minecraft/hasJoined"
 
 
+def _offline_uuid(username: str) -> str:
+    # Matches Java's UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes("UTF-8"))
+    md5 = bytearray(hashlib.md5(f"OfflinePlayer:{username}".encode()).digest())
+    md5[6] = md5[6] & 0x0F | 0x30
+    md5[8] = md5[8] & 0x3F | 0x80
+    return str(uuid.UUID(bytes=bytes(md5)))
+
+
 class CompassServer:
     verified_clients: dict[str, ConnectedClient]
 
-    def __init__(self):
+    def __init__(self, no_auth: bool = False):
+        self.no_auth = no_auth
         self.clients: set[ConnectedClient] = set()
         # username: ConnectedClient instance
         self.verified_clients = dict()
@@ -37,7 +48,7 @@ class CompassServer:
 
     async def handle_connection(self, conn: pyroh.Connection):
         reader, writer = await conn.accept_bi()
-        self.clients.add(ConnectedClient(conn, reader, writer, self))
+        self.clients.add(ConnectedClient(conn, reader, writer, self, self.no_auth))
 
 
 class ConnectedClient(Client):
@@ -54,10 +65,12 @@ class ConnectedClient(Client):
         reader: StreamReader,
         writer: StreamWriter,
         server: CompassServer,
+        no_auth: bool = False,
     ):
         super().__init__(reader, writer, autostart=True)
 
         self.compass_server = server
+        self.no_auth = no_auth
         self.state = State.LOGIN
 
         self.conn = conn
@@ -82,6 +95,19 @@ class ConnectedClient(Client):
     @listen(0x00, State.LOGIN, blocking=True)
     async def _packet_login_start(self, buff: Buffer) -> None:
         self._username = buff.unpack(String)
+
+        if self.no_auth:
+            self.uuid = _offline_uuid(self._username)
+            self.downstream.send_packet(
+                0x02,
+                String.pack(self.uuid),
+                String.pack(self._username),
+            )
+            self.verified = True
+            self.compass_server.verified_clients[self._username] = self
+            self.state = State.PLAY
+            self.create_task(self.keep_alive())
+            return
 
         self._verify_token = os.urandom(4)
 
