@@ -1,11 +1,9 @@
-from importlib.metadata import version
 from typing import TYPE_CHECKING
 
 from petty.nbt import dumps, from_dict
 from petty.protocol.datatypes import Item, SlotData, String, TextComponent
 from plugins.commands import CommandException, command
 from proxhy.argtypes import Gamemode, Submode
-from proxhy.utils import zero_pad_calver
 
 from .window import Window, get_trigger
 
@@ -14,11 +12,6 @@ if TYPE_CHECKING:
 
 
 class MiscPlugin:
-    @command("version")
-    async def _command_version(self: ProxhyPlugin):
-        """Get the currently running version of Proxhy."""
-        return TextComponent(zero_pad_calver(version("proxhy"))).color("yellow")
-
     @command("rq")
     async def _command_requeue(self: ProxhyPlugin):
         """Requeue the last played game."""

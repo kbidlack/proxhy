@@ -10,7 +10,7 @@ uv sync --group dev
 
 ## Before opening a PR
 
-Make sure to run pre-commit:
+After `git add`ing all of your changes, make sure to run pre-commit:
 
 ```bash
 uv run pre-commit run --all-files

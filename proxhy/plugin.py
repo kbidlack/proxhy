@@ -11,6 +11,7 @@ from plugins.hypixelstate import HypixelStatePlugin
 from plugins.login import LoginPlugin
 from plugins.misc import MiscPlugin
 from plugins.settings import SettingsPlugin
+from plugins.slashproxhy import SlashProxhy
 from plugins.sound import SoundPlugin
 from plugins.spatial import SpatialPlugin
 from plugins.statcheck import StatCheckPlugin
@@ -29,6 +30,7 @@ class ProxhyPlugin(  # type: ignore
     LoginPlugin,
     MiscPlugin,
     SettingsPlugin,
+    SlashProxhy,
     SoundPlugin,
     SpatialPlugin,
     StatCheckPlugin,
