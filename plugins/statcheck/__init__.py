@@ -8,6 +8,7 @@ from enum import StrEnum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Literal, TypeIs, get_args
 
+import hypixel
 import keyring
 from hypixel import (
     ApiError,
@@ -1181,18 +1182,20 @@ class StatCheckPlugin:
             else:
                 raise CommandException("You have not set your Hypixel API key yet!")
 
+        test_client = hypixel.Client(key, cache_h=False, cache_m=False)
+        try:
+            await test_client.player_count()
+        except InvalidApiKey, KeyRequired, MalformedApiKey:
+            raise CommandException(self.get_api_key_err())
+        finally:
+            await test_client.close()
+
         self.hypixel_client.remove_key(self.hypixel_api_key)
         self.hypixel_client.add_key(key)
-        # hypixel.Client.validate_keys does not work anymore
-        await self.validate_api_key()  # sets self._api_key_valid automatically
-
-        if self._api_key_valid:
-            self.hypixel_api_key = key
-
-            self.game_error = None
-            self.downstream.chat(TextComponent("Updated API Key!").color("green"))
-        else:
-            raise CommandException(self.get_api_key_err())
+        self.hypixel_api_key = key
+        self._api_key_valid = True
+        self.game_error = None
+        self.downstream.chat(TextComponent("Updated API Key!").color("green"))
 
     def match_kill_message(self: ProxhyPlugin, message: str) -> re.Match | None:
         """Match a kill message against known patterns.
