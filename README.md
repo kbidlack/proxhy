@@ -104,6 +104,11 @@ uv tool install --index=https://kbidlack.github.io/proxhy/simple proxhy
 -fp, --fake-port PORT      Port to report to the server (default: remote-port)
 ```
 
+## Updating
+You'll be notified when a new update is available in the launcher and in game. If you're using the app, click the `↺ Update proxhy` button.
+
+If you installed via `uv`, rerun the `uvx` command or run `uv upgrade proxhy` to get the latest version.
+
 ## Uninstallation
 
 > [!NOTE]
