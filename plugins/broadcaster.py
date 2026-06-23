@@ -230,6 +230,16 @@ class BroadcastPlugin:
             uuid=lambda player: player.uuid,
         ).register(self, onto=bc)
 
+        PlayerListSystem(
+            "block",
+            label="blocked players",
+            help="Manage blocked players.",
+            key=lambda proxy: f"blocked:{proxy.uuid}",
+            add_type=MojangPlayer,
+            display=lambda player: f"§b{player.name}",
+            uuid=lambda player: player.uuid,
+        ).register(self, onto=bc)
+
     async def _get_player_endpoint_addr(
         self: ProxhyPlugin, player: Lazy[MojangPlayer]
     ) -> tuple[MojangPlayer, pyroh.EndpointAddr]:
