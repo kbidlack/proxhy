@@ -160,10 +160,10 @@ class BroadcastPlugin:
             self._last_broadcast_request_time = asyncio.get_event_loop().time()
             self.create_task(self._iphone_ringtone())
             self.downstream.chat(
-                TextComponent("Sent broadcast request to ")
+                TextComponent("Sent broadcast request to")
                 .color("green")
-                .append(TextComponent(mplayer.name).color("aqua"))
-                .appends("! Waiting for their response...")
+                .appends(TextComponent(mplayer.name).color("aqua"))
+                .append("! Waiting for their response...")
             )
             self.sent_broadcast_requests.add(mplayer.name)
 

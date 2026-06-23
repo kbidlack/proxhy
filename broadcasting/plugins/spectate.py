@@ -37,19 +37,21 @@ if TYPE_CHECKING:
 
 
 @numba.njit(cache=True, fastmath=True)
-def compute_look(camera_pos: Vec3d, object_pos: Vec3d):
+def compute_look(
+    cx: float, cy: float, cz: float, ox: float, oy: float, oz: float
+) -> tuple[float, float]:
     delta = np.array(
         [
-            object_pos.x - camera_pos.x,
-            object_pos.y - camera_pos.y,
-            object_pos.z - camera_pos.z,
+            ox - cx,
+            oy - cy,
+            oz - cz,
         ],
         dtype=np.float64,
     )
 
     dx, dy, dz = delta
 
-    r = np.linalg.norm(delta)
+    r = np.sqrt(dx**2 + dy**2 + dz**2)
 
     # yaw: xz-plane, starts at (0, +Z), ccw, degrees
     yaw = -np.degrees(np.arctan2(dx, dz))
@@ -57,7 +59,7 @@ def compute_look(camera_pos: Vec3d, object_pos: Vec3d):
 
     pitch = -np.degrees(np.arcsin(dy / r))
 
-    return Rotation(yaw, pitch)
+    return float(yaw), float(pitch)
 
 
 class BroadcastPeerSpectatePlugin:
@@ -128,7 +130,15 @@ class BroadcastPeerSpectatePlugin:
         relative_position = Vec3d(2, 2, 2)
         position = self.proxy.gamestate.position + relative_position
 
-        rotation = compute_look(position, self.proxy.gamestate.position)
+        yaw, pitch = compute_look(
+            position.x,
+            position.y,
+            position.z,
+            self.proxy.gamestate.position.x,
+            self.proxy.gamestate.position.y + 1,  # to look closer to head
+            self.proxy.gamestate.position.z,
+        )
+        rotation = Rotation(yaw, pitch)
         return position, rotation
 
     async def _update_spec_task(self: BroadcastPeerPlugin):
