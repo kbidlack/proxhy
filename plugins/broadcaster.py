@@ -671,6 +671,32 @@ class BroadcastPlugin:
 
             self.upstream.writer.write_eof()
 
+            # remove all entities
+            entity_ids = list(self.gamestate.entities.keys())
+            if entity_ids:
+                new_proxy.downstream.send_packet(
+                    0x13,
+                    VarInt.pack(len(entity_ids)),
+                    *(VarInt.pack(eid) for eid in entity_ids),
+                )
+
+            # remove players from tab
+            player_uuids = list(self.gamestate.player_list.keys())
+            if player_uuids:
+                entries = []
+                for uid_str in player_uuids:
+                    try:
+                        entries.append(UUID.pack(uuid_mod.UUID(uid_str)))
+                    except ValueError:
+                        pass
+                if entries:
+                    new_proxy.downstream.send_packet(
+                        0x38,
+                        VarInt.pack(4),  # action: remove player
+                        VarInt.pack(len(entries)),
+                        *entries,
+                    )
+
             await new_proxy.join(self.username, node_id)
         except CommandException:
             self.joining_broadcast = False
