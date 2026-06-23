@@ -496,11 +496,7 @@ class StatCheckPlugin:
     ):
         if data == ["OFF", "ON"]:
             if not await self.validate_api_key():
-                self.downstream.chat(
-                    TextComponent(
-                        "Invalid Hypixel API Key; will not be able to refresh stats in tab!"
-                    ).color("red")
-                )
+                await self.send_api_key_err()
 
         self._rebuild_display_names()
 
@@ -665,7 +661,7 @@ class StatCheckPlugin:
             ApiError,
         ) as err:
             err_messages: dict[type, TextComponent] = {
-                InvalidApiKey: TextComponent("Invalid API Key!").color("red"),
+                InvalidApiKey: self.get_api_key_err(),
                 KeyRequired: TextComponent("No API Key provided!").color("red"),
                 RateLimitError: TextComponent("Rate limit!").color("red"),
                 TimeoutError: TextComponent(
@@ -1059,18 +1055,7 @@ class StatCheckPlugin:
             m = JOIN_RE.match(message)
             if m and m.group("ign").casefold() == self.nick_or_username.casefold():
                 if not await self.validate_api_key():
-                    self.downstream.chat(
-                        TextComponent("Invalid API key! ")
-                        .color("red")
-                        .append(
-                            TextComponent("(developer.hypixel.net)")
-                            .underlined()
-                            .click_event(
-                                "open_url", "https://developer.hypixel.net/dashboard/"
-                            )
-                            .color("gray")
-                        )
-                    )
+                    await self.send_api_key_err()
 
     @subscribe("chat:server:ONLINE: .*")
     async def _statcheck_event_chat_server_who(
@@ -1207,7 +1192,7 @@ class StatCheckPlugin:
             self.game_error = None
             self.downstream.chat(TextComponent("Updated API Key!").color("green"))
         else:
-            raise CommandException("Invalid API Key!")
+            raise CommandException(self.get_api_key_err())
 
     def match_kill_message(self: ProxhyPlugin, message: str) -> re.Match | None:
         """Match a kill message against known patterns.

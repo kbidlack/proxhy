@@ -1,7 +1,7 @@
 from typing import TYPE_CHECKING
 
 from petty.events import listen_client, listen_server
-from petty.protocol.datatypes import Buffer, Chat, String
+from petty.protocol.datatypes import Buffer, Chat, String, TextComponent
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
@@ -24,3 +24,27 @@ class ChatPlugin:
         )
         if not results:
             self.upstream.send_packet(0x01, buff.getvalue())
+
+    async def send_api_key_err(self: ProxhyPlugin):
+        self.downstream.chat(self.get_api_key_err())
+
+    def get_api_key_err(self: ProxhyPlugin):
+        err = (
+            TextComponent("API key is invalid! Get one at ")
+            .color("red")
+            .append(
+                TextComponent("developer.hypixel.net")
+                .underlined()
+                .click_event("open_url", "https://developer.hypixel.net/dashboard/")
+                .color("white")
+            )
+            .append(TextComponent(" and enter it using ").color("red"))
+            .append(
+                TextComponent("/key")
+                .underlined()
+                .click_event("suggest_command", "/key ")
+                .color("white")
+            )
+            .append(TextComponent(".").color("red"))
+        )
+        return err

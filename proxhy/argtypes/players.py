@@ -236,9 +236,7 @@ class HypixelPlayer(Player):
                 TextComponent("Hypixel API key not configured!").color("red")
             )
         except hypixel.InvalidApiKey:
-            raise CommandException(
-                TextComponent("Invalid Hypixel API key!").color("red")
-            )
+            raise CommandException(ctx.proxy.get_api_key_err())
         except hypixel.RateLimitError:
             raise CommandException(
                 TextComponent(
