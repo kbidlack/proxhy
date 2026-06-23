@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 import mcauth as auth
 from compass import CompassClient, RequestFailure
 from petty.protocol.datatypes import TextComponent
-from plugins.commands import CommandGroup
+from plugins.commands import CommandException, CommandGroup
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
@@ -29,6 +29,26 @@ class CompassPlugin:
     def _setup_compass_commands(self: ProxhyPlugin):
         compass = CommandGroup("compass", help="Compass client commands.")
 
+        @compass.command("initialize", "init")
+        async def _command_compass_init(self: ProxhyPlugin):
+            """Initialize the compass client."""
+            if self.compass_client.registered:
+                raise CommandException(
+                    "The Compass client has already been initialized!"
+                )
+
+            self.create_task(self.initialize_cc())
+            return TextComponent("Initializing Compass client...").color("yellow")
+
+        @compass.command("close")
+        async def _command_compass_close(self: ProxhyPlugin):
+            """Close the compass client."""
+            if not self.compass_client.registered:
+                raise CommandException("The Compass client is already closed!")
+
+            await self.compass_client.close()
+            return TextComponent("Closed the compass client!").color("green")
+
         @compass.command("status")
         async def _command_compass_status(self: ProxhyPlugin):
             """Get the compass client status."""
@@ -48,6 +68,8 @@ class CompassPlugin:
                     .click_event("suggest_command", self.compass_client.broker_url)
                 )
             )
+
+        self.command_registry.register(compass)
 
     async def initialize_cc(self: ProxhyPlugin):
         self.access_token, self.username, self.uuid = await auth.load_auth_info(
