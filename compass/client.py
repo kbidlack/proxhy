@@ -1,4 +1,6 @@
 import asyncio
+import json
+import logging
 import os
 from collections import defaultdict
 from dataclasses import dataclass
@@ -13,9 +15,11 @@ from petty.protocol.crypt import (
     generate_verification_hash,
     pkcs1_v15_padded_rsa_encrypt,
 )
-from petty.protocol.datatypes import Boolean, Buffer, Byte, ByteArray, String, VarInt
+from petty.protocol.datatypes import Buffer, ByteArray, String, VarInt
 
 from .errors import RequestFailure
+
+logger = logging.getLogger(__name__)
 
 SESSION_SERVER_JOIN_URL = "https://sessionserver.mojang.com/session/minecraft/join"
 
@@ -64,7 +68,7 @@ class AsyncDict[T]:
 @dataclass
 class Response:
     success: bool
-    details: str
+    data: dict
 
 
 class CompassClient(Server):
@@ -92,7 +96,8 @@ class CompassClient(Server):
         self.discoverable: bool = True
         self.whitelist: set[str] = set()
 
-        self.responses: AsyncDict[Response] = AsyncDict()
+        self.responses: AsyncDict[dict] = AsyncDict()
+        self.notifications: asyncio.Queue[dict] = asyncio.Queue()
         self.keep_alive_q = asyncio.Queue()
 
         self.request_counter = ByteCounter()
@@ -130,17 +135,14 @@ class CompassClient(Server):
         der_public_key = buff.unpack(ByteArray)
         verify_token = buff.unpack(ByteArray)
 
-        # Generate a random 16-byte shared secret.
         self._shared_secret = os.urandom(16)
 
-        # Compute the server hash for Mojang auth.
         server_hash = generate_verification_hash(
             _server_id.encode("ascii"),
             self._shared_secret,
             der_public_key,
         )
 
-        # Notify Mojang that we're joining this server.
         payload = {
             "accessToken": self.access_token,
             "selectedProfile": self.uuid,
@@ -154,7 +156,6 @@ class CompassClient(Server):
                 await self.close("Failed to authenticate with Mojang.")
                 return
 
-        # Encrypt shared secret and verify token with the server's public key.
         encrypted_shared_secret = pkcs1_v15_padded_rsa_encrypt(
             der_public_key, self._shared_secret
         )
@@ -162,15 +163,11 @@ class CompassClient(Server):
             der_public_key, verify_token
         )
 
-        # Send Encryption Response (C→S  0x01).
-
         self.upstream.send_packet(
             0x01,
             ByteArray.pack(encrypted_shared_secret),
             ByteArray.pack(encrypted_verify_token),
         )
-
-        # Enable AES/CFB8 encryption — everything from here on is encrypted.
 
         self.upstream.key = self._shared_secret
 
@@ -186,32 +183,61 @@ class CompassClient(Server):
     @listen(0x3F)
     async def _packet_plugin_message(self, buff: Buffer):
         channel = buff.unpack(String)
-        if not channel.startswith("COMPASS"):
-            return
-        else:
-            request_id = buff.unpack(Byte)
 
-        if channel == "COMPASS|RESPONSE":
-            success = buff.unpack(Boolean)
-            details = buff.unpack(String)
+        if channel == "COMPASS":
+            raw = buff.unpack(String)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError, ValueError:
+                logger.warning(
+                    "compass sent malformed JSON on COMPASS channel: %r", raw
+                )
+                await self.close("Malformed JSON from compass.")
+                return
 
-            self.responses.set(request_id, Response(success, details))
+            if not isinstance(msg, dict):
+                logger.warning("compass sent non-dict on COMPASS channel: %r", msg)
+                await self.close("Malformed JSON from compass.")
+                return
+
+            if "response_id" in msg:
+                self.responses.set(msg["response_id"], msg.get("data", {}))
+            else:
+                logger.warning(
+                    "compass sent unexpected message on COMPASS channel: %r", msg
+                )
+
+        elif channel == "COMPASS|NOTIFICATION":
+            raw = buff.unpack(String)
+            try:
+                msg = json.loads(raw)
+            except json.JSONDecodeError, ValueError:
+                logger.warning(
+                    "compass sent malformed JSON on COMPASS|NOTIFICATION: %r", raw
+                )
+                await self.close("Malformed JSON from compass.")
+                return
+
+            if not isinstance(msg, dict):
+                logger.warning("compass sent non-dict on COMPASS|NOTIFICATION: %r", msg)
+                await self.close("Malformed JSON from compass.")
+                return
+
+            await self.notifications.put(msg)
 
     @listen(0x00)
     async def _packet_keep_alive(self, buff: Buffer):
         ka_num = buff.unpack(VarInt)
-
         await self.keep_alive_q.put(ka_num)
 
     async def _keep_alive(self):
         if self.endpoint is None:
-            return  # TODO: log?
+            return
 
         while not self.closed.is_set():
             try:
                 async with asyncio.timeout(10):
                     num = await self.keep_alive_q.get()
-
                     self.upstream.send_packet(
                         0x00, VarInt.pack(num), String.pack(self.endpoint.ticket or "")
                     )
@@ -225,27 +251,46 @@ class CompassClient(Server):
         self._registered.clear()
         await super().close(reason, force=force)
 
-    async def _message(self, channel: str, *data: bytes) -> Response:
-        # raises TimeoutError or RequestFailure
+    def _send_json(self, payload: dict) -> None:
+        """Send a JSON payload to compass over the COMPASS plugin channel."""
+        self.upstream.send_packet(
+            0x17,
+            String.pack("COMPASS"),
+            String.pack(json.dumps(payload)),
+        )
+
+    async def _action(self, action: str, data: dict, *, timeout: float = 5.0) -> dict:
+        """Send a JSON action to compass and wait for the keyed response."""
         if not self.registered:
             raise RequestFailure("Compass client is not registered!")
 
-        self.upstream.send_packet(
-            0x17,
-            String.pack(channel),
-            Byte.pack(request_id := next(self.request_counter)),
-            *data,
+        request_id = next(self.request_counter)
+        self._send_json({"request_id": request_id, "action": action, "data": data})
+
+        try:
+            async with asyncio.timeout(timeout):
+                return await self.responses.get(request_id)
+        except TimeoutError:
+            raise RequestFailure(
+                f"Timed out waiting for compass response to {action!r}"
+            )
+
+    async def respond(self, response_id: int, data: dict) -> None:
+        """Send a response to an inbound compass notification (fire-and-forget)."""
+        if not self.registered:
+            raise RequestFailure("Compass client is not registered!")
+        self._send_json({"response_id": response_id, "data": data})
+
+    async def broadcast_outbound_request(self, player: str) -> dict:
+        """Request to join player's broadcast. Waits up to 65s for their response."""
+        return await self._action(
+            "broadcast.outbound_request", {"player": player}, timeout=65.0
         )
 
-        async with asyncio.timeout(2):
-            return await self.responses.get(request_id)
-
-    async def request(self, username: str) -> Response:
-        return await self._message("COMPASS|REQUEST", String.pack(username))
-
-    async def verify(self, username: str, node_id: str) -> Response:
-        return await self._message(
-            "COMPASS|VERIFY", String.pack(username), String.pack(node_id)
+    async def broadcast_outbound_invite(self, player: str) -> dict:
+        """Invite player to join your broadcast. Waits up to 65s for their response."""
+        return await self._action(
+            "broadcast.outbound_invite", {"player": player}, timeout=65.0
         )
 
     async def update_settings(
@@ -253,12 +298,14 @@ class CompassClient(Server):
     ) -> Response:
         if discoverable is not None:
             self.discoverable = discoverable
-        if whitelist:
+        if whitelist is not None:
             self.whitelist = whitelist
 
-        return await self._message(
-            "COMPASS|STATE",
-            Boolean.pack(self.discoverable),
-            Byte.pack(len(self.whitelist)),
-            *(String.pack(player) for player in self.whitelist),
+        data = await self._action(
+            "settings.update",
+            {
+                "discoverable": self.discoverable,
+                "whitelist": list(self.whitelist),
+            },
         )
+        return Response(success=bool(data.get("response")), data=data)

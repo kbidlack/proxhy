@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import os
 import random
 import uuid
@@ -11,13 +12,12 @@ import pyroh
 from petty.endpoints import Client
 from petty.events import listen_client as listen
 from petty.net import State
-from petty.protocol import Byte
 from petty.protocol.crypt import (
     generate_rsa_keypair,
     generate_verification_hash,
     pkcs1_v15_padded_rsa_decrypt,
 )
-from petty.protocol.datatypes import Boolean, Buffer, ByteArray, Chat, String, VarInt
+from petty.protocol.datatypes import Buffer, ByteArray, Chat, String, VarInt
 
 DER_PRIVATE_KEY, DER_PUBLIC_KEY = generate_rsa_keypair()
 
@@ -87,6 +87,8 @@ class ConnectedClient(Client):
         self.discoverable = True
         self.whitelist_enabled = False
         self.whitelist = set()
+
+        self.pending_responses: dict[int, asyncio.Future] = {}
 
     async def disconnect(self, reason: str) -> None:
         packet_id = 0x00 if self.state == State.LOGIN else 0x40
@@ -168,86 +170,105 @@ class ConnectedClient(Client):
         self.state = State.PLAY
         self.create_task(self.keep_alive())
 
+    def _send_json(self, channel: str, payload: dict) -> None:
+        self.downstream.send_packet(
+            0x3F,
+            String.pack(channel),
+            String.pack(json.dumps(payload)),
+        )
+
+    async def _ask(self, action: str, data: dict, timeout=60.0) -> dict[str, int | str]:
+        req_id = random.randint(0, 2147483647)
+        self._send_json(
+            "COMPASS|NOTIFICATION",
+            {
+                "request_id": req_id,
+                "action": action,
+                "data": data,
+            },
+        )
+        fut = asyncio.get_running_loop().create_future()
+        self.pending_responses[req_id] = fut
+        try:
+            async with asyncio.timeout(timeout):
+                return await fut
+        except TimeoutError:
+            return {"response": 0}
+        finally:
+            self.pending_responses.pop(req_id, None)
+
     @listen(0x17)
     async def _packet_plugin_message(self, buff: Buffer):
         channel = buff.unpack(String)
 
-        if not channel.startswith("COMPASS"):
+        if channel != "COMPASS":
             return
-        else:
-            request_id = buff.unpack(Byte)
 
-        if channel == "COMPASS|STATE":
-            e: Exception | None = None
-            try:
-                self.discoverable = buff.unpack(Boolean)
-                num_whitelist = buff.unpack(Byte)
-                self.whitelist = {buff.unpack(String) for _ in range(num_whitelist)}
+        raw = buff.unpack(String)
+        try:
+            msg = json.loads(raw)
+        except Exception:
+            return
 
-                success = True
-            except Exception as error:
-                success = False
-                e = error
+        if "response_id" in msg:
+            response_id = msg["response_id"]
+            if response_id in self.pending_responses:
+                self.pending_responses[response_id].set_result(msg.get("data", {}))
+            return
 
-            self.downstream.send_packet(
-                0x3F,
-                String.pack("COMPASS|RESPONSE"),
-                Byte.pack(request_id),
-                Boolean.pack(success),
-                String.pack(
-                    "Successfully updated state"
-                    if success
-                    else f"Failed to update state: {e}"
-                ),
+        request_id = msg.get("request_id")
+        action = msg.get("action")
+        data = msg.get("data", {})
+
+        if request_id is None or action is None:
+            return
+
+        if action == "settings.update":
+            self.discoverable = data.get("discoverable", True)
+            self.whitelist = set(data.get("whitelist", []))
+            self._send_json(
+                "COMPASS", {"response_id": request_id, "data": {"response": 1}}
             )
-        elif channel == "COMPASS|REQUEST":
-            username = buff.unpack(String)
-            client = self.compass_server.verified_clients.get(username)
 
-            def _reject_request():
-                self.downstream.send_packet(
-                    0x3F,
-                    String.pack("COMPASS|RESPONSE"),
-                    Byte.pack(request_id),
-                    Boolean.pack(False),  # request did not succeed
-                    String.pack(f"{username} is not available!"),
+        elif action in ("broadcast.outbound_request", "broadcast.outbound_invite"):
+            target_player = data.get("player")
+            if target_player not in self.compass_server.verified_clients:
+                self._send_json(
+                    "COMPASS", {"response_id": request_id, "data": {"response": 0}}
                 )
+                return
 
-            if client is None:
-                return _reject_request()
-            if not client.discoverable:
-                return _reject_request()
-            if client.whitelist and self._username not in client.whitelist:
-                return _reject_request()
-            self.downstream.send_packet(
-                0x3F,
-                String.pack("COMPASS|RESPONSE"),
-                Byte.pack(request_id),
-                Boolean.pack(True),
-                String.pack(client.ticket),
+            target_client = self.compass_server.verified_clients[target_player]
+
+            if not target_client.discoverable or (
+                target_client.whitelist
+                and self._username not in target_client.whitelist
+            ):
+                self._send_json(
+                    "COMPASS", {"response_id": request_id, "data": {"response": 0}}
+                )
+                return
+
+            inbound_action = (
+                "broadcast.inbound_request"
+                if action == "broadcast.outbound_request"
+                else "broadcast.inbound_invite"
             )
-        elif channel == "COMPASS|VERIFY":
-            username = buff.unpack(String)
-            node_id = buff.unpack(String)
 
-            client = self.compass_server.verified_clients.get(username)
+            response_data = await target_client._ask(
+                inbound_action,
+                {
+                    "player": self._username,
+                    "node_id": self.conn.remote_node_id,
+                },
+            )
 
-            if client is not None and client.conn.remote_node_id == node_id:
-                self.downstream.send_packet(
-                    0x3F,
-                    String.pack("COMPASS|RESPONSE"),
-                    Byte.pack(request_id),
-                    Boolean.pack(True),
-                    String.pack(client.uuid),
-                )
-            else:
-                self.downstream.send_packet(
-                    0x3F,
-                    String.pack("COMPASS|RESPONSE"),
-                    Byte.pack(request_id),
-                    Boolean.pack(False),
-                    String.pack(""),
-                )
+            if response_data.get("response") == 1:
+                response_data["ticket"] = target_client.ticket
+
+            self._send_json(
+                "COMPASS", {"response_id": request_id, "data": response_data}
+            )
 
     @listen(0x00)
     async def _packet_keep_alive(self, buff: Buffer):

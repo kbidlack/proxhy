@@ -1,4 +1,6 @@
 import asyncio
+import base64
+import os
 import random
 import re
 import uuid as uuid_mod
@@ -7,7 +9,6 @@ from typing import TYPE_CHECKING
 
 import pyroh
 
-import compass
 from broadcasting.plugin import BroadcastPeerPlugin
 from broadcasting.proxy import BroadcastPeerProxy
 from broadcasting.transform import (
@@ -24,7 +25,6 @@ from petty.protocol.datatypes import (
     UUID,
     Angle,
     Buffer,
-    Byte,
     Chat,
     Int,
     Short,
@@ -37,7 +37,6 @@ from plugins.commands import CommandException, CommandGroup, Lazy, command
 from proxhy.argtypes import BroadcastPlayer, MojangPlayer
 from proxhy.p2p import StreamIntent
 from proxhy.player_list import PlayerList, PlayerListSystem
-from proxhy.utils import offline_uuid
 
 from .broadcastee.proxy import broadcastee_plugin_list
 
@@ -49,9 +48,8 @@ if TYPE_CHECKING:
 class ConnectionRequest:
     from_player: str
     intent: StreamIntent
-    reader: asyncio.StreamReader
-    writer: asyncio.StreamWriter
-    conn: pyroh.Connection
+    compass_response_id: int
+    node_id: str
 
     expires_task: asyncio.TimerHandle | None = None
 
@@ -78,6 +76,9 @@ class BroadcastPlugin:
         self.received_broadcast_invites = dict()
         self.received_broadcast_requests = dict()
         self._last_broadcast_request_time: float = 0
+
+        # verifier -> (node_id, from_player, intent)
+        self._pending_verifiers: dict[bytes, tuple[str, str, StreamIntent]] = {}
 
         self._setup_broadcast_commands()
 
@@ -111,16 +112,140 @@ class BroadcastPlugin:
             self: ProxhyPlugin, player: Lazy[MojangPlayer]
         ):
             """Send a request to join a player's broadcast."""
-            mplayer, endpoint_addr = await self._get_player_endpoint_addr(player)
-            reader, writer = await self._ask_peer(
-                name=mplayer.name,
-                addr=endpoint_addr,
-                reason=StreamIntent.BROADCAST_REQUEST,
-                command="request",
-                sent_msg="Requested to join",
-                expired_msg="The broadcast request to ",
+            mplayer = await player
+
+            if not self.compass_client.registered:
+                raise CommandException("The compass client is not connected yet!")
+
+            if self.endpoint is None:
+                raise CommandException(
+                    TextComponent("The broadcast endpoint is not ready yet!")
+                    .color("red")
+                    .appends(TextComponent("(Try again)").color("gold"))
+                    .click_event("run_command", f"/bc join {mplayer.name}")
+                )
+
+            now = asyncio.get_event_loop().time()
+            if now - self._last_broadcast_request_time < 5:
+                raise CommandException(
+                    TextComponent(
+                        "Please wait before sending another broadcast request!"
+                    ).color("red")
+                )
+
+            if mplayer.name.casefold() == self.username.casefold():
+                raise CommandException("You cannot request to join yourself!")
+
+            if mplayer.name.casefold() in {c.username.casefold() for c in self.clients}:
+                raise CommandException(
+                    TextComponent(mplayer.name)
+                    .color("aqua")
+                    .appends("is already in the broadcast!")
+                )
+
+            if mplayer.name in self.sent_broadcast_requests:
+                raise CommandException(
+                    TextComponent("You already have a pending request to")
+                    .appends(TextComponent(mplayer.name).color("aqua"))
+                    .append("!")
+                )
+
+            if mplayer.name in self.sent_broadcast_invites:
+                raise CommandException(
+                    TextComponent("You already have a pending invite for")
+                    .appends(TextComponent(mplayer.name).color("aqua"))
+                    .append("!")
+                )
+
+            self._last_broadcast_request_time = asyncio.get_event_loop().time()
+            self.create_task(self._iphone_ringtone())
+            self.downstream.chat(
+                TextComponent("Sent broadcast request to ")
+                .color("green")
+                .append(TextComponent(mplayer.name).color("aqua"))
+                .appends("! Waiting for their response...")
             )
-            await self._join_broadcast_with_streams(reader, writer, endpoint_addr.id)
+            self.sent_broadcast_requests.add(mplayer.name)
+
+            try:
+                response_data = await self.compass_client.broadcast_outbound_request(
+                    mplayer.name
+                )
+            except RequestFailure as e:
+                raise CommandException(e.details)
+            finally:
+                self.sent_broadcast_requests.discard(mplayer.name)
+
+            if not response_data.get("response"):
+                raise CommandException(
+                    TextComponent(mplayer.name)
+                    .color("gold")
+                    .appends("denied your broadcast request!")
+                )
+
+            ticket = response_data.get("ticket")
+            verifier_b64 = response_data.get("verifier")
+
+            if not ticket or not verifier_b64:
+                self.logger.warning(
+                    "compass response missing ticket or verifier: %r", response_data
+                )
+                raise CommandException(
+                    "Compass sent an invalid response (missing ticket or verifier)."
+                )
+
+            try:
+                verifier = base64.b64decode(verifier_b64)
+            except Exception as e:
+                self.logger.warning("Failed to decode verifier %r: %s", verifier_b64, e)
+                raise CommandException("Compass sent an invalid verifier.")
+
+            self.downstream.chat(
+                TextComponent(mplayer.name)
+                .color("aqua")
+                .appends(
+                    TextComponent("accepted your request! Connecting...").color("green")
+                )
+            )
+
+            try:
+                async with asyncio.timeout(5):
+                    conn = await self.endpoint.connect(ticket, alpn=b"proxhy/1")
+                    reader, writer = await conn.open_bi()
+                    writer.write(verifier)
+            except TimeoutError:
+                raise CommandException(
+                    TextComponent("Timed out connecting to")
+                    .appends(TextComponent(mplayer.name).color("gold"))
+                    .append("!")
+                )
+            except OSError as e:
+                raise CommandException(
+                    TextComponent("Failed to connect to")
+                    .appends(TextComponent(mplayer.name).color("gold"))
+                    .append(f"! [OSError({e.errno})]")
+                )
+
+            try:
+                async with asyncio.timeout(5):
+                    accepted = int.from_bytes(await reader.read(1))
+            except TimeoutError:
+                writer.close()
+                raise CommandException("Timed out waiting for verification response.")
+            except Exception as e:
+                writer.close()
+                self.logger.warning(f"unknown error during verification: {e}")
+                raise CommandException("An unknown error occurred during verification!")
+
+            if not accepted:
+                writer.close()
+                raise CommandException(
+                    TextComponent(mplayer.name)
+                    .color("gold")
+                    .appends("rejected the connection after verification.")
+                )
+
+            await self._join_broadcast_with_streams(reader, writer, conn.remote_node_id)
 
         @bc.command("accept")
         async def _command_broadcast_accept(self: ProxhyPlugin, username: str):
@@ -137,27 +262,7 @@ class BroadcastPlugin:
                 )
 
             self._clear_pending_received(request)
-
-            if request.intent == StreamIntent.BROADCAST_INVITE:
-                self.downstream.chat(
-                    TextComponent("Joining ")
-                    .color("yellow")
-                    .append(TextComponent(request.from_player).color("aqua"))
-                    .appends("'s broadcast...")
-                )
-                request.writer.write(int.to_bytes(1))
-                return await self._join_broadcast_with_streams(
-                    request.reader, request.writer, request.conn.remote_node_id
-                )
-
-            self.downstream.chat(
-                TextComponent("Accepting ")
-                .color("green")
-                .append(TextComponent(request.from_player).color("aqua"))
-                .appends(" into your broadcast!")
-            )
-            request.writer.write(int.to_bytes(1))
-            self.create_task(self.on_broadcast_peer(request.reader, request.writer))
+            await self._accept_request(request)
 
         @bc.command("slime")
         async def _command_broadcast_slime(self: ProxhyPlugin, player: BroadcastPlayer):
@@ -179,44 +284,140 @@ class BroadcastPlugin:
             self: ProxhyPlugin, player: Lazy[MojangPlayer]
         ):
             """Send a broadcast invite to a player."""
-            mplayer, endpoint_addr = await self._get_player_endpoint_addr(player)
-            result = await self._ask_peer(
-                mplayer.name,
-                addr=endpoint_addr,
-                reason=StreamIntent.BROADCAST_INVITE,
-                command="invite",
-                sent_msg="Invited",
-                expired_msg="The broadcast invite to ",
+            mplayer = await player
+
+            if not self.compass_client.registered:
+                raise CommandException("The compass client is not connected yet!")
+
+            if self.endpoint is None:
+                raise CommandException(
+                    TextComponent("The broadcast endpoint is not ready yet!")
+                    .color("red")
+                    .appends(TextComponent("(Try again)").color("gold"))
+                    .click_event("run_command", f"/bc invite {mplayer.name}")
+                )
+
+            now = asyncio.get_event_loop().time()
+            if now - self._last_broadcast_request_time < 5:
+                raise CommandException(
+                    TextComponent(
+                        "Please wait before sending another broadcast invite!"
+                    ).color("red")
+                )
+
+            if mplayer.name.casefold() == self.username.casefold():
+                raise CommandException("You cannot invite yourself!")
+
+            if mplayer.name.casefold() in {c.username.casefold() for c in self.clients}:
+                raise CommandException(
+                    TextComponent(mplayer.name)
+                    .color("aqua")
+                    .appends("is already in the broadcast!")
+                )
+
+            if mplayer.name in self.sent_broadcast_invites:
+                raise CommandException(
+                    TextComponent("You already have a pending invite for")
+                    .appends(TextComponent(mplayer.name).color("aqua"))
+                    .append("!")
+                )
+
+            if mplayer.name in self.sent_broadcast_requests:
+                raise CommandException(
+                    TextComponent("You already have a pending request to")
+                    .appends(TextComponent(mplayer.name).color("aqua"))
+                    .append("!")
+                )
+
+            self._last_broadcast_request_time = asyncio.get_event_loop().time()
+            self.create_task(self._iphone_ringtone())
+            self.downstream.chat(
+                TextComponent("Sent broadcast invite to")
+                .color("green")
+                .appends(TextComponent(mplayer.name).color("aqua"))
+                .append("! Waiting for their response...")
             )
-            if result is None:
+            self.sent_broadcast_invites.add(mplayer.name)
+
+            try:
+                response_data = await self.compass_client.broadcast_outbound_invite(
+                    mplayer.name
+                )
+            except RequestFailure as e:
+                raise CommandException(e.details)
+            finally:
+                self.sent_broadcast_invites.discard(mplayer.name)
+
+            if not response_data.get("response"):
                 raise CommandException(
                     TextComponent(mplayer.name)
                     .color("gold")
-                    .appends("denied your invite!")
+                    .appends("denied your broadcast invite!")
                 )
-            reader, writer = result
-            self.create_task(self.on_broadcast_peer(reader, writer))
 
-        @bc.command("server")
-        async def _command_broadcast_server(self: ProxhyPlugin):
-            try:
-                # TODO: add more info?
-                return (
-                    TextComponent("Server Node ID:")
-                    .color("green")
-                    .appends(
-                        TextComponent(self.broadcast_pyroh_server.id)
-                        .color("yellow")
-                        .hover_text(
-                            TextComponent("Get Node ID to copy").color("yellow")
-                        )
-                        .click_event("suggest_command", self.broadcast_pyroh_server.id)
-                    )
+            ticket = response_data.get("ticket")
+            verifier_b64 = response_data.get("verifier")
+
+            if not ticket or not verifier_b64:
+                self.logger.warning(
+                    "compass response missing ticket or verifier: %r", response_data
                 )
-            except AttributeError:
                 raise CommandException(
-                    "The broadcast server has not been initialized yet!"
+                    "Compass sent an invalid response (missing ticket or verifier)."
                 )
+
+            try:
+                verifier = base64.b64decode(verifier_b64)
+            except Exception as e:
+                self.logger.warning("Failed to decode verifier %r: %s", verifier_b64, e)
+                raise CommandException("Compass sent an invalid verifier.")
+
+            self.downstream.chat(
+                TextComponent(mplayer.name)
+                .color("aqua")
+                .appends(
+                    TextComponent("accepted your invite! Connecting...").color("green")
+                )
+            )
+
+            try:
+                async with asyncio.timeout(5):
+                    conn = await self.endpoint.connect(ticket, alpn=b"proxhy/1")
+                    reader, writer = await conn.open_bi()
+                    writer.write(verifier)
+            except TimeoutError:
+                raise CommandException(
+                    TextComponent("Timed out connecting to")
+                    .appends(TextComponent(mplayer.name).color("gold"))
+                    .append("!")
+                )
+            except OSError as e:
+                raise CommandException(
+                    TextComponent("Failed to connect to")
+                    .appends(TextComponent(mplayer.name).color("gold"))
+                    .append(f"! [OSError({e.errno})]")
+                )
+
+            try:
+                async with asyncio.timeout(5):
+                    accepted = int.from_bytes(await reader.read(1))
+            except TimeoutError:
+                writer.close()
+                raise CommandException("Timed out waiting for verification response.")
+            except Exception as e:
+                writer.close()
+                self.logger.warning(f"unknown error during verification: {e}")
+                raise CommandException("An unknown error occurred during verification!")
+
+            if not accepted:
+                writer.close()
+                raise CommandException(
+                    TextComponent(mplayer.name)
+                    .color("gold")
+                    .appends("rejected the connection after verification.")
+                )
+
+            self.create_task(self.on_broadcast_peer(reader, writer))
 
         self.command_registry.register(bc)
 
@@ -240,162 +441,200 @@ class BroadcastPlugin:
             uuid=lambda player: player.uuid,
         ).register(self, onto=bc)
 
-    async def _get_player_endpoint_addr(
-        self: ProxhyPlugin, player: Lazy[MojangPlayer]
-    ) -> tuple[MojangPlayer, pyroh.EndpointAddr]:
-        if not self.compass_client.registered:
-            raise CommandException("The compass client is not connected yet!")
-
-        mplayer = await player
-
-        try:
-            async with asyncio.timeout(1):
-                response = await self.compass_client.request(mplayer.name)
-        except OSError as e:
-            raise CommandException(
-                TextComponent("Unable to connect to ")
-                .append(TextComponent(mplayer.name).color("blue"))
-                .appends(f"): [IOError(errno={e.errno})]")
-            )
-        except compass.RequestFailure as e:
-            raise CommandException(e.details)
-        except TimeoutError:
-            raise CommandException(
-                f"Timed out while trying to connect to {mplayer.name}"
-            )
-        except Exception as e:
-            raise CommandException(
-                f"An unknown error occurred while trying to connect to {mplayer.name}! ({e})"
-            )
-
-        if not response.success:
-            raise CommandException(response.details)
-
-        return mplayer, pyroh.EndpointAddr.from_ticket(response.details)
-
-    async def _ask_peer(
-        self: ProxhyPlugin,
-        name: str,
-        addr: pyroh.EndpointAddr,
-        reason: StreamIntent,
-        command: str,
-        sent_msg: str,
-        expired_msg: str,
-    ) -> tuple[asyncio.StreamReader, asyncio.StreamWriter]:
-        if self.endpoint is None:
-            raise CommandException(
-                TextComponent("The endpoint is not connected yet!")
-                .appends(TextComponent("(Try again)").color("gold"))
-                .click_event("run_command", f"/bc {command} {name}")
-                .hover_text(TextComponent(f"/bc {command} {name}").color("gold"))
-            )
-
-        now = asyncio.get_event_loop().time()
-        if now - self._last_broadcast_request_time < 5:
-            raise CommandException(
-                TextComponent(
-                    "Please wait before sending another broadcast request!"
-                ).color("red")
-            )
-
-        if name.casefold() == self.username.casefold():
-            raise CommandException(TextComponent(f"You cannot {command} yourself!"))
-
-        if name.casefold() in {c.username.casefold() for c in self.clients}:
-            raise CommandException(
-                TextComponent(name)
-                .color("aqua")
-                .appends("has already joined the broadcast!")
-            )
-
-        sent_set = (
-            self.sent_broadcast_invites
-            if reason == StreamIntent.BROADCAST_INVITE
-            else self.sent_broadcast_requests
+    async def _accept_request(self: ProxhyPlugin, request: ConnectionRequest):
+        """Generate a verifier, store it, and send acceptance through compass."""
+        verifier = os.urandom(16)
+        self._pending_verifiers[verifier] = (
+            request.node_id,
+            request.from_player,
+            request.intent,
+        )
+        asyncio.get_running_loop().call_later(
+            15, lambda: self._pending_verifiers.pop(verifier, None)
         )
 
-        if name in sent_set:
-            raise CommandException(
-                TextComponent(f"You already have a pending {command} for")
-                .appends(TextComponent(name).color("aqua"))
-                .append("!")
-            )
-
-        if (
-            reason == StreamIntent.BROADCAST_INVITE
-            and name in self.sent_broadcast_requests
-        ):
-            raise CommandException(
-                TextComponent("You already have a pending request for ")
-                .appends(TextComponent(name).color("aqua"))
-                .append("!")
-            )
-
-        if (
-            reason == StreamIntent.BROADCAST_REQUEST
-            and name in self.sent_broadcast_invites
-        ):
-            raise CommandException(
-                TextComponent("You already have a pending invite for ")
-                .appends(TextComponent(name).color("aqua"))
-                .append("!")
-            )
+        word = (
+            "invite" if request.intent == StreamIntent.BROADCAST_INVITE else "request"
+        )
 
         try:
-            async with asyncio.timeout(5):
-                conn = await self.endpoint.connect(addr, alpn=b"proxhy/1")
-                reader, writer = await conn.open_bi()
-                writer.write(Byte.pack(reason))
-                writer.write(self.username.zfill(16).encode("utf-8"))
-        except TimeoutError:
-            raise CommandException(
-                TextComponent("Timed out while connecting to")
-                .appends(TextComponent(name).color("gold"))
-                .append("!")
+            await self.compass_client.respond(
+                request.compass_response_id,
+                {"response": 1, "verifier": base64.b64encode(verifier).decode()},
             )
-        except OSError as e:
-            raise CommandException(
-                TextComponent("Failed to connect to")
-                .appends(TextComponent(name).color("gold"))
-                .append(f"! [OSError(errno={e.errno})]")
+        except RequestFailure as e:
+            self._pending_verifiers.pop(verifier, None)
+            self.logger.error(
+                "Failed to send acceptance to compass for %r: %s",
+                request.from_player,
+                e,
             )
+            self.downstream.chat(
+                TextComponent(f"Failed to accept {word} from ")
+                .color("red")
+                .append(TextComponent(request.from_player).color("aqua"))
+                .appends("(compass error).")
+            )
+            return
 
-        self._last_broadcast_request_time = asyncio.get_event_loop().time()
-        self.create_task(self._iphone_ringtone())
         self.downstream.chat(
-            TextComponent(sent_msg)
+            TextComponent(f"Accepted {word} from ")
             .color("green")
-            .appends(TextComponent(name).color("aqua"))
-            .append("! They have 60 seconds to accept.")
+            .append(TextComponent(request.from_player).color("aqua"))
+            .append("! Waiting for them to connect...")
         )
 
-        sent_set.add(name)
+    async def _handle_inbound_request(self: ProxhyPlugin, request_id: int, data: dict):
+        player = data.get("player")
+        node_id = data.get("node_id")
+
+        if (
+            not isinstance(player, str)
+            or not isinstance(node_id, str)
+            or not player
+            or not node_id
+        ):
+            self.logger.warning("inbound_request has invalid data: %r", data)
+            return
+
+        if player in self.received_broadcast_requests:
+            self.logger.warning("Duplicate inbound request from %r, ignoring", player)
+            return
+
+        # Check blocked list
+        if PlayerList(f"blocked:{self.uuid}").contains(player):
+            self.logger.info("Auto-denying blocked player %r", player)
+            try:
+                await self.compass_client.respond(request_id, {"response": 0})
+            except Exception as e:
+                self.logger.warning(
+                    "Failed to send denial for blocked player %r: %s", player, e
+                )
+            return
+
+        request = ConnectionRequest(
+            from_player=player,
+            intent=StreamIntent.BROADCAST_REQUEST,
+            compass_response_id=request_id,
+            node_id=node_id,
+        )
+        self.received_broadcast_requests[player] = request
+
+        # Check trusted list — auto-accept
+        if PlayerList(f"trusted:{self.uuid}").contains(player):
+            self.downstream.chat(
+                TextComponent(player)
+                .color("aqua")
+                .bold()
+                .appends(
+                    TextComponent(
+                        "requested to join your broadcast! Auto-accepting..."
+                    ).color("green")
+                )
+            )
+            self._clear_pending_received(request)
+            await self._accept_request(request)
+            return
+
+        self.create_task(self._samsung_ringtone())
+        self.downstream.chat(
+            self._build_broadcast_request_message(
+                player,
+                "wants to join your broadcast! You have 60 seconds to accept.",
+                "Accept",
+                f"/bc accept {player}",
+                "Accept join request from",
+            )
+        )
+        request.expires_task = asyncio.get_running_loop().call_later(
+            60, lambda: self.create_task(self._expire_received(request))
+        )
+
+    async def _handle_inbound_invite(self: ProxhyPlugin, request_id: int, data: dict):
+        player = data.get("player")
+        node_id = data.get("node_id")
+
+        if (
+            not isinstance(player, str)
+            or not isinstance(node_id, str)
+            or not player
+            or not node_id
+        ):
+            self.logger.warning("inbound_invite has invalid data: %r", data)
+            return
+
+        if player in self.received_broadcast_invites:
+            self.logger.warning("Duplicate inbound invite from %r, ignoring", player)
+            return
+
+        # Check blocked list
+        if PlayerList(f"blocked:{self.uuid}").contains(player):
+            self.logger.info("Auto-denying blocked player %r", player)
+            try:
+                await self.compass_client.respond(request_id, {"response": 0})
+            except Exception as e:
+                self.logger.warning(
+                    "Failed to send denial for blocked player %r: %s", player, e
+                )
+            return
+
+        request = ConnectionRequest(
+            from_player=player,
+            intent=StreamIntent.BROADCAST_INVITE,
+            compass_response_id=request_id,
+            node_id=node_id,
+        )
+        self.received_broadcast_invites[player] = request
+
+        self.create_task(self._samsung_ringtone())
+        self.downstream.chat(
+            self._build_broadcast_request_message(
+                player,
+                "has invited you to join their broadcast! You have 60 seconds to accept.",
+                "Accept",
+                f"/bc accept {player}",
+                "Accept invite from",
+            )
+        )
+        request.expires_task = asyncio.get_running_loop().call_later(
+            60, lambda: self.create_task(self._expire_received(request))
+        )
+
+    async def _consume_compass_notifications(self: ProxhyPlugin):
+        """Consume inbound broadcast notifications pushed by compass."""
+        while not self.compass_client.registered:
+            await asyncio.sleep(0.5)
+
+        self.logger.debug("Compass notification consumer started")
 
         try:
-            async with asyncio.timeout(60):
-                accepted = int.from_bytes(await reader.read(1))
-                if accepted:
-                    return reader, writer
-                writer.close()
-                raise CommandException(
-                    TextComponent(name).color("gold").appends(f"denied your {command}!")
-                )
-        except TimeoutError:
-            raise CommandException(
-                TextComponent(expired_msg)
-                .append(TextComponent(name).color("gold"))
-                .appends("expired!")
-            )
-        except CommandException:
-            raise
-        except Exception as e:
-            raise CommandException(
-                TextComponent("An unknown error occurred while trying to connect to")
-                .appends(TextComponent(name).color("gold"))
-                .appends(f"! ({e})")
-            )
-        finally:
-            sent_set.discard(name)
+            while True:
+                msg = await self.compass_client.notifications.get()
+                try:
+                    action = msg.get("action")
+                    request_id = msg.get("request_id")
+                    data = msg.get("data", {})
+
+                    if not isinstance(action, str) or not isinstance(request_id, int):
+                        self.logger.warning(
+                            "Notification missing valid action/request_id: %r", msg
+                        )
+                        continue
+
+                    if action == "broadcast.inbound_request":
+                        await self._handle_inbound_request(request_id, data)
+                    elif action == "broadcast.inbound_invite":
+                        await self._handle_inbound_invite(request_id, data)
+                    else:
+                        self.logger.warning(
+                            "Unknown compass notification action: %r", action
+                        )
+                except Exception:
+                    self.logger.exception(
+                        "Error processing compass notification: %r", msg
+                    )
+        except asyncio.CancelledError:
+            self.logger.debug("Compass notification consumer cancelled")
 
     async def _join_broadcast_with_streams(
         self: ProxhyPlugin,
@@ -451,6 +690,7 @@ class BroadcastPlugin:
             )
 
         self._transformer.init_from_gamestate(str(self.uuid))
+        self.create_task(self._consume_compass_notifications())
 
     async def initialize_broadcast_pyroh_server(self: ProxhyPlugin):
         self.endpoint = await pyroh.Endpoint.bind(alpns=[b"proxhy/1"])
@@ -564,7 +804,17 @@ class BroadcastPlugin:
             .appends(TextComponent(request.from_player).color("aqua"))
             .appends(TextComponent("expired!").color("red"))
         )
-        request.writer.write(int.to_bytes(0))
+
+        try:
+            await self.compass_client.respond(
+                request.compass_response_id, {"response": 0}
+            )
+        except Exception as e:
+            self.logger.warning(
+                "Failed to send expiry denial to compass for %r: %s",
+                request.from_player,
+                e,
+            )
 
     def _build_broadcast_request_message(
         self,
@@ -598,119 +848,79 @@ class BroadcastPlugin:
         try:
             async with asyncio.timeout(3):
                 reader, writer = await conn.accept_bi()
-                intent = StreamIntent(int.from_bytes(await reader.read(1)))
-                username = (await reader.read(16)).decode("utf-8").strip("0")
-        except (TimeoutError, ValueError) as e:
+                verifier = await reader.read(16)
+        except TimeoutError:
             self.logger.warning(
-                f"failed to accept connection from {conn.remote_node_id!r}: {e}"
+                "Timed out accepting connection from %r", conn.remote_node_id
+            )
+            conn.close()
+            return
+        except Exception as e:
+            self.logger.warning(
+                "Error accepting connection from %r: %s", conn.remote_node_id, e
             )
             conn.close()
             return
 
         async def _reject():
             writer.write(int.to_bytes(0))
-            await writer.drain()
+            try:
+                await asyncio.wait_for(writer.drain(), timeout=2.0)
+            except Exception:
+                pass
             conn.close()
 
-        if not self.dev_mode and self.settings.compass.verify_node_id:
-            try:
-                response = await self.compass_client.verify(
-                    username, conn.remote_node_id
-                )
-            except RequestFailure:
-                self.logger.warning(
-                    f"compass verification request failed for {username!r}"
-                )
-                await _reject()
-                return
-
-            verified = response.success
-            uid = response.details
-
-            if not verified:
-                self.logger.warning(f"{username!r} failed compass verification")
-                await _reject()
-                return
-        else:
-            try:
-                async with asyncio.timeout(3):
-                    uid = await self.hypixel_client.get_uuid(username)
-            except Exception as e:
-                err_msg = (
-                    "timed out"
-                    if isinstance(e, asyncio.TimeoutError)
-                    else f"unknown error ({e!r})"
-                )
-                uid = str(offline_uuid(username))
-                self.logger.warning(
-                    f"{err_msg} while fetching uuid for {username!r};"
-                    f"using hash of 'OfflinePlayer:{username}'"
-                )
-
-        existing = self.received_broadcast_invites.get(
-            username
-        ) or self.received_broadcast_requests.get(username)
-        if existing is not None:
-            self.logger.warning(f"duplicate connection from {username!r}, rejecting")
+        if len(verifier) != 16:
+            self.logger.warning(
+                "Short verifier (%d bytes) from %r", len(verifier), conn.remote_node_id
+            )
             await _reject()
             return
 
-        request = ConnectionRequest(
-            from_player=username,
-            intent=intent,
-            reader=reader,
-            writer=writer,
-            conn=conn,
+        entry = self._pending_verifiers.pop(verifier, None)
+        if entry is None:
+            self.logger.warning(
+                "Unknown or expired verifier from %r", conn.remote_node_id
+            )
+            await _reject()
+            return
+
+        node_id, from_player, intent = entry
+
+        if conn.remote_node_id != node_id:
+            self.logger.warning(
+                "Node ID mismatch for %r: expected %r, got %r",
+                from_player,
+                node_id,
+                conn.remote_node_id,
+            )
+            await _reject()
+            return
+
+        writer.write(int.to_bytes(1))
+        try:
+            await asyncio.wait_for(writer.drain(), timeout=2.0)
+        except Exception as e:
+            self.logger.warning("Error flushing accept to %r: %s", from_player, e)
+            conn.close()
+            return
+
+        self.logger.info(
+            "Verified p2p connection from %r (intent=%s)", from_player, intent.name
         )
 
-        self.create_task(self._samsung_ringtone())
-
         if intent == StreamIntent.BROADCAST_INVITE:
-            self.received_broadcast_invites[username] = request
+            # We (PlayerB) join the initiator's (PlayerA's) broadcast
             self.downstream.chat(
-                self._build_broadcast_request_message(
-                    request.from_player,
-                    "has invited you to join their broadcast! You have 60 seconds to accept.",
-                    "Accept",
-                    f"/bc accept {request.from_player}",
-                    "Accept invite from",
-                )
+                TextComponent("Joining ")
+                .color("yellow")
+                .append(TextComponent(from_player).color("aqua"))
+                .append("'s broadcast...")
             )
-            request.expires_task = asyncio.get_running_loop().call_later(
-                60,
-                lambda: self.create_task(self._expire_received(request)),
-            )
-        elif intent == StreamIntent.BROADCAST_REQUEST:
-            self.received_broadcast_requests[username] = request
-            if PlayerList("trusted").contains_uuid(uid):
-                self.downstream.chat(
-                    TextComponent(request.from_player)
-                    .color("aqua")
-                    .bold()
-                    .appends(
-                        TextComponent(
-                            " requested to join your broadcast! Auto-accepting..."
-                        ).color("green")
-                    )
-                )
-                self._clear_pending_received(request)
-                request.writer.write(int.to_bytes(1))
-                self.create_task(self.on_broadcast_peer(request.reader, request.writer))
-                return
-
-            self.downstream.chat(
-                self._build_broadcast_request_message(
-                    request.from_player,
-                    "wants to join your broadcast! You have 60 seconds to accept.",
-                    "Accept",
-                    f"/bc accept {request.from_player}",
-                    "Accept join request from",
-                )
-            )
-            request.expires_task = asyncio.get_running_loop().call_later(
-                60,
-                lambda: self.create_task(self._expire_received(request)),
-            )
+            await self._join_broadcast_with_streams(reader, writer, conn.remote_node_id)
+        else:
+            # BROADCAST_REQUEST: initiator (PlayerA) joins our broadcast as spectator
+            self.create_task(self.on_broadcast_peer(reader, writer))
 
     def disconnect_clients(
         self: ProxhyPlugin, reason: str = "The broadcast was stopped!"
