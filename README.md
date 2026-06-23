@@ -223,15 +223,11 @@ Two separate lists control access to your broadcasts:
 
 **Trusted players** (`/broadcast trust add|remove|list <player>`):
 
-Players on this list have their join/invite requests auto-accepted.
+Players on this list have their join requests to your broadcast auto-accepted.
 
-**Compass whitelist** (`/compass whitelist add|remove|list <player>`):
+**Blocked players** (`/broadcast block add|remove|list <player>`):
 
-Controls who can look up your server node ID on the Compass relay. When enabled in settings, only whitelisted players can request your endpoint address, preventing uninvited connections entirely.
-
-**If this is enabled, only players on this list will be able to join or invite you to broadcasts.** This setting is left off by default, but if you'd like to avoid others accessing your IP address, you should turn it on.
-
-You can enable the whitelist in the [settings menu](#settings), (accessed via `/s`). To manage it, use `/compass whitelist`
+Players on this list will not be able to invite you to their or join your broadcasts.
 
 </details>
 <details>

@@ -190,13 +190,13 @@ class CompassClient(Server):
                 msg = json.loads(raw)
             except json.JSONDecodeError, ValueError:
                 logger.warning(
-                    "compass sent malformed JSON on COMPASS channel: %r", raw
+                    f"compass sent malformed JSON on COMPASS channel: {raw!r}"
                 )
                 await self.close("Malformed JSON from compass.")
                 return
 
             if not isinstance(msg, dict):
-                logger.warning("compass sent non-dict on COMPASS channel: %r", msg)
+                logger.warning(f"compass sent non-dict on COMPASS channel: {msg!r}")
                 await self.close("Malformed JSON from compass.")
                 return
 
@@ -204,7 +204,7 @@ class CompassClient(Server):
                 self.responses.set(msg["response_id"], msg.get("data", {}))
             else:
                 logger.warning(
-                    "compass sent unexpected message on COMPASS channel: %r", msg
+                    f"compass sent unexpected message on COMPASS channel: {msg!r}"
                 )
 
         elif channel == "COMPASS|NOTIFICATION":
@@ -213,13 +213,15 @@ class CompassClient(Server):
                 msg = json.loads(raw)
             except json.JSONDecodeError, ValueError:
                 logger.warning(
-                    "compass sent malformed JSON on COMPASS|NOTIFICATION: %r", raw
+                    f"compass sent malformed JSON on COMPASS|NOTIFICATION: {raw!r}"
                 )
                 await self.close("Malformed JSON from compass.")
                 return
 
             if not isinstance(msg, dict):
-                logger.warning("compass sent non-dict on COMPASS|NOTIFICATION: %r", msg)
+                logger.warning(
+                    f"compass sent non-dict on COMPASS|NOTIFICATION: {msg!r}"
+                )
                 await self.close("Malformed JSON from compass.")
                 return
 

@@ -188,7 +188,7 @@ class BroadcastPlugin:
 
             if not ticket or not verifier_b64:
                 self.logger.warning(
-                    "compass response missing ticket or verifier: %r", response_data
+                    f"compass response missing ticket or verifier: {response_data!r}"
                 )
                 raise CommandException(
                     "Compass sent an invalid response (missing ticket or verifier)."
@@ -197,7 +197,7 @@ class BroadcastPlugin:
             try:
                 verifier = base64.b64decode(verifier_b64)
             except Exception as e:
-                self.logger.warning("Failed to decode verifier %r: %s", verifier_b64, e)
+                self.logger.warning(f"Failed to decode verifier {verifier_b64!r}: {e}")
                 raise CommandException("Compass sent an invalid verifier.")
 
             self.downstream.chat(
@@ -360,7 +360,7 @@ class BroadcastPlugin:
 
             if not ticket or not verifier_b64:
                 self.logger.warning(
-                    "compass response missing ticket or verifier: %r", response_data
+                    f"compass response missing ticket or verifier: {response_data!r}"
                 )
                 raise CommandException(
                     "Compass sent an invalid response (missing ticket or verifier)."
@@ -369,7 +369,7 @@ class BroadcastPlugin:
             try:
                 verifier = base64.b64decode(verifier_b64)
             except Exception as e:
-                self.logger.warning("Failed to decode verifier %r: %s", verifier_b64, e)
+                self.logger.warning(f"Failed to decode verifier {verifier_b64!r}: {e}")
                 raise CommandException("Compass sent an invalid verifier.")
 
             self.downstream.chat(
@@ -465,9 +465,7 @@ class BroadcastPlugin:
         except RequestFailure as e:
             self._pending_verifiers.pop(verifier, None)
             self.logger.error(
-                "Failed to send acceptance to compass for %r: %s",
-                request.from_player,
-                e,
+                f"Failed to send acceptance to compass for {request.from_player!r}: {e}",
             )
             self.downstream.chat(
                 TextComponent(f"Failed to accept {word} from ")
@@ -494,21 +492,21 @@ class BroadcastPlugin:
             or not player
             or not node_id
         ):
-            self.logger.warning("inbound_request has invalid data: %r", data)
+            self.logger.warning(f"inbound_request has invalid data: {data!r}")
             return
 
         if player in self.received_broadcast_requests:
-            self.logger.warning("Duplicate inbound request from %r, ignoring", player)
+            self.logger.warning(f"Duplicate inbound request from {player!r}, ignoring")
             return
 
         # Check blocked list
         if PlayerList(f"blocked:{self.uuid}").contains(player):
-            self.logger.info("Auto-denying blocked player %r", player)
+            self.logger.info(f"Auto-denying blocked player {player!r}")
             try:
                 await self.compass_client.respond(request_id, {"response": 0})
             except Exception as e:
                 self.logger.warning(
-                    "Failed to send denial for blocked player %r: %s", player, e
+                    f"Failed to send denial for blocked player {player!r}: {e}"
                 )
             return
 
@@ -560,21 +558,21 @@ class BroadcastPlugin:
             or not player
             or not node_id
         ):
-            self.logger.warning("inbound_invite has invalid data: %r", data)
+            self.logger.warning(f"inbound_invite has invalid data: {data!r}")
             return
 
         if player in self.received_broadcast_invites:
-            self.logger.warning("Duplicate inbound invite from %r, ignoring", player)
+            self.logger.warning(f"Duplicate inbound invite from {player!r}, ignoring")
             return
 
         # Check blocked list
         if PlayerList(f"blocked:{self.uuid}").contains(player):
-            self.logger.info("Auto-denying blocked player %r", player)
+            self.logger.info(f"Auto-denying blocked player {player!r}")
             try:
                 await self.compass_client.respond(request_id, {"response": 0})
             except Exception as e:
                 self.logger.warning(
-                    "Failed to send denial for blocked player %r: %s", player, e
+                    f"Failed to send denial for blocked player {player!r}: {e}"
                 )
             return
 
@@ -617,7 +615,7 @@ class BroadcastPlugin:
 
                     if not isinstance(action, str) or not isinstance(request_id, int):
                         self.logger.warning(
-                            "Notification missing valid action/request_id: %r", msg
+                            f"Notification missing valid action/request_id: {msg!r}"
                         )
                         continue
 
@@ -627,11 +625,11 @@ class BroadcastPlugin:
                         await self._handle_inbound_invite(request_id, data)
                     else:
                         self.logger.warning(
-                            "Unknown compass notification action: %r", action
+                            f"Unknown compass notification action: {action!r}"
                         )
                 except Exception:
                     self.logger.exception(
-                        "Error processing compass notification: %r", msg
+                        f"Error processing compass notification: {msg!r}"
                     )
         except asyncio.CancelledError:
             self.logger.debug("Compass notification consumer cancelled")
@@ -811,9 +809,7 @@ class BroadcastPlugin:
             )
         except Exception as e:
             self.logger.warning(
-                "Failed to send expiry denial to compass for %r: %s",
-                request.from_player,
-                e,
+                f"Failed to send expiry denial to compass for {request.from_player!r}: {e}",
             )
 
     def _build_broadcast_request_message(
@@ -851,13 +847,13 @@ class BroadcastPlugin:
                 verifier = await reader.read(16)
         except TimeoutError:
             self.logger.warning(
-                "Timed out accepting connection from %r", conn.remote_node_id
+                f"Timed out accepting connection from {conn.remote_node_id!r}"
             )
             conn.close()
             return
         except Exception as e:
             self.logger.warning(
-                "Error accepting connection from %r: %s", conn.remote_node_id, e
+                f"Error accepting connection from {conn.remote_node_id!r}: {e}"
             )
             conn.close()
             return
@@ -872,7 +868,7 @@ class BroadcastPlugin:
 
         if len(verifier) != 16:
             self.logger.warning(
-                "Short verifier (%d bytes) from %r", len(verifier), conn.remote_node_id
+                f"Short verifier ({len(verifier)} bytes) from {conn.remote_node_id!r}"
             )
             await _reject()
             return
@@ -880,7 +876,7 @@ class BroadcastPlugin:
         entry = self._pending_verifiers.pop(verifier, None)
         if entry is None:
             self.logger.warning(
-                "Unknown or expired verifier from %r", conn.remote_node_id
+                f"Unknown or expired verifier from {conn.remote_node_id!r}"
             )
             await _reject()
             return
@@ -889,10 +885,7 @@ class BroadcastPlugin:
 
         if conn.remote_node_id != node_id:
             self.logger.warning(
-                "Node ID mismatch for %r: expected %r, got %r",
-                from_player,
-                node_id,
-                conn.remote_node_id,
+                f"Node ID mismatch for {from_player!r}: expected {node_id!r}, got {conn.remote_node_id!r}",
             )
             await _reject()
             return
@@ -901,12 +894,12 @@ class BroadcastPlugin:
         try:
             await asyncio.wait_for(writer.drain(), timeout=2.0)
         except Exception as e:
-            self.logger.warning("Error flushing accept to %r: %s", from_player, e)
+            self.logger.warning(f"Error flushing accept to {from_player!r}: {e}")
             conn.close()
             return
 
         self.logger.info(
-            "Verified p2p connection from %r (intent=%s)", from_player, intent.name
+            f"Verified p2p connection from {from_player!r} (intent={intent.name})"
         )
 
         if intent == StreamIntent.BROADCAST_INVITE:
