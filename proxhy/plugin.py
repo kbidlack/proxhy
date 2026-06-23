@@ -5,6 +5,7 @@ from plugins.autoboop import AutoboopPlugin
 from plugins.broadcaster import BroadcastPlugin
 from plugins.chat import ChatPlugin
 from plugins.commands import CommandsPlugin
+from plugins.compass import CompassPlugin
 from plugins.debug import DebugPlugin
 from plugins.gamestate import GameStatePlugin
 from plugins.hypixelstate import HypixelStatePlugin
@@ -24,6 +25,7 @@ class ProxhyPlugin(  # type: ignore
     BroadcastPlugin,
     ChatPlugin,
     CommandsPlugin,
+    CompassPlugin,
     DebugPlugin,
     GameStatePlugin,
     HypixelStatePlugin,

@@ -8,7 +8,6 @@ from typing import TYPE_CHECKING
 import pyroh
 
 import compass
-import mcauth as auth
 from broadcasting.plugin import BroadcastPeerPlugin
 from broadcasting.proxy import BroadcastPeerProxy
 from broadcasting.transform import (
@@ -16,7 +15,7 @@ from broadcasting.transform import (
     build_player_list_add_packet,
     build_spawn_player_packet,
 )
-from compass import CompassClient, RequestFailure
+from compass import RequestFailure
 from gamestate.state import Vec3d
 from petty.endpoints import Proxy
 from petty.events import listen_server, subscribe
@@ -44,8 +43,6 @@ from .broadcastee.proxy import broadcastee_plugin_list
 
 if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
-
-BROKER_URL = "http://163.192.4.69:8080/ticket"
 
 
 @dataclass
@@ -75,12 +72,6 @@ class BroadcastPlugin:
             announce_func=self._announce_to_all,
             announce_player_func=self._announce_player_entity,
         )
-        self.compass_client = CompassClient(
-            broker_url=BROKER_URL,
-            username="",
-            uuid="",
-            access_token="",
-        )  # so I can say that compass_client is not optional lol
 
         self.sent_broadcast_invites = set()
         self.sent_broadcast_requests = set()
@@ -89,60 +80,6 @@ class BroadcastPlugin:
         self._last_broadcast_request_time: float = 0
 
         self._setup_broadcast_commands()
-        self._setup_compass_commands()
-
-    @property
-    def whitelist(self: ProxhyPlugin) -> set[str]:
-        return set(PlayerList("whitelist").names())
-
-    def _setup_compass_commands(self: ProxhyPlugin):
-        compass = CommandGroup("compass", help="Compass client commands.")
-
-        @compass.command("initialize", "init")
-        async def _command_compass_init(self: ProxhyPlugin):
-            """Initialize the compass client."""
-            if self.compass_client.registered:
-                raise CommandException(
-                    "The Compass client has already been initialized!"
-                )
-
-            self.create_task(self.initialize_cc())
-            return TextComponent("Initializing Compass client...").color("yellow")
-
-        @compass.command("status")
-        async def _command_compass_status(self: ProxhyPlugin):
-            """Get the compass client status."""
-
-            return (
-                TextComponent("Compass Client Status:\n")
-                .color("gold")
-                .append(TextComponent("Registered:").color("green"))
-                .appends(
-                    TextComponent(str(self.compass_client.registered)).color("yellow")
-                )
-                .appends(TextComponent("Broker URL:").color("green"), separator="\n")
-                .appends(
-                    TextComponent(self.compass_client.broker_url)
-                    .color("yellow")
-                    .hover_text(TextComponent("Click to copy").color("yellow"))
-                    .click_event("suggest_command", self.compass_client.broker_url)
-                )
-            )
-
-        # TODO: add /compass restart and /compass close (or deinit) if needed
-
-        PlayerListSystem(
-            "whitelist",
-            "wl",
-            label="the whitelist",
-            help="Manage your compass whitelist.",
-            key=lambda proxy: f"whitelist:{proxy.uuid}",
-            add_type=MojangPlayer,
-            display=lambda player: f"§b{player.name}",
-            on_change=lambda proxy: proxy._update_compass_client_settings(),
-        ).register(self, onto=compass)
-
-        self.command_registry.register(compass)
 
     def _setup_broadcast_commands(self: ProxhyPlugin):
         bc = CommandGroup("broadcast", "bc", help="Broadcast commands.")
@@ -519,53 +456,6 @@ class BroadcastPlugin:
                 TextComponent("✓ Broadcast server initialized!").color("green")
             )
 
-    async def initialize_cc(self: ProxhyPlugin):
-        self.access_token, self.username, self.uuid = await auth.load_auth_info(
-            self.username
-        )
-        self.uuid = self.uuid
-
-        self.compass_client = CompassClient(
-            broker_url=BROKER_URL,
-            username=self.username,
-            uuid=str(self.uuid),
-            access_token=self.access_token,
-        )
-
-        if self.endpoint is None:
-            self.downstream.chat(
-                TextComponent(
-                    "Failed to initialize the compass client. (this should not happen!)"
-                ).color("red")
-            )
-            return  # TODO: log
-
-        try:
-            async with asyncio.timeout(5):
-                await self.compass_client.register(self.endpoint)
-                await self._update_compass_client_settings()
-        except TimeoutError:
-            return self.downstream.chat(
-                TextComponent("Failed to initialize compass client (timed out)!").color(
-                    "red"
-                )
-            )
-        except RequestFailure as e:
-            return self.downstream.chat(
-                TextComponent(f"Failed to initialize the compass client! ({e.details})")
-            )
-        except Exception as e:
-            return self.downstream.chat(
-                TextComponent(
-                    f"Failed to initialize compass client due to an unknown error! ({e})"
-                ).color("red")
-            )
-
-        if self.dev_mode:
-            self.downstream.chat(
-                TextComponent("✓ Compass client initialized!").color("green")
-            )
-
     @listen_server(0x07, blocking=True)
     async def _packet_respawn(self: ProxhyPlugin, buff: Buffer):
         for client in self.clients:
@@ -585,22 +475,6 @@ class BroadcastPlugin:
                     client._spectate(client.bat_eid)
 
         self._respawn_debounce_task = self.create_task(spawn_bats_debounced())
-
-    async def _update_compass_client_settings(self: ProxhyPlugin):
-        await self.compass_client.update_settings(
-            discoverable=self.settings.compass.discoverable.get() == "ON",
-            whitelist=set()
-            if self.settings.compass.whitelist.get() == "OFF"
-            else self.whitelist,
-        )
-
-    @subscribe("setting:compass.discoverable")
-    async def _setting_compass_discoverable(self: ProxhyPlugin, _match, data: list):
-        await self._update_compass_client_settings()
-
-    @subscribe("setting:compass.whitelist")
-    async def _setting_compass_whitelist(self: ProxhyPlugin, _match, data: list):
-        await self._update_compass_client_settings()
 
     async def on_broadcast_peer(
         self: ProxhyPlugin, reader: asyncio.StreamReader, writer: asyncio.StreamWriter
