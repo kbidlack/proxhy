@@ -587,7 +587,7 @@ class LoginPlugin:
                 latest = (
                     (
                         await aclient.get(
-                            "https://api.github.com/repos/kbidlack/proxhy/releases/latest"
+                            "https://api.github.com/repos/proxhyhq/proxhy/releases/latest"
                         )
                     )
                     .json()
@@ -604,7 +604,7 @@ class LoginPlugin:
                 )
                 return
 
-        base_url = "https://github.com/kbidlack/proxhy/releases/tag/v{}"
+        base_url = "https://github.com/proxhyhq/proxhy/releases/tag/v{}"
         current_url = base_url.format(current)
         latest_url = base_url.format(latest)
 
@@ -642,7 +642,7 @@ class LoginPlugin:
                     TextComponent("README")
                     .click_event(
                         "open_url",
-                        "https://github.com/kbidlack/proxhy?tab=readme-ov-file#upgrading",
+                        "https://github.com/proxhyhq/proxhy?tab=readme-ov-file#upgrading",
                     )
                     .hover_text(
                         TextComponent("Open the README on GitHub").color("yellow")

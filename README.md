@@ -1,11 +1,11 @@
 # Proxhy
 
-[![Latest Release](https://img.shields.io/github/v/release/kbidlack/proxhy?style=flat-square)](https://github.com/kbidlack/proxhy/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/proxhyhq/proxhy?style=flat-square)](https://github.com/proxhyhq/proxhy/releases/latest)
 [![Discord](https://img.shields.io/discord/1517293954029195344?logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=gray)](https://discord.com/invite/3qFP9SQT)
 
-[![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.zip)
-[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.exe)
-[![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.AppImage)
+[![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.zip)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.exe)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.AppImage)
 
 An advanced, feature-rich Minecraft 1.8.9 proxy for players who want to level up their Hypixel experience! Proxhy is **free forever**.
 
@@ -55,11 +55,11 @@ _All relevant features may be disabled at any time through the settings menu._
 
 ## Download
 
-| Platform              | Download                                                                                           |
-| --------------------- | -------------------------------------------------------------------------------------------------- |
-| macOS (Apple Silicon) | [Proxhy.zip](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.zip)           |
-| Windows (x64)         | [Proxhy.exe](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.exe)           |
-| Linux (x64)           | [Proxhy.AppImage](https://github.com/kbidlack/proxhy-gui/releases/latest/download/Proxhy.AppImage) |
+| Platform              | Download                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| macOS (Apple Silicon) | [Proxhy.zip](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.zip)           |
+| Windows (x64)         | [Proxhy.exe](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.exe)           |
+| Linux (x64)           | [Proxhy.AppImage](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.AppImage) |
 
 - **macOS:** Unzip → drag `Proxhy.app` to Applications → double-click.
 - **Windows:** Run `Proxhy.exe`.
@@ -81,7 +81,7 @@ After opening the Proxhy app, press the "Start" button in the top-left corner. T
 The easiest way to run Proxhy is to use [uv](https://docs.astral.sh/uv/):
 
 ```bash
-uvx --index=https://kbidlack.github.io/proxhy/simple proxhy
+uvx --index=https://proxhyhq.github.io/proxhy/simple proxhy
 ```
 
 This will fetch the latest Proxhy release and run it. To update, simply rerun the command. By default, this connects to `mc.hypixel.net:25565` and binds to `localhost:41223`.
@@ -89,7 +89,7 @@ This will fetch the latest Proxhy release and run it. To update, simply rerun th
 You can also install Proxhy with uv:
 
 ```bash
-uv tool install --index=https://kbidlack.github.io/proxhy/simple proxhy
+uv tool install --index=https://proxhyhq.github.io/proxhy/simple proxhy
 ```
 
 ### CLI Options
@@ -105,6 +105,7 @@ uv tool install --index=https://kbidlack.github.io/proxhy/simple proxhy
 ```
 
 ## Updating
+
 You'll be notified when a new update is available in the launcher and in game. If you're using the app, click the `↺ Update proxhy` button.
 
 If you installed via `uv`, rerun the `uvx` command or run `uv upgrade proxhy` to get the latest version.
