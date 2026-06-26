@@ -3,8 +3,8 @@
 [![Latest Release](https://img.shields.io/github/v/release/proxhyhq/proxhy?style=flat-square)](https://github.com/proxhyhq/proxhy/releases/latest)
 [![Discord](https://img.shields.io/discord/1517293954029195344?logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=gray)](https://discord.com/invite/3qFP9SQT)
 
-[![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.Launcher.zip)
-[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.Launcher.exe)
+[![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.zip)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.exe)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?style=flat-square&logo=linux&logoColor=black)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.AppImage)
 
 An advanced, feature-rich Minecraft 1.8.9 proxy for players who want to level up their Hypixel experience! Proxhy is **free forever**.
@@ -55,21 +55,21 @@ _All relevant features may be disabled at any time through the settings menu._
 
 ## Download
 
-| Platform              | Download                                                                                                 |
-| --------------------- | -------------------------------------------------------------------------------------------------------- |
-| macOS (Apple Silicon) | [Proxhy Launcher.zip](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.Launcher.zip) |
-| Windows (x64)         | [Proxhy Launcher.exe](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.Launcher.exe) |
-| Linux (x64)           | [Proxhy.AppImage](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.AppImage)         |
+| Platform              | Download                                                                                         |
+| --------------------- | ------------------------------------------------------------------------------------------------ |
+| macOS (Apple Silicon) | [Proxhy.zip](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.zip)           |
+| Windows (x64)         | [Proxhy.exe](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.exe)           |
+| Linux (x64)           | [Proxhy.AppImage](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.AppImage) |
 
-- **macOS:** Unzip → drag `Proxhy Launcher.app` to Applications → double-click.
-- **Windows:** Run `Proxhy Launcher.exe`.
+- **macOS:** Unzip → drag `Proxhy.app` to Applications → double-click.
+- **Windows:** Run `Proxhy.exe`.
 - **Linux:** Run `Proxhy.AppImage`.
 
 > [!NOTE]  
-> macOS will say the app is "damaged" because it's unsigned. To fix (after moving `Proxhy Launcher.app` to `/Applications`):
+> macOS will say the app is "damaged" because it's unsigned. To fix (after moving `Proxhy.app` to `/Applications`):
 
 1. Open Terminal
-2. Run: `xattr -cr /Applications/Proxhy Launcher.app`
+2. Run: `xattr -cr /Applications/Proxhy.app`
 3. Open Proxhy normally
 
 ### How to use
@@ -123,9 +123,9 @@ If you installed via `uv`, rerun the `uvx` command or run `uv upgrade proxhy` to
 
 Delete the app file:
 
-**macOS:** Remove `/Applications/Proxhy Launcher.app`
+**macOS:** Remove `/Applications/Proxhy.app`
 
-**Windows:** Delete `Proxhy Launcher.exe`
+**Windows:** Delete `Proxhy.exe`
 
 **Linux:** Delete `Proxhy.AppImage`
 
