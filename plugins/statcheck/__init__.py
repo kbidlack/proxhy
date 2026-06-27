@@ -691,10 +691,15 @@ class StatCheckPlugin:
                     self.logger.debug(
                         f"retrying {player.username} for {type(err)}; try #{try_n}"
                     )
-                    self.downstream.chat(f"{err_message} Retrying... (#{try_n})")
+                    self.downstream.chat(
+                        TextComponent(f"{err_message} Retrying... (#{try_n})").color(
+                            "red"
+                        )
+                    )
                     try_n += 1
                 else:
-                    return self.downstream.chat(err_message)
+                    self.logger.debug(f"gave up on {player.username} for {type(err)}")
+                    return self.downstream.chat(TextComponent(err_message).color("red"))
 
             self.player_stats_queue.put_nowait((player, try_n))
 
