@@ -192,21 +192,15 @@ class StatcheckCommandPlugin:
 
     @subscribe("close")
     async def _statcheck_event_close(self: ProxhyPlugin, _match, _data):
-        self.create_task(self._close_statcheck_helper())
+        if getattr(self, "hypixel_client", None) is None:
+            return
 
-    async def _close_statcheck_helper(self: ProxhyPlugin):
         try:
-            if self.hypixel_client:
-                try:
-                    await asyncio.wait_for(self.log_stats("logout"), timeout=2.0)
-                except TimeoutError:
-                    pass
-                try:
-                    await asyncio.wait_for(self.hypixel_client.close(), timeout=1.0)
-                except TimeoutError:
-                    pass  # force close anyways
-        except AttributeError:
-            pass  # TODO: log
+            await asyncio.wait_for(self.log_stats("logout"), timeout=2.0)
+        except TimeoutError:
+            self.logger.debug("logging stats on logout took too long!")
+
+        await self.hypixel_client.close()
 
     async def log_stats(self: ProxhyPlugin, event: str) -> None:
         if self.dev_mode:
