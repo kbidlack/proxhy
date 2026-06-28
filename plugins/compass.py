@@ -10,7 +10,7 @@ if TYPE_CHECKING:
     from proxhy.plugin import ProxhyPlugin
 
 
-BROKER_URL = "http://163.192.4.69:8080/ticket"
+BROKER_URL = "https://compass.proxhy.com/"
 
 
 class CompassPlugin:

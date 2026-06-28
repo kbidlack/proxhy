@@ -113,7 +113,9 @@ class CompassClient(Server):
 
         async with asyncio.timeout(5):
             async with httpx.AsyncClient() as client:
-                ticket = (await client.get(self.broker_url)).content.decode("utf-8")
+                ticket = (
+                    await client.get(f"{self.broker_url.rstrip('/')}/ticket")
+                ).content.decode("utf-8")
             conn = await self.endpoint.connect(ticket, alpn=b"compass/1")
             reader, writer = await conn.open_bi()
 
