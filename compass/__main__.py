@@ -1,13 +1,36 @@
 import argparse
 import asyncio
+import logging
 import random
 import signal
 import sys
 
 import pyroh
-from aiohttp import web
+from aiohttp import http_exceptions, web
 
 from compass.server import CompassServer
+
+logging.getLogger("aiohttp.server").addFilter(
+    type(
+        "_ScannerFilter",
+        (logging.Filter,),
+        {
+            "filter": lambda self, r: (
+                not (
+                    r.exc_info
+                    and isinstance(
+                        r.exc_info[1],
+                        (
+                            http_exceptions.BadHttpMessage,
+                            http_exceptions.InvalidURLError,
+                        ),
+                    )
+                )
+            )
+        },
+    )()
+)
+
 
 routes = web.RouteTableDef()
 
