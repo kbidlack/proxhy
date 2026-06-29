@@ -273,7 +273,18 @@ class ConnectedClient(Client):
     @listen(0x00)
     async def _packet_keep_alive(self, buff: Buffer):
         keep_alive_num = buff.unpack(VarInt)
-        self.ticket = buff.unpack(String)
+
+        try:
+            ticket = buff.unpack(String)
+            node_id = pyroh.EndpointAddr.from_ticket(ticket).id
+        except ValueError:
+            return await self.close()  # TODO: log
+        else:
+            if node_id != self.conn.remote_node_id:
+                return await self.close()  # TODO: log
+
+            self.ticket = ticket
+
         await self.c_keep_alive_q.put(keep_alive_num)
 
     async def _handle_stream(self, *args, **kwargs):

@@ -83,11 +83,15 @@ async def main():
 
     app = web.Application()
 
-    async def ticket_handler(request):
+    async def ticket_handler(_request):
         ticket = endpoint.ticket
         return web.Response(text=ticket)
 
+    async def player_count_handler(_request):
+        return web.Response(text=str(len(server.clients)))
+
     app.router.add_get("/ticket", ticket_handler)
+    app.router.add_get("/player_count", player_count_handler)
 
     runner = None
 
