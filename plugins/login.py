@@ -64,7 +64,7 @@ class LoginPlugin:
         self.server_list_ping = {
             "version": {"name": "1.8.9", "protocol": 47},
             "players": {
-                "max": 1,
+                "max": -41223,
                 "online": 0,
             },
             "description": {"text": "why hello there"},
@@ -474,6 +474,19 @@ class LoginPlugin:
 
     @listen_client(0x00, State.STATUS, blocking=True)
     async def packet_status_request(self: ProxhyPlugin, _):
+        async with httpx.AsyncClient() as client:
+            response = await client.get("https://compass.proxhy.com/player_count")
+
+        try:
+            int(response.text)
+            motd = f"§e§l{response.text}§r§7 player{'' if response.text == '1' else 's'} currently online."
+        except ValueError:
+            self.logger.warning(
+                "Got non-integer value from compass.proxhy.com/player_count"
+            )
+            motd = "§7Couldn't get Proxhy player count! uwu"
+
+        self.server_list_ping["description"] = {"text": motd}
         self.downstream.send_packet(
             0x00, String.pack(orjson.dumps(self.server_list_ping).decode())
         )
