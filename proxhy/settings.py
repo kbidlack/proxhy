@@ -16,18 +16,17 @@ config_dir.mkdir(parents=True, exist_ok=True)
 settings_file = config_dir / "settings.json"
 
 
-class TablistGroup(SettingGroup):
+class StatsGroup(SettingGroup):
     def __init__(self, storage: SettingsStorage):
         super().__init__(
-            key="bedwars.tablist",
-            display_name="Tablist",
-            description="Settings related to the Bedwars player list.",
-            item="minecraft:sign",
+            key="bedwars.tablist.stats",
+            display_name="Stats",
+            description="Settings related to stats shown in the Bedwars player list.",
+            item="minecraft:bookshelf",
         )
 
-        # Define all tablist settings
         self.show_stats: Setting[Literal["OFF", "ON"]] = create_setting(
-            key="bedwars.tablist.show_stats",
+            key="bedwars.tablist.stats.show_stats",
             display_name="Show Tablist Stats",
             description="In Bedwars, shows users' stats next to their name in the tablist.",
             item="minecraft:iron_sword",
@@ -38,9 +37,8 @@ class TablistGroup(SettingGroup):
             default_state="OFF",
             storage=storage,
         )
-
         self.is_mode_specific: Setting[Literal["OFF", "ON"]] = create_setting(
-            key="bedwars.tablist.is_mode_specific",
+            key="bedwars.tablist.stats.is_mode_specific",
             display_name="Mode-Specific Tablist Stats",
             description="In Bedwars, the tablist will show users' stats for the mode you're playing.\nex: Solo stats instead of overall.",
             item="minecraft:writable_book",
@@ -53,7 +51,7 @@ class TablistGroup(SettingGroup):
         )
 
         self.show_rankname: Setting[Literal["OFF", "ON"]] = create_setting(
-            key="bedwars.tablist.show_rankname",
+            key="bedwars.tablist.stats.show_rankname",
             display_name="Show Rankname in Tablist",
             description="In Bedwars, the tablist will show users' colorized ranks and usernames instead of team color.",
             item="minecraft:name_tag",
@@ -64,6 +62,18 @@ class TablistGroup(SettingGroup):
             default_state="OFF",
             storage=storage,
         )
+
+
+class TablistGroup(SettingGroup):
+    def __init__(self, storage: SettingsStorage):
+        super().__init__(
+            key="bedwars.tablist",
+            display_name="Tablist",
+            description="Settings related to the Bedwars player list.",
+            item="minecraft:sign",
+        )
+
+        self.stats = StatsGroup(storage)
 
         self.show_respawn_timer: Setting[Literal["OFF", "ON"]] = create_setting(
             key="bedwars.tablist.show_respawn_timer",
@@ -88,6 +98,19 @@ class TablistGroup(SettingGroup):
                 "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
             },
             default_state="ON",
+            storage=storage,
+        )
+
+        self.show_seraph_warnings: Setting[Literal["OFF", "ON"]] = create_setting(
+            key="bedwars.tablist.show_seraph_warnings",
+            display_name="Show Seraph Warnings",
+            description="In Bedwars, appends [BL] or [BOT] next to players flagged on Seraph. Requires a Seraph API key (/key seraph).",
+            item="minecraft:banner",
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
+            default_state="OFF",
             storage=storage,
         )
 

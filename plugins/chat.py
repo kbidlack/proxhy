@@ -29,8 +29,8 @@ class ChatPlugin:
         self.downstream.chat(self.get_api_key_err())
 
     def get_api_key_err(self: ProxhyPlugin):
-        err = (
-            TextComponent("API key is invalid! Get one at ")
+        return (
+            TextComponent("Hypixel API key is invalid! Get one at ")
             .color("red")
             .append(
                 TextComponent("developer.hypixel.net")
@@ -40,11 +40,33 @@ class ChatPlugin:
             )
             .append(TextComponent(" and enter it using ").color("red"))
             .append(
-                TextComponent("/key")
+                TextComponent("/key hypixel")
                 .underlined()
-                .click_event("suggest_command", "/key ")
+                .click_event("suggest_command", "/key hypixel ")
                 .color("white")
             )
             .append(TextComponent(".").color("red"))
         )
-        return err
+
+    async def send_seraph_no_key_err(self: ProxhyPlugin):
+        self.downstream.chat(self.get_seraph_no_key_err())
+
+    def get_seraph_no_key_err(self: ProxhyPlugin):
+        return (
+            TextComponent("No Seraph API key set! Get one at ")
+            .color("yellow")
+            .append(
+                TextComponent("seraph.si")
+                .underlined()
+                .click_event("open_url", "https://seraph.si/")
+                .color("white")
+            )
+            .append(TextComponent(" and enter it using ").color("yellow"))
+            .append(
+                TextComponent("/key seraph")
+                .underlined()
+                .click_event("suggest_command", "/key seraph ")
+                .color("white")
+            )
+            .append(TextComponent(".").color("yellow"))
+        )

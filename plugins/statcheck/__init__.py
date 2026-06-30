@@ -21,6 +21,7 @@ from hypixel import (
     TimeoutError,
 )
 from platformdirs import user_cache_dir
+from seraph import BlacklistResponse, Seraph, SeraphError
 
 from assets import load_json_asset
 from petty.events import listen_server, subscribe
@@ -35,6 +36,7 @@ from petty.protocol.datatypes import (
     VarInt,
 )
 from plugins.commands import CommandException, command
+from proxhy.secrets import delete_secret, get_secret, set_secret
 from proxhy.utils import offline_uuid
 from proxhypixel.formatting import format_player_dict
 from proxhypixel.models import Game
@@ -250,6 +252,16 @@ class GamePlayerWithStats(GamePlayer):
     # requires fplayer, guarantees display_name
     fplayer: dict[str, Any] | Nick
     display_name: str = ""
+    seraph_data: BlacklistResponse | None = None
+
+
+def _seraph_warning_suffix(data: BlacklistResponse) -> str:
+    parts = []
+    if data.data.blacklist and data.data.blacklist.tagged:
+        parts.append("§c[BL]")
+    if data.data.bot and data.data.bot.tagged:
+        parts.append("§6[BOT]")
+    return " ".join(parts)
 
 
 class StatCheckPlugin:
@@ -259,13 +271,19 @@ class StatCheckPlugin:
             str, GamePlayer
         ] = {}  # username: player object (see above)
         self._hypixel_api_key = ""
+        self._seraph_api_key = ""
+        self._seraph_client: Seraph | None = None
 
         self.game_error = None  # if invalid key error has been sent that game
+        self.seraph_game_error = None  # same, but for seraph
 
         self.stats_highlighted = False
         self.adjacent_teams_highlighted = False
 
         self.player_stats_queue: asyncio.Queue[tuple[GamePlayer, int]] = asyncio.Queue()
+        self._seraph_stats_queue: asyncio.Queue[GamePlayer] = asyncio.Queue()
+        # seraph data keyed by player UUID; populated independently of hypixel stats
+        self._seraph_cache: dict[uuid.UUID, BlacklistResponse] = {}
 
         self.log_path = (
             Path(user_cache_dir("proxhy", ensure_exists=True)) / "stat_log.jsonl"
@@ -274,6 +292,7 @@ class StatCheckPlugin:
 
         # _update_stats
         self.player_stats_task: asyncio.Task[None] | None = None
+        self._seraph_stats_task: asyncio.Task[None] | None = None
         # list of tasks spawned by _update_player_stats
         self.player_stats_tasks: list[asyncio.Task[None]] = list()
         # players from /who
@@ -297,21 +316,28 @@ class StatCheckPlugin:
 
         self.who_players_statted.clear()
         self.game_error = None
+        self.seraph_game_error = None
         self.stats_highlighted = False
         self.adjacent_teams_highlighted = False
+        self._seraph_cache.clear()
 
         self.game = Game()
 
         if self.player_stats_task:
             self.player_stats_task.cancel()
+        if self._seraph_stats_task:
+            self._seraph_stats_task.cancel()
 
         while not self.player_stats_queue.empty():
             self.player_stats_queue.get_nowait()
+        while not self._seraph_stats_queue.empty():
+            self._seraph_stats_queue.get_nowait()
 
         for task in self.player_stats_tasks:
             task.cancel()
 
         self.player_stats_task = self.create_task(self._update_stats())
+        self._seraph_stats_task = self.create_task(self._run_seraph_stats())
 
     @property
     def respawning(self: ProxhyPlugin) -> dict[str, GamePlayer]:
@@ -353,13 +379,48 @@ class StatCheckPlugin:
         if self._hypixel_api_key:
             return self._hypixel_api_key
 
-        return keyring.get_password("proxhy", "hypixel_api_key") or ""
+        key = get_secret("hypixel_api_key")
+        if key is None:
+            # one-time migration from the old per-entry keyring storage
+            old = keyring.get_password("proxhy", "hypixel_api_key")
+            if old:
+                set_secret("hypixel_api_key", old)
+                keyring.delete_password("proxhy", "hypixel_api_key")
+                key = old
+
+        return key or ""
 
     @hypixel_api_key.setter
     def hypixel_api_key(self: ProxhyPlugin, key: str):
         self._hypixel_api_key = key
+        if key:
+            set_secret("hypixel_api_key", key)
+        else:
+            delete_secret("hypixel_api_key")
 
-        keyring.set_password("proxhy", "hypixel_api_key", key)
+    @property
+    def seraph_api_key(self) -> str:
+        if self._seraph_api_key:
+            return self._seraph_api_key
+        return get_secret("seraph_api_key") or ""
+
+    @seraph_api_key.setter
+    def seraph_api_key(self: ProxhyPlugin, key: str):
+        self._seraph_api_key = key
+        old_client = self._seraph_client
+        self._seraph_client = Seraph(api_key=key or None)
+        if old_client is not None:
+            self.create_task(old_client.close())
+        if key:
+            set_secret("seraph_api_key", key)
+        else:
+            delete_secret("seraph_api_key")
+
+    @property
+    def seraph_client(self) -> Seraph:
+        if self._seraph_client is None:
+            self._seraph_client = Seraph(api_key=self.seraph_api_key or None)
+        return self._seraph_client
 
     async def validate_api_key(self: ProxhyPlugin) -> bool:
         """Validate the Hypixel API key by making a test request."""
@@ -395,31 +456,42 @@ class StatCheckPlugin:
         self: ProxhyPlugin, player: GamePlayerWithStats
     ) -> str:
         fdict = player.fplayer
+        show_stats = self.settings.bedwars.tablist.stats.show_stats.get() == "ON"
+        show_seraph = self.settings.bedwars.tablist.show_seraph_warnings.get() == "ON"
 
         if isinstance(fdict, Nick):
-            return f"{player.team.prefix} §5[NICK] {player.username}"
+            base = f"{player.team.prefix} §5[NICK] {player.username}"
+        elif show_stats:
+            if (
+                self.settings.bedwars.tablist.stats.is_mode_specific.get() == "ON"
+                and self.game.mode
+            ):
+                mode = self.game.mode[8:].lower()
+                fkdr = fdict[f"{mode}_fkdr"]
+            else:
+                fkdr = fdict["fkdr"]
 
-        if (
-            self.settings.bedwars.tablist.is_mode_specific.get() == "ON"
-            and self.game.mode
-        ):
-            mode = self.game.mode[8:].lower()
-            fkdr = fdict[f"{mode}_fkdr"]
-        else:
-            fkdr = fdict["fkdr"]
-
-        show_rankname = self.settings.bedwars.tablist.show_rankname.get() == "ON"
-        name = fdict["rankname"] if show_rankname else fdict["raw_name"]
-
-        display_name = " ".join(
-            (
-                f"{fdict['star']}{player.team.code}",
-                name,
-                f"§7| {fkdr}",
+            show_rankname = (
+                self.settings.bedwars.tablist.stats.show_rankname.get() == "ON"
             )
-        )
+            name = fdict["rankname"] if show_rankname else fdict["raw_name"]
+            stats_str = " ".join(
+                (f"{fdict['star']}{player.team.code}", name, f"§7| {fkdr}")
+            )
+            base = f"{player.team.prefix} {stats_str}"
+        else:
+            base = f"{player.team.prefix} {player.username}"
 
-        return f"{player.team.prefix} {display_name}"
+        self.logger.debug(f"{show_seraph=}; {player.username}")
+        if show_seraph and player.seraph_data is not None:
+            self.logger.debug(
+                f"{player.seraph_data.data.blacklist=}, {player.seraph_data.data.bot=}, {player.seraph_data.data.statistics=}"
+            )
+            suffix = _seraph_warning_suffix(player.seraph_data)
+            if suffix:
+                base = f"{base} {suffix}"
+
+        return base
 
     def _get_dead_display_name(self: ProxhyPlugin, player: GamePlayer) -> str:
         """Get the grayed-out display name for a dead player.
@@ -433,11 +505,17 @@ class StatCheckPlugin:
         # Use bold+italic for current user, just italic for others
         color = "§7§l§o" if player.username == self.nick_or_username else "§7§o"
 
-        if (
-            isinstance(player, GamePlayerWithStats)
-            and self.settings.bedwars.tablist.show_stats.get() == "ON"
-        ):
+        show_stats = self.settings.bedwars.tablist.stats.show_stats.get() == "ON"
+        show_seraph = self.settings.bedwars.tablist.show_seraph_warnings.get() == "ON"
+
+        if isinstance(player, GamePlayerWithStats) and (show_stats or show_seraph):
             display_name = player.display_name
+        elif not isinstance(player, GamePlayerWithStats) and show_seraph:
+            seraph = self._seraph_cache.get(player.uuid)
+            suffix = _seraph_warning_suffix(seraph) if seraph else ""
+            display_name = f"{player.team.prefix} {player.username}"
+            if suffix:
+                display_name = f"{display_name} {suffix}"
         else:
             display_name = f"{player.team.prefix} {player.username}"
 
@@ -448,24 +526,43 @@ class StatCheckPlugin:
         return f"§6§l{player.respawn_time}s {self._get_dead_display_name(player)}"
 
     def _rebuild_display_names(self: ProxhyPlugin):
+        show_stats = self.settings.bedwars.tablist.stats.show_stats.get() == "ON"
+        show_seraph = self.settings.bedwars.tablist.show_seraph_warnings.get() == "ON"
+
         for player in self.players_with_stats.values():
-            # if has stats, refresh display name
             player.display_name = self._build_player_display_name(player)
 
-        if self.settings.bedwars.tablist.show_stats.get() == "ON":
-            # if we are showing stats, go ahead and ONLY update
-            # those who have stats
+        if show_stats or show_seraph:
             self._send_tablist_update(
                 {
                     player.uuid: player.display_name
                     for player in self.players_with_stats.values()
                 }
             )
+            # also refresh plain GamePlayers that have seraph data but no hypixel stats
+            if show_seraph:
+                for player in self.game_players.values():
+                    if isinstance(player, GamePlayerWithStats):
+                        continue
+                    if player.uuid not in self._seraph_cache:
+                        continue
+                    seraph = self._seraph_cache[player.uuid]
+                    suffix = _seraph_warning_suffix(seraph)
+                    display_name = f"{player.team.prefix} {player.username}"
+                    if suffix:
+                        display_name = f"{display_name} {suffix}"
+                    if player.status in {
+                        GamePlayerStatus.ELIMINATED,
+                        GamePlayerStatus.RESPAWNING,
+                    }:
+                        self._send_tablist_update(
+                            {player.offline_uuid: self._get_dead_display_name(player)}
+                        )
+                    else:
+                        self._send_tablist_update({player.uuid: display_name})
         else:
-            # if we are not showing stats, remove display names
-            # from all players who have stats;
-            # these are the only players whose
-            # display names we should have set
+            # neither feature is active; clear all custom display names.
+            # these are the only players whose display names we've set
             self.downstream.send_packet(
                 0x38,
                 VarInt.pack(3),
@@ -491,7 +588,7 @@ class StatCheckPlugin:
                 }
             )
 
-    @subscribe("setting:bedwars.tablist.show_stats")
+    @subscribe("setting:bedwars.tablist.stats.show_stats")
     async def _statcheck_event_setting_bedwars_tablist_show_stats(
         self: ProxhyPlugin, _match, data: list
     ):
@@ -501,13 +598,13 @@ class StatCheckPlugin:
 
         self._rebuild_display_names()
 
-    @subscribe("setting:bedwars.tablist.is_mode_specific")
+    @subscribe("setting:bedwars.tablist.stats.is_mode_specific")
     async def _statcheck_event_setting_bedwars_tablist_is_mode_specific(
         self: ProxhyPlugin, _match, data: list
     ) -> None:
         self._rebuild_display_names()
 
-    @subscribe("setting:bedwars.tablist.show_rankname")
+    @subscribe("setting:bedwars.tablist.stats.show_rankname")
     async def _statcheck_event_setting_bedwars_tablist_show_rankname(
         self: ProxhyPlugin, _match, data: list
     ) -> None:
@@ -540,6 +637,20 @@ class StatCheckPlugin:
                 packet += UUID.pack(player.offline_uuid)
 
             self.downstream.send_packet(0x38, packet)
+
+    @subscribe("setting:bedwars.tablist.show_seraph_warnings")
+    async def _statcheck_event_setting_bedwars_tablist_show_seraph_warnings(
+        self: ProxhyPlugin, _match, data: list
+    ) -> None:
+        if data == ["OFF", "ON"]:
+            if not self.seraph_api_key:
+                await self.send_seraph_no_key_err()
+            else:
+                # backfill all players who don't have seraph data yet
+                for player in self.game_players.values():
+                    if player.uuid not in self._seraph_cache:
+                        self._seraph_stats_queue.put_nowait(player)
+        self._rebuild_display_names()
 
     @listen_server(0x3E, blocking=True)
     async def packet_teams(self: ProxhyPlugin, buff: Buffer):
@@ -578,6 +689,7 @@ class StatCheckPlugin:
                     f"put {player.username!r} on {player.team!r}, {name}, {self.gamestate.teams[name].prefix}"
                 )
                 self.player_stats_queue.put_nowait((player, 1))
+                self._seraph_stats_queue.put_nowait(player)
 
     @listen_server(0x38, blocking=True)
     async def _packet_player_list_item(self: ProxhyPlugin, buff: Buffer):
@@ -744,16 +856,22 @@ class StatCheckPlugin:
             player.respawn_time,
             fdict,
         )
+        # pick up seraph data if the independent worker already fetched it
+        player.seraph_data = self._seraph_cache.get(player.uuid)
         player.display_name = (display_name := self._build_player_display_name(player))
         self.game_players[player.username] = player
 
-        if self.settings.bedwars.tablist.show_stats.get() == "ON":
+        show_stats = self.settings.bedwars.tablist.stats.show_stats.get() == "ON"
+        show_seraph = self.settings.bedwars.tablist.show_seraph_warnings.get() == "ON"
+
+        if show_stats or show_seraph:
             if player.status in {
                 GamePlayerStatus.ELIMINATED,
                 GamePlayerStatus.RESPAWNING,
             }:
-                display_name = self._get_dead_display_name(player)
-                self._send_tablist_update({player.offline_uuid: display_name})
+                self._send_tablist_update(
+                    {player.offline_uuid: self._get_dead_display_name(player)}
+                )
             else:
                 self._send_tablist_update({player.uuid: display_name})
 
@@ -767,6 +885,73 @@ class StatCheckPlugin:
             if self.settings.bedwars.display_top_stats.get() != "OFF":
                 if not self.stats_highlighted:
                     await self.stat_highlights()
+
+    async def _run_seraph_stats(self: ProxhyPlugin) -> None:
+        await self.received_locraw.wait()
+        if not self.in_bedwars_game():
+            return
+        while True:
+            player = await self._seraph_stats_queue.get()
+            if self.settings.bedwars.tablist.show_seraph_warnings.get() == "ON":
+                self.create_task(self._update_player_seraph_data(player))
+
+    async def _update_player_seraph_data(
+        self: ProxhyPlugin, player: GamePlayer
+    ) -> None:
+        if not self.seraph_api_key:
+            if not self.seraph_game_error:
+                self.seraph_game_error = "no_key"
+                await self.send_seraph_no_key_err()
+            return
+
+        try:
+            result = await self.seraph_client.blacklist(str(player.uuid))
+        except SeraphError as err:
+            if not self.seraph_game_error:
+                self.seraph_game_error = err
+                self.downstream.chat(
+                    TextComponent(f"Seraph error: {err.cause}").color("red")
+                )
+            return
+        except Exception as err:
+            if not self.seraph_game_error:
+                self.seraph_game_error = err
+                self.downstream.chat(TextComponent(f"Seraph error: {err}").color("red"))
+            return
+
+        self._seraph_cache[player.uuid] = result
+
+        # use the most up-to-date player object, may have been promoted to
+        # GamePlayerWithStats by the time seraph responds
+        current = self.game_players.get(player.username)
+        if current is None:
+            return
+
+        show_stats = self.settings.bedwars.tablist.stats.show_stats.get() == "ON"
+        show_seraph = self.settings.bedwars.tablist.show_seraph_warnings.get() == "ON"
+
+        if isinstance(current, GamePlayerWithStats):
+            current.seraph_data = result
+            current.display_name = self._build_player_display_name(current)
+            display_name = current.display_name
+        else:
+            # hypixel stats not available yet (invalid/missing key); build minimal
+            # display with just team + username + seraph suffix
+            suffix = _seraph_warning_suffix(result)
+            display_name = f"{current.team.prefix} {current.username}"
+            if suffix:
+                display_name = f"{display_name} {suffix}"
+
+        if show_stats or show_seraph:
+            if current.status in {
+                GamePlayerStatus.ELIMINATED,
+                GamePlayerStatus.RESPAWNING,
+            }:
+                self._send_tablist_update(
+                    {current.offline_uuid: self._get_dead_display_name(current)}
+                )
+            else:
+                self._send_tablist_update({current.uuid: display_name})
 
     async def highlight_adjacent_teams(self: ProxhyPlugin) -> None:
         """Displays a title card with stats of adjacent team(s)."""
@@ -990,7 +1175,7 @@ class StatCheckPlugin:
                 enemy_nicks.append(f"{player.team.code}{player.username}§f")
                 continue
 
-            if self.settings.bedwars.tablist.is_mode_specific.get() == "ON":
+            if self.settings.bedwars.tablist.stats.is_mode_specific.get() == "ON":
                 mode = self.game.mode[8:].lower()
                 fkdr = fdict[f"{mode}_fkdr"]
                 f_fkdr = fdict[f"{mode}_fkdr"]
@@ -1129,6 +1314,7 @@ class StatCheckPlugin:
 
         self.logger.debug(f"putting self: {self_game_player!r}")
         self.player_stats_queue.put_nowait((self_game_player, 1))
+        self._seraph_stats_queue.put_nowait(self_game_player)
 
         self.upstream.send_packet(0x01, String.pack("/who"))
         self.received_who.clear()
@@ -1158,49 +1344,96 @@ class StatCheckPlugin:
             self.game.started = True
 
     @command("resetkey")
-    async def _command_reset_key(self: ProxhyPlugin):
-        """Reset your Hypixel API key."""
-        self.hypixel_client.remove_key(self.hypixel_api_key)
-        self.hypixel_api_key = ""
-        return TextComponent("Reset your Hypixel API key!").color("green")
+    async def _command_reset_key(
+        self: ProxhyPlugin, service: Literal["hypixel", "seraph"]
+    ):
+        """Reset a stored API key."""
+        if service == "hypixel":
+            self.hypixel_client.remove_key(self.hypixel_api_key)
+            self.hypixel_api_key = ""
+            return TextComponent("Reset your Hypixel API key!").color("green")
+        elif service == "seraph":
+            self.seraph_api_key = ""
+            return TextComponent("Reset your Seraph API key!").color("green")
 
     @command("key", "apikey")
-    async def _command_key(self: ProxhyPlugin, key: str = ""):
-        """Set or view your Hypixel API key."""
+    async def _command_key(
+        self: ProxhyPlugin, service: Literal["hypixel", "seraph"], key: str = ""
+    ):
+        """Set or view an API key."""
 
-        if not key:
-            if self.hypixel_api_key:
-                return (
-                    TextComponent("Hypixel API Key:")
-                    .color("yellow")
-                    .appends(
-                        TextComponent("[Click to Reveal]")
-                        .color("green")
-                        .click_event("suggest_command", self.hypixel_api_key)
+        if service == "hypixel":
+            if not key:
+                if self.hypixel_api_key:
+                    return (
+                        TextComponent("Hypixel API Key: ")
+                        .color("yellow")
+                        .appends(
+                            TextComponent("[Click to Reveal]")
+                            .color("green")
+                            .click_event("suggest_command", self.hypixel_api_key)
+                        )
+                        .appends(
+                            TextComponent("[Click to Reset]")
+                            .color("red")
+                            .click_event("run_command", "/resetkey hypixel")
+                        )
                     )
-                    .appends(
-                        TextComponent("[Click to Reset]")
-                        .color("red")
-                        .click_event("run_command", "/resetkey")
+                else:
+                    raise CommandException("You have not set your Hypixel API key yet!")
+
+            test_client = hypixel.Client(key, cache_h=False, cache_m=False)
+            try:
+                await test_client.player_count()
+            except InvalidApiKey, KeyRequired, MalformedApiKey:
+                raise CommandException(self.get_api_key_err())
+            finally:
+                await test_client.close()
+
+            self.hypixel_client.remove_key(self.hypixel_api_key)
+            self.hypixel_client.add_key(key)
+            self.hypixel_api_key = key
+            self._api_key_valid = True
+            self.game_error = None
+            self.downstream.chat(
+                TextComponent("Updated Hypixel API key!").color("green")
+            )
+
+        elif service == "seraph":
+            if not key:
+                if self.seraph_api_key:
+                    return (
+                        TextComponent("Seraph API Key: ")
+                        .color("yellow")
+                        .appends(
+                            TextComponent("[Click to Reveal]")
+                            .color("green")
+                            .click_event("suggest_command", self.seraph_api_key)
+                        )
+                        .appends(
+                            TextComponent("[Click to Reset]")
+                            .color("red")
+                            .click_event("run_command", "/resetkey seraph")
+                        )
                     )
+                else:
+                    raise CommandException("You have not set your Seraph API key yet!")
+
+            test_client = Seraph(api_key=key)
+            try:
+                await test_client.website_user()
+            except SeraphError:
+                raise CommandException(
+                    TextComponent("Invalid Seraph API key!").color("red")
                 )
-            else:
-                raise CommandException("You have not set your Hypixel API key yet!")
+            finally:
+                await test_client.close()
 
-        test_client = hypixel.Client(key, cache_h=False, cache_m=False)
-        try:
-            await test_client.player_count()
-        except InvalidApiKey, KeyRequired, MalformedApiKey:
-            raise CommandException(self.get_api_key_err())
-        finally:
-            await test_client.close()
-
-        self.hypixel_client.remove_key(self.hypixel_api_key)
-        self.hypixel_client.add_key(key)
-        self.hypixel_api_key = key
-        self._api_key_valid = True
-        self.game_error = None
-        self.downstream.chat(TextComponent("Updated API Key!").color("green"))
+            self.seraph_api_key = key
+            self.seraph_game_error = None
+            self.downstream.chat(
+                TextComponent("Updated Seraph API key!").color("green")
+            )
 
     def match_kill_message(self: ProxhyPlugin, message: str) -> re.Match | None:
         """Match a kill message against known patterns.

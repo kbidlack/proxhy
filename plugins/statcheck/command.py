@@ -202,6 +202,9 @@ class StatcheckCommandPlugin:
 
         await self.hypixel_client.close()
 
+        if (seraph_client := getattr(self, "_seraph_client", None)) is not None:
+            await seraph_client.close()
+
     async def log_stats(self: ProxhyPlugin, event: str) -> None:
         if self.dev_mode:
             return
