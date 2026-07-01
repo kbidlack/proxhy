@@ -55,7 +55,7 @@ indent-style = "space"
 where = ["."]
 
 [tool.setuptools.package-data]
-"assets" = ["*.json", "*.png"]
+"assets" = ["*.json", "*.png", "font/*.bin", "font/*.png"]
 
 [tool.uv.workspace]
 members = ["mcauth", "petty", "compass"]
