@@ -12,6 +12,7 @@ from importlib.metadata import version
 from platformdirs import user_log_path
 
 import mcauth as auth
+from mcauth.session_loader import summarize_account_sources
 from petty.endpoints import Proxy
 from proxhy.proxhy import Proxhy
 from proxhy.utils import zero_pad_calver
@@ -35,6 +36,23 @@ logger = logging.getLogger("proxhy")
 instances: list[Proxy] = []
 
 auth.set_client_id("6dd7ede8-1d77-4fff-a7ea-6e07c09d6163")
+
+
+def log_account_sources():
+    """Log how many accounts were found in each supported launcher."""
+    for source in summarize_account_sources():
+        if source["error"] == "not found":
+            logger.info(f"{source['label']}: not installed ({source['path']})")
+        elif source["error"]:
+            logger.warning(
+                f"{source['label']}: could not read accounts ({source['error']})"
+            )
+        else:
+            count = source["count"]
+            logger.info(
+                f"{source['label']}: found {count} account{'' if count == 1 else 's'} "
+                f"({source['path']})"
+            )
 
 
 def parse_args():
@@ -191,6 +209,7 @@ async def start(host: str = "localhost", port: int = 41223) -> ProxhyServer:
     logger.info(
         f"Started proxhy v{zero_pad_calver(version('proxhy'))} on {host}:{port} -> {args.remote_host}:{args.remote_port} ({args.fake_host}:{args.fake_port})"
     )
+    log_account_sources()
     if args.dev:
         logger.setLevel(logging.DEBUG)
         logger.info("DEV MODE ACTIVATED")
