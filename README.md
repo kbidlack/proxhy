@@ -1,7 +1,7 @@
 # Proxhy
 
 [![Latest Release](https://img.shields.io/github/v/release/proxhyhq/proxhy?style=flat-square)](https://github.com/proxhyhq/proxhy/releases/latest)
-[![Discord](https://img.shields.io/discord/1517293954029195344?logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=gray)](https://discord.com/invite/3qFP9SQT)
+[![Discord](https://img.shields.io/discord/1517293954029195344?logo=discord&logoColor=white&label=Discord&labelColor=5865F2&color=gray)](https://discord.gg/2gy98dnH7M)
 
 [![macOS](https://img.shields.io/badge/macOS-000000?style=flat-square&logo=apple&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.zip)
 [![Windows](https://img.shields.io/badge/Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](https://github.com/proxhyhq/launcher/releases/latest/download/Proxhy.exe)
