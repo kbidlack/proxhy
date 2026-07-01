@@ -11,6 +11,7 @@ from plugins.gamestate import GameStatePlugin
 from plugins.hypixelstate import HypixelStatePlugin
 from plugins.login import LoginPlugin
 from plugins.misc import MiscPlugin
+from plugins.respack import ResourcePackPlugin
 from plugins.settings import SettingsPlugin
 from plugins.slashproxhy import SlashProxhy
 from plugins.sound import SoundPlugin
@@ -31,6 +32,7 @@ class ProxhyPlugin(  # type: ignore
     HypixelStatePlugin,
     LoginPlugin,
     MiscPlugin,
+    ResourcePackPlugin,
     SettingsPlugin,
     SlashProxhy,
     SoundPlugin,

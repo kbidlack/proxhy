@@ -114,6 +114,22 @@ class TablistGroup(SettingGroup):
             storage=storage,
         )
 
+        self.align_columns: Setting[Literal["OFF", "ON"]] = create_setting(
+            key="bedwars.tablist.align_columns",
+            display_name="Align Tablist Columns",
+            description=(
+                "In Bedwars, pad the tablist with invisible glyphs so stars, names\n"
+                "and FKDR line up in neat columns. Requires the Proxhy resource pack."
+            ),
+            item="minecraft:paper",
+            states={
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+            },
+            default_state="ON",
+            storage=storage,
+        )
+
 
 class VisualGroup(SettingGroup):
     def __init__(self, storage: SettingsStorage):
@@ -258,6 +274,22 @@ class ProxhySettings(SettingGroup):
             display_name="Update Check",
             description="Check for new Proxhy versions on login.",
             item="minecraft:paper",
+            states={
+                "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
+                "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),
+            },
+            default_state="ON",
+            storage=self._storage,
+        )
+
+        self.resource_pack: Setting[Literal["ON", "OFF"]] = create_setting(
+            key="proxhy.resource_pack",
+            display_name="Proxhy Resource Pack",
+            description=(
+                "Offer Proxhy's resource pack when you join. It ships the invisible\n"
+                "glyphs used to align tablist columns."
+            ),
+            item="minecraft:item_frame",
             states={
                 "ON": (Item.from_display_name("Lime Stained Glass Pane"), "green"),
                 "OFF": (Item.from_display_name("Red Stained Glass Pane"), "red"),

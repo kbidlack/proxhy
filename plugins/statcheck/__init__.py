@@ -37,6 +37,7 @@ from petty.protocol.datatypes import (
 )
 from plugins.commands import CommandException, command
 from proxhy.secrets import delete_secret, get_secret, set_secret
+from proxhy.tablist import get_string_width, pad_right
 from proxhy.utils import offline_uuid
 from proxhypixel.formatting import format_player_dict
 from proxhypixel.models import Game
@@ -452,6 +453,47 @@ class StatCheckPlugin:
             ),
         )
 
+    def _tab_parts(
+        self: ProxhyPlugin, player: GamePlayerWithStats
+    ) -> tuple[str, str, str, str]:
+        """Split a player's tab entry into (prefix, star, name, tail) columns.
+
+        Caller must ensure ``player.fplayer`` is not a :class:`Nick`.
+        """
+        fdict = player.fplayer
+
+        if (
+            self.settings.bedwars.tablist.stats.is_mode_specific.get() == "ON"
+            and self.game.mode
+        ):
+            mode = self.game.mode[8:].lower()
+            fkdr = fdict[f"{mode}_fkdr"]
+        else:
+            fkdr = fdict["fkdr"]
+
+        show_rankname = self.settings.bedwars.tablist.stats.show_rankname.get() == "ON"
+        name = fdict["rankname"] if show_rankname else fdict["raw_name"]
+
+        return (
+            player.team.prefix,
+            f"{fdict['star']}{player.team.code}",
+            name,
+            f"§7{fkdr}",
+        )
+
+    def _tab_col_widths(self: ProxhyPlugin) -> tuple[float, float, float]:
+        """Max pixel width of the prefix/star/name columns across all statted
+        (non-nicked) players, for aligning the tablist into columns."""
+        prefix_w = star_w = name_w = 0.0
+        for player in self.players_with_stats.values():
+            if isinstance(player.fplayer, Nick):
+                continue
+            prefix, star, name, _ = self._tab_parts(player)
+            prefix_w = max(prefix_w, get_string_width(prefix))
+            star_w = max(star_w, get_string_width(star))
+            name_w = max(name_w, get_string_width(name))
+        return prefix_w, star_w, name_w
+
     def _build_player_display_name(
         self: ProxhyPlugin, player: GamePlayerWithStats
     ) -> str:
@@ -462,23 +504,25 @@ class StatCheckPlugin:
         if isinstance(fdict, Nick):
             base = f"{player.team.prefix} §5[NICK] {player.username}"
         elif show_stats:
-            if (
-                self.settings.bedwars.tablist.stats.is_mode_specific.get() == "ON"
-                and self.game.mode
-            ):
-                mode = self.game.mode[8:].lower()
-                fkdr = fdict[f"{mode}_fkdr"]
+            prefix, star, name, tail = self._tab_parts(player)
+            if self.settings.bedwars.tablist.align_columns.get() == "ON":
+                # Pad each column to the widest entry with invisible 1px glyphs so
+                # the star, name and FKDR columns line up vertically (see
+                # proxhy.tablist). The team prefix ends bold (e.g. "§c§lR"); a "§r"
+                # resets that before the padding/separator so bold does not add 1px
+                # and misalign the row. The star column re-establishes the color
+                # afterwards, so the name still renders in the team color.
+                prefix_w, star_w, name_w = self._tab_col_widths()
+                base = " ".join(
+                    (
+                        pad_right(f"{prefix}§r", prefix_w),
+                        pad_right(star, star_w),
+                        pad_right(name, name_w),
+                        tail,
+                    )
+                )
             else:
-                fkdr = fdict["fkdr"]
-
-            show_rankname = (
-                self.settings.bedwars.tablist.stats.show_rankname.get() == "ON"
-            )
-            name = fdict["rankname"] if show_rankname else fdict["raw_name"]
-            stats_str = " ".join(
-                (f"{fdict['star']}{player.team.code}", name, f"§7| {fkdr}")
-            )
-            base = f"{player.team.prefix} {stats_str}"
+                base = f"{prefix} {star} {name} {tail}"
         else:
             base = f"{player.team.prefix} {player.username}"
 
@@ -874,6 +918,10 @@ class StatCheckPlugin:
                 )
             else:
                 self._send_tablist_update({player.uuid: display_name})
+
+            # a new player's stats may widen a column; realign every row
+            if self.settings.bedwars.tablist.align_columns.get() == "ON":
+                self._rebuild_display_names()
 
         await self.emit("statcheck:update", player)
 
