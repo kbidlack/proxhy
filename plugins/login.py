@@ -15,6 +15,7 @@ import orjson
 
 import mcauth as auth
 from mcauth.errors import AuthException, InvalidCredentials
+from mcauth.session_loader import find_launcher_account_session
 from petty.events import listen_client, listen_server, subscribe
 from petty.net import ServerStream, State
 from petty.protocol.crypt import (
@@ -72,6 +73,7 @@ class LoginPlugin:
         }
 
         self.access_token = ""
+        self.launcher_session = None
         self.secret: bytes = b""
 
         self.secret_task: asyncio.Task | None = None
@@ -172,11 +174,21 @@ class LoginPlugin:
     async def packet_login_start(self: ProxhyPlugin, buff: Buffer):
         self.username = buff.unpack(String)
 
+        self.launcher_session = None
         if not auth.user_exists(self.username):
-            self.logger.debug(f"user {self.username} does not exist; logging in")
-            return await self.login()
+            # Not logged into Proxhy itself yet; try to reuse a session from a
+            # launcher (Lunar Client, vanilla launcher, IAS) the user already
+            # authenticated with, before falling back to the device-code flow.
+            self.launcher_session = find_launcher_account_session(self.username)
+            if self.launcher_session is None:
+                self.logger.debug(f"user {self.username} does not exist; logging in")
+                return await self.login()
 
-        if auth.token_needs_refresh(self.username):
+            source_id, _session = self.launcher_session
+            self.logger.info(
+                f"reusing existing {source_id} session for {self.username}"
+            )
+        elif auth.token_needs_refresh(self.username):
             self.logger.debug(
                 f"user {self.username} needs a token refresh; regenerating credentials"
             )
@@ -222,9 +234,14 @@ class LoginPlugin:
         )
 
         if self.CONNECT_HOST[0] not in {"localhost", "127.0.0.1", "::1"}:
-            self.access_token, self.username, self.uuid = await auth.load_auth_info(
-                self.username
-            )
+            if self.launcher_session is not None:
+                _source_id, session = self.launcher_session
+                self.access_token = session.session.access_token
+                self.uuid = uuid.UUID(session.session.selected_profile.id)
+            else:
+                self.access_token, self.username, self.uuid = (
+                    await auth.load_auth_info(self.username)
+                )
 
             async with Cache() as cache:
                 if self.CONNECT_HOST in cache:
