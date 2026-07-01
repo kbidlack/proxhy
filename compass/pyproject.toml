@@ -6,7 +6,7 @@ dependencies = [
   "aiohttp>=3.0",
   "httpx>=0.28.1",
   "petty",
-  "pyroh>=0.4.1",
+  "pyroh>=0.4.2",
 ]
 
 [project.scripts]
